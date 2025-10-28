@@ -4,20 +4,19 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getJobs, createJob, updateJob, deleteJob } from '../../api/admin';
-import { Job } from '../../types';
 
-const Jobs: React.FC = () => {
+const Jobs = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [editingJob, setEditingJob] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     company: '',
     location: '',
-    type: 'full-time' as 'full-time' | 'part-time' | 'contract',
+    type: 'full-time',
     salary: '',
-    status: 'active' as 'active' | 'closed',
+    status: 'active',
   });
 
   const { data: jobsData, isLoading } = useQuery({
@@ -35,7 +34,7 @@ const Jobs: React.FC = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Job> }) => updateJob(id, data),
+    mutationFn: ({ id, data }) => updateJob(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       setShowModal(false);
@@ -55,7 +54,7 @@ const Jobs: React.FC = () => {
     setEditingJob(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (editingJob) {
       updateMutation.mutate({ id: editingJob.id, data: formData });
@@ -64,7 +63,7 @@ const Jobs: React.FC = () => {
     }
   };
 
-  const handleEdit = (job: Job) => {
+  const handleEdit = (job) => {
     setEditingJob(job);
     setFormData({
       title: job.title,
@@ -77,7 +76,7 @@ const Jobs: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (jobId: string) => {
+  const handleDelete = (jobId) => {
     if (confirm('Are you sure you want to delete this job?')) {
       deleteMutation.mutate(jobId);
     }
@@ -207,7 +206,7 @@ const Jobs: React.FC = () => {
                 <label className="block text-sm font-medium mb-2">Job Type</label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
                 >
                   <option value="full-time">Full-time</option>
@@ -230,7 +229,7 @@ const Jobs: React.FC = () => {
                 <label className="block text-sm font-medium mb-2">Status</label>
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
                 >
                   <option value="active">Active</option>

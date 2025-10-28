@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 
-const MockPrep = dynamic(() => import('../../../src/pages/User/MockPrep'), { ssr: false });
+const MockPrep = dynamic(() => import('../../../src/pages/User/MockPrepMUI'), { ssr: false });
 
 export default function MockPrepPage() {
   return <MockPrep />;

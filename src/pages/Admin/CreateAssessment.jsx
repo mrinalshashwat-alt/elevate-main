@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { createAssessment } from '../../api/admin';
 
-const CreateAssessment: React.FC = () => {
+const CreateAssessment = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
@@ -13,7 +13,7 @@ const CreateAssessment: React.FC = () => {
     description: '',
     duration: 60,
     questions: 20,
-    status: 'draft' as 'draft' | 'published' | 'archived',
+    status: 'draft',
   });
 
   const createMutation = useMutation({
@@ -24,7 +24,7 @@ const CreateAssessment: React.FC = () => {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     createMutation.mutate(formData);
   };
@@ -100,7 +100,7 @@ const CreateAssessment: React.FC = () => {
               <label className="block text-sm font-medium mb-2">Status</label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
               >
                 <option value="draft">Draft</option>

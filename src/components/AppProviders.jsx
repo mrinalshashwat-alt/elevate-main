@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { AuthProvider } from '../context/AuthContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AppProviders = ({ children }) => {
   const [queryClient] = useState(() => new QueryClient());
 
   return (

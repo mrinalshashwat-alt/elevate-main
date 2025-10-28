@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getMockInterviews } from '../../api/user';
 
-const MockPrep: React.FC = () => {
+const MockPrep = () => {
   const router = useRouter();
 
   const { data: interviews, isLoading } = useQuery({

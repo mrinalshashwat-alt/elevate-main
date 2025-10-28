@@ -3,9 +3,9 @@
 import React, { useEffect, useRef } from 'react';
 
 const Agents = () => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [imageErrors, setImageErrors] = React.useState<Record<string, boolean>>({});
+  const [imageErrors, setImageErrors] = React.useState({});
 
   const agents = [
     {
@@ -51,13 +51,7 @@ const Agents = () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const particles: Array<{
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      radius: number;
-    }> = [];
+    const particles = [];
     const particleCount = 80;
     const connectionDistance = 150;
 
@@ -124,7 +118,7 @@ const Agents = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleNavigation = (route: string) => {
+  const handleNavigation = (route) => {
     window.location.href = route;
   };
 

@@ -2,18 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-}
-
-const AICareerCoach: React.FC = () => {
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Particle[]>([]);
-  const animationRef = useRef<number>();
+const AICareerCoach = () => {
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const canvasRef = useRef(null);
+  const particlesRef = useRef([]);
+  const animationRef = useRef();
 
   const topics = [
     { id: '1', title: 'Career Path Planning', icon: '🎯', description: 'Strategic guidance for your professional journey', gradient: 'from-orange-500/20 to-red-500/20' },

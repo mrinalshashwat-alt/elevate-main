@@ -7,48 +7,8 @@ import { motion, AnimatePresence, useScroll, useSpring, useInView } from 'framer
 import CountUp from 'react-countup';
 import { FiEye, FiEyeOff, FiX, FiCheck, FiLoader } from 'react-icons/fi';
 
-// Type declarations
-declare global {
-  interface Window {
-    THREE: any;
-  }
-}
-
-interface CarouselItem {
-  title: string;
-  description: string;
-  buttonText: string;
-  gradient: string;
-  videoSrc: string;
-  route: string;
-}
-
-interface FeatureData {
-  title: string;
-  description: string;
-  statistics: string;
-  icon: string;
-  gradient: string;
-}
-
-interface Achievement {
-  number: string;
-  label: string;
-  description: string;
-  color: string;
-}
-
-interface Testimonial {
-  name: string;
-  role: string;
-  location: string;
-  content: string;
-  avatar: string;
-  videoUrl?: string;
-}
-
 // Custom Hooks
-const useTypewriter = (text: string, speed: number = 50) => {
+const useTypewriter = (text, speed = 50) => {
   const [displayText, setDisplayText] = useState('');
   const [isComplete, setIsComplete] = useState(false);
 
@@ -114,7 +74,7 @@ const staggerContainer = {
   }
 };
 
-const Home: React.FC = () => {
+const Home = () => {
   const router = useRouter();
   const { login } = useAuth();
   
@@ -124,12 +84,12 @@ const Home: React.FC = () => {
   const [currentTestimonialIndex, setCurrentTestimonialIndex] = useState(0);
   const [currentAchievementIndex, setCurrentAchievementIndex] = useState(0);
   const [showVideoModal, setShowVideoModal] = useState(false);
-  const [isTestimonialVideoPlaying, setIsTestimonialVideoPlaying] = useState<{[key: number]: boolean}>({});
-  const testimonialVideoRefs = useRef<{[key: number]: HTMLVideoElement | null}>({});
+  const [isTestimonialVideoPlaying, setIsTestimonialVideoPlaying] = useState({});
+  const testimonialVideoRefs = useRef({});
   
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [loginRole, setLoginRole] = useState<'user' | 'admin'>('user');
+  const [loginRole, setLoginRole] = useState('user');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -160,7 +120,7 @@ const Home: React.FC = () => {
   const achievementsInView = useInView(achievementsRef, { once: true, amount: 0.2 });
 
   // Data arrays
-  const carouselItems: CarouselItem[] = [
+  const carouselItems = [
     {
       title: "AI Communication Coach",
       description: "Master professional communication with AI-powered feedback and personalized coaching sessions for interviews and presentations.",
@@ -203,7 +163,7 @@ const Home: React.FC = () => {
     }
   ];
 
-  const featuresData: FeatureData[] = [
+  const featuresData = [
     {
       title: "AI Career Coach – Discover Your Best-Fit Career",
       description: "87% of students and professionals fail to identify roles that truly fit their skills and values. Our AI-powered Career Coach analyzes your strengths, competencies, work-life values, and cultural fit.",
@@ -248,7 +208,7 @@ const Home: React.FC = () => {
     }
   ];
 
-  const achievementsData: Achievement[] = [
+  const achievementsData = [
     {
       number: "50000",
       label: "Students Placed",
@@ -281,7 +241,7 @@ const Home: React.FC = () => {
     }
   ];
 
-  const testimonialsData: Testimonial[] = [
+  const testimonialsData = [
     {
       name: "Chandrashekhar Rao",
       role: "Senior Software Engineer",
@@ -369,7 +329,7 @@ const Home: React.FC = () => {
     return () => clearInterval(interval);
   }, [achievementsData.length]);
 
-  const toggleTestimonialVideo = (index: number) => {
+  const toggleTestimonialVideo = (index) => {
     const videoRef = testimonialVideoRefs.current[index];
     if (videoRef) {
       if (isTestimonialVideoPlaying[index]) {
@@ -382,13 +342,13 @@ const Home: React.FC = () => {
     }
   };
 
-  const scrollToTestimonials = (e: React.MouseEvent) => {
+  const scrollToTestimonials = (e) => {
     e.preventDefault();
     document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Login handler
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setLoginError('');
@@ -412,7 +372,7 @@ const Home: React.FC = () => {
     }
   };
 
-  const openLoginModal = (role: 'user' | 'admin') => {
+  const openLoginModal = (role) => {
     setLoginRole(role);
     setShowLoginModal(true);
     setLoginError('');
@@ -428,7 +388,7 @@ const Home: React.FC = () => {
     setLoginSuccess(false);
   };
 
-  const getAchievementPosition = (index: number) => {
+  const getAchievementPosition = (index) => {
     const relativePos = (index - currentAchievementIndex + achievementsData.length) % achievementsData.length;
     
     switch(relativePos) {
@@ -441,12 +401,12 @@ const Home: React.FC = () => {
     }
   };
 
-  const navigateToFeature = (route: string) => {
+  const navigateToFeature = (route) => {
     router.push(route);
   };
 
-  const handleLearnMore = (featureTitle: string) => {
-    const routeMap: { [key: string]: string } = {
+  const handleLearnMore = (featureTitle) => {
+    const routeMap = {
       "AI Career Coach – Discover Your Best-Fit Career": "/user/ai-career-coach",
       "AI Mock Interview Agent – Real-Time Practice": "/user/ai-mock-interview",
       "AI Communication Coach – Master Professional Skills": "/user/ai-communication",
@@ -468,7 +428,7 @@ const Home: React.FC = () => {
           if (!canvas || typeof window === 'undefined') return;
           
           const initThree = () => {
-            if (typeof (window as any).THREE === 'undefined') {
+            if (typeof window.THREE === 'undefined') {
               const script = document.createElement('script');
               script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
               script.onload = () => setupScene();
@@ -479,7 +439,7 @@ const Home: React.FC = () => {
           };
 
           const setupScene = () => {
-            const THREE = (window as any).THREE;
+            const THREE = window.THREE;
             if (!THREE || !canvas) return;
 
             const scene = new THREE.Scene();
@@ -499,7 +459,7 @@ const Home: React.FC = () => {
             const maxConnections = 3;
             const connectionDistance = 6;
 
-            const neurons: Array<{ position: any; velocity: any; }> = [];
+            const neurons = [];
 
             for (let i = 0; i < neuronCount; i++) {
               neurons.push({
@@ -523,7 +483,7 @@ const Home: React.FC = () => {
               opacity: 0.9
             });
 
-            const neuronMeshes: any[] = [];
+            const neuronMeshes = [];
             neurons.forEach(() => {
               const mesh = new THREE.Mesh(neuronGeometry, neuronMaterial);
               neuronMeshes.push(mesh);
@@ -537,7 +497,7 @@ const Home: React.FC = () => {
             });
 
             const maxLines = neuronCount * maxConnections;
-            const linePool: any[] = [];
+            const linePool = [];
             
             for (let i = 0; i < maxLines; i++) {
               const geometry = new THREE.BufferGeometry();
@@ -556,15 +516,7 @@ const Home: React.FC = () => {
               opacity: 0.8
             });
 
-            interface Pulse {
-              mesh: any;
-              fromIndex: number;
-              toIndex: number;
-              progress: number;
-              speed: number;
-            }
-
-            const pulses: Pulse[] = [];
+            const pulses = [];
             for (let i = 0; i < 8; i++) {
               const mesh = new THREE.Mesh(pulseGeometry, pulseMaterial);
               pulses.push({
@@ -579,7 +531,7 @@ const Home: React.FC = () => {
 
             camera.position.z = 12;
 
-            let animationId: number;
+            let animationId;
             let frameCount = 0;
 
             const animate = () => {
@@ -617,7 +569,7 @@ const Home: React.FC = () => {
                     
                     if (distance < connectionDistance) {
                       const line = linePool[lineIndex];
-                      const positions = line.geometry.attributes.position.array as Float32Array;
+                      const positions = line.geometry.attributes.position.array;
                       
                       positions[0] = neurons[i].position.x;
                       positions[1] = neurons[i].position.y;
@@ -627,7 +579,7 @@ const Home: React.FC = () => {
                       positions[5] = neurons[j].position.z;
                       
                       line.geometry.attributes.position.needsUpdate = true;
-                      (line.material as any).opacity = Math.max(0, 0.4 * (1 - distance / connectionDistance));
+                      line.material.opacity = Math.max(0, 0.4 * (1 - distance / connectionDistance));
                       line.visible = true;
                       
                       lineIndex++;
@@ -685,7 +637,7 @@ const Home: React.FC = () => {
               linePool.forEach(line => {
                 scene.remove(line);
                 line.geometry.dispose();
-                (line.material as any).dispose();
+                line.material.dispose();
               });
               neuronMeshes.forEach(mesh => scene.remove(mesh));
               pulses.forEach(pulse => scene.remove(pulse.mesh));
@@ -718,13 +670,11 @@ const Home: React.FC = () => {
             whileHover={{ scale: 1.05 }}
           >
             <button className="flex items-center space-x-3 filter drop-shadow-lg">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-sm">E</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-orange-500 uppercase font-bold text-lg font-mono tracking-tight">Elevate</span>
-                <span className="text-orange-400 uppercase font-mono text-xs tracking-wider">Career.AI</span>
-              </div>
+              <img 
+                src="/logo.jpg" 
+                alt="Elevate Career AI Logo" 
+                className="w-28 h-28 object-contain"
+              />
             </button>
           </motion.div>
 
@@ -1470,13 +1420,11 @@ const Home: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold">E</span>
-                </div>
-                <div>
-                  <div className="font-bold text-xl text-orange-600">Elevate</div>
-                  <div className="text-xs text-orange-500 font-semibold">career.ai</div>
-                </div>
+                <img 
+                  src="/logo.jpg" 
+                  alt="Elevate Career AI Logo" 
+                  className="w-8 h-8 object-contain"
+                />
               </div>
               <p className="text-sm text-gray-400 max-w-xs">
                 Empowering careers with AI-driven insights and personalized learning experiences.

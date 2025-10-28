@@ -15,7 +15,7 @@ import Courses from '../pages/User/Courses';
 import Content from '../pages/User/Content';
 import Test from '../pages/User/Test';
 
-const UserRoutes: React.FC = () => {
+const UserRoutes = () => {
   return (
     <Routes>
       <Route

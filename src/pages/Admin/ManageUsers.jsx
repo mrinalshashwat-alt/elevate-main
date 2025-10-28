@@ -4,18 +4,17 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getUsers, createUser, updateUser, deleteUser } from '../../api/admin';
-import { AdminUser } from '../../types';
 
-const ManageUsers: React.FC = () => {
+const ManageUsers = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'user' as 'user' | 'admin',
-    status: 'active' as 'active' | 'inactive',
+    role: 'user',
+    status: 'active',
   });
 
   const { data: usersData, isLoading } = useQuery({
@@ -33,7 +32,7 @@ const ManageUsers: React.FC = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<AdminUser> }) => updateUser(id, data),
+    mutationFn: ({ id, data }) => updateUser(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
       setShowModal(false);
@@ -53,7 +52,7 @@ const ManageUsers: React.FC = () => {
     setEditingUser(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (editingUser) {
       updateMutation.mutate({ id: editingUser.id, data: formData });
@@ -62,7 +61,7 @@ const ManageUsers: React.FC = () => {
     }
   };
 
-  const handleEdit = (user: AdminUser) => {
+  const handleEdit = (user) => {
     setEditingUser(user);
     setFormData({
       name: user.name,
@@ -73,7 +72,7 @@ const ManageUsers: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (userId: string) => {
+  const handleDelete = (userId) => {
     if (confirm('Are you sure you want to delete this user?')) {
       deleteMutation.mutate(userId);
     }
@@ -196,7 +195,7 @@ const ManageUsers: React.FC = () => {
                 <label className="block text-sm font-medium mb-2">Role</label>
                 <select
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'user' | 'admin' })}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
                 >
                   <option value="user">User</option>
@@ -207,7 +206,7 @@ const ManageUsers: React.FC = () => {
                 <label className="block text-sm font-medium mb-2">Status</label>
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
                 >
                   <option value="active">Active</option>

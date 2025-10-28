@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { getAdminDashboard } from '../../api/admin';
 import { useAuth } from '../../context/AuthContext';
 
-const AdminDashboard: React.FC = () => {
+const AdminDashboard = () => {
   const router = useRouter();
   const { user, logout } = useAuth();
 
@@ -139,7 +139,7 @@ const AdminDashboard: React.FC = () => {
         <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-xl p-6">
           <h3 className="text-xl font-bold mb-4">Recent Activity</h3>
           <div className="space-y-3">
-            {stats?.recentActivity?.map((activity: any) => (
+            {stats?.recentActivity?.map((activity) => (
               <div key={activity.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                 <div className="flex items-center space-x-3">
                   <div className="w-2 h-2 bg-orange-500 rounded-full"></div>

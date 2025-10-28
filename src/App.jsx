@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const App: React.FC = () => {
+const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

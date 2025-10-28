@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getAssessments, deleteAssessment } from '../../api/admin';
 
-const AssessmentList: React.FC = () => {
+const AssessmentList = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -21,7 +21,7 @@ const AssessmentList: React.FC = () => {
     },
   });
 
-  const handleDelete = (assessmentId: string) => {
+  const handleDelete = (assessmentId) => {
     if (confirm('Are you sure you want to delete this assessment?')) {
       deleteMutation.mutate(assessmentId);
     }

@@ -11,7 +11,7 @@ import Jobs from '../pages/Admin/Jobs';
 import CreateAssessment from '../pages/Admin/CreateAssessment';
 import AssessmentList from '../pages/Admin/AssessmentList';
 
-const AdminRoutes: React.FC = () => {
+const AdminRoutes = () => {
   return (
     <Routes>
       <Route
