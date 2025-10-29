@@ -83,10 +83,11 @@ const Home = () => {
   const [currentFeature, setCurrentFeature] = useState(0);
   const [currentTestimonialIndex, setCurrentTestimonialIndex] = useState(0);
   const [currentAchievementIndex, setCurrentAchievementIndex] = useState(0);
-  const [currentWhyChooseIndex, setCurrentWhyChooseIndex] = useState(0);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [isTestimonialVideoPlaying, setIsTestimonialVideoPlaying] = useState({});
   const testimonialVideoRefs = useRef({});
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const dropdownRef = useRef(null);
   
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -325,7 +326,7 @@ const Home = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentAchievementIndex(prev => (prev + 1) % Math.ceil(achievementsData.length / 2));
+      setCurrentAchievementIndex(prev => (prev + 1) % achievementsData.length);
     }, 4000);
     return () => clearInterval(interval);
   }, [achievementsData.length]);
@@ -362,15 +363,46 @@ const Home = () => {
       competitor: "Static problem sets with <55% skill transferability to job interviews",
       elevate: "88% improvement in coding efficiency, 60% faster problem-solving speed, and 85% higher success rates in tech interview coding rounds",
       cardStyle: "gradient-card-orange card-glow-orange"
+    },
+    {
+      title: "5. AI Resume Builder – ATS-Optimized Perfection",
+      subtitle: "Create perfectly formatted, keyword-optimized resumes that pass ATS filters and get you noticed by recruiters.",
+      icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+      competitor: "Generic templates with only 15% ATS pass rate and outdated formatting",
+      elevate: "89% callback increase, 73% faster response rate, and 4x higher interview invitation rate with AI-optimized resumes",
+      cardStyle: "gradient-card-blue card-glow-blue"
+    },
+    {
+      title: "6. Career Insights & Market Intelligence",
+      subtitle: "Access real-time market trends, salary data, and industry insights to make informed career decisions.",
+      icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+      competitor: "Outdated salary surveys updated annually with limited market coverage",
+      elevate: "Real-time market intelligence, 95% accuracy in salary predictions, and personalized career growth insights based on current trends",
+      cardStyle: "gradient-card-green card-glow-green"
     }
   ];
 
+
+  // Handle click outside to close dropdown
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentWhyChooseIndex(prev => (prev + 1) % Math.ceil(whyChooseData.length / 2));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [whyChooseData.length]);
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpenDropdown(null);
+      }
+    };
+
+    if (openDropdown !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdown]);
+
+  const toggleDropdown = (dropdownName) => {
+    setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
+  };
 
   const toggleTestimonialVideo = (index) => {
     const videoRef = testimonialVideoRefs.current[index];
@@ -486,61 +518,97 @@ const Home = () => {
             </button>
           </motion.div>
 
-          <div className="glass-stripe flex items-center space-x-4 rounded-full px-4 py-2 relative z-[100] shadow-card-elevated">
-            <div className="relative group">
-              <button className="nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 hover:bg-orange-500/10 hover:text-orange-400 font-medium text-sm">
+          <div ref={dropdownRef} className="glass-stripe flex items-center space-x-4 rounded-full px-4 py-2 relative z-[100] shadow-card-elevated">
+            <div className="relative">
+              <button 
+                onClick={() => toggleDropdown('ai-mock-agents')}
+                className={`nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm ${
+                  openDropdown === 'ai-mock-agents' ? 'bg-orange-500/10 text-orange-400' : 'hover:bg-orange-500/10 hover:text-orange-400'
+                }`}
+              >
                 AI Mock Agents
-                <svg className="inline ml-1 w-3 h-3 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'ai-mock-agents' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              <div className="absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-[200] mt-2 pointer-events-none group-hover:pointer-events-auto">
-                <a href="/user/ai-communication" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Communication Coach</a>
-                <a href="/user/ai-mock-interview" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Mock Interview Agent</a>
-                <a href="/user/ai-career-coach" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Career Guide</a>
+              <div className={`absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 transition-all duration-300 z-[200] mt-2 ${
+                openDropdown === 'ai-mock-agents' 
+                  ? 'opacity-100 visible translate-y-0' 
+                  : 'opacity-0 invisible translate-y-2 pointer-events-none'
+              }`}>
+                <a href="/user/ai-communication" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Communication Coach</a>
+                <a href="/user/ai-mock-interview" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Mock Interview Agent</a>
+                <a href="/user/ai-career-coach" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Career Guide</a>
               </div>
             </div>
 
-            <div className="relative group">
-              <button className="nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 hover:bg-orange-500/10 hover:text-orange-400 font-medium text-sm">
+            <div className="relative">
+              <button 
+                onClick={() => toggleDropdown('mock-prep')}
+                className={`nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm ${
+                  openDropdown === 'mock-prep' ? 'bg-orange-500/10 text-orange-400' : 'hover:bg-orange-500/10 hover:text-orange-400'
+                }`}
+              >
                 Mock Prep
-                <svg className="inline ml-1 w-3 h-3 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'mock-prep' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              <div className="absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-[200] mt-2 pointer-events-none group-hover:pointer-events-auto">
-                <a href="/user/courses" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Coder Arena</a>
-                <a href="/user/mock-prep" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Interview Prep</a>
-                <a href="/user/ai-mock-interview" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Mock Interviews</a>
-                <a href="/user/ai-communication" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Communication Practice</a>
+              <div className={`absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 transition-all duration-300 z-[200] mt-2 ${
+                openDropdown === 'mock-prep' 
+                  ? 'opacity-100 visible translate-y-0' 
+                  : 'opacity-0 invisible translate-y-2 pointer-events-none'
+              }`}>
+                <a href="/user/courses" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Coder Arena</a>
+                <a href="/user/mock-prep" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Interview Prep</a>
+                <a href="/user/ai-mock-interview" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Mock Interviews</a>
+                <a href="/user/ai-communication" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Communication Practice</a>
               </div>
             </div>
 
-            <div className="relative group">
-              <button className="nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 hover:bg-orange-500/10 hover:text-orange-400 font-medium text-sm">
+            <div className="relative">
+              <button 
+                onClick={() => toggleDropdown('exam-prep')}
+                className={`nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm ${
+                  openDropdown === 'exam-prep' ? 'bg-orange-500/10 text-orange-400' : 'hover:bg-orange-500/10 hover:text-orange-400'
+                }`}
+              >
                 Exam Prep
-                <svg className="inline ml-1 w-3 h-3 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'exam-prep' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              <div className="absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-[200] mt-2 pointer-events-none group-hover:pointer-events-auto">
-                <a href="/user/test" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Aptitude Prep</a>
-                <a href="/user/content" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Exam Prep</a>
+              <div className={`absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 transition-all duration-300 z-[200] mt-2 ${
+                openDropdown === 'exam-prep' 
+                  ? 'opacity-100 visible translate-y-0' 
+                  : 'opacity-0 invisible translate-y-2 pointer-events-none'
+              }`}>
+                <a href="/user/test" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Aptitude Prep</a>
+                <a href="/user/content" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Exam Prep</a>
               </div>
             </div>
 
-            <div className="relative group">
-              <button className="nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 hover:bg-orange-500/10 hover:text-orange-400 font-medium text-sm">
+            <div className="relative">
+              <button 
+                onClick={() => toggleDropdown('career-essentials')}
+                className={`nav-link text-white px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm ${
+                  openDropdown === 'career-essentials' ? 'bg-orange-500/10 text-orange-400' : 'hover:bg-orange-500/10 hover:text-orange-400'
+                }`}
+              >
                 Career Essentials
-                <svg className="inline ml-1 w-3 h-3 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'career-essentials' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              <div className="absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-[200] mt-2 pointer-events-none group-hover:pointer-events-auto">
-                <a href="/user/ai-career-coach" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Career Guide</a>
-                <a href="/user/ai-mock-interview" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Mock Interview</a>
-                <a href="/user/ai-communication" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Communication Coach</a>
-                <a href="/user/mock-prep" className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Interview Questions</a>
+              <div className={`absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 transition-all duration-300 z-[200] mt-2 ${
+                openDropdown === 'career-essentials' 
+                  ? 'opacity-100 visible translate-y-0' 
+                  : 'opacity-0 invisible translate-y-2 pointer-events-none'
+              }`}>
+                <a href="/user/ai-career-coach" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Career Guide</a>
+                <a href="/user/ai-mock-interview" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Mock Interview</a>
+                <a href="/user/ai-communication" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">AI Communication Coach</a>
+                <a href="/user/mock-prep" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Interview Questions</a>
               </div>
             </div>
           </div>
@@ -618,25 +686,41 @@ const Home = () => {
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentSlide}
-                className="gradient-card-orange card-glow-orange rounded-3xl p-10 space-y-6 shadow-card-elevated-lg"
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 50 }}
+                className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-10 space-y-6 overflow-hidden"
+                style={{
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                  transformStyle: 'preserve-3d'
+                }}
+                initial={{ opacity: 0, x: -50, rotateX: -5 }}
+                animate={{ opacity: 1, x: 0, rotateX: 0 }}
+                exit={{ opacity: 0, x: 50, rotateX: 5 }}
                 transition={{ duration: 0.5 }}
+                whileHover={{ 
+                  y: -8,
+                  scale: 1.02,
+                  rotateX: 2,
+                  transition: { duration: 0.3 }
+                }}
               >
-                <div className="premium-card-content">
+                {/* Shine effect */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                </div>
+                
+                <div className="premium-card-content relative z-10">
                   <h2 className="text-3xl font-black text-white mb-4 leading-tight">
                     {carouselItems[currentSlide].title}
                   </h2>
                   <p className="text-base text-gray-200 leading-relaxed mb-4">
                     {carouselItems[currentSlide].description}
                   </p>
-                  <p className="text-orange-300 font-bold text-sm tracking-wide">
+                  <p className="text-gray-300 font-bold text-sm tracking-wide">
                     72% higher clarity | 65% increase in satisfaction
                   </p>
                 </div>
                 
-                <div className="premium-card-content">
+                <div className="premium-card-content relative z-10">
                   <motion.button 
                     className="px-10 py-4 bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-black rounded-full font-black text-base shadow-2xl shadow-yellow-500/30 hover:shadow-yellow-500/50 transition-all"
                     onClick={() => navigateToFeature(carouselItems[currentSlide].route)}
@@ -735,7 +819,7 @@ const Home = () => {
 
           <div className="relative">
             <button 
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center"
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white/10 border border-white/20 rounded-full flex items-center justify-center hover:bg-white/20 transition-all"
               onClick={() => setCurrentTestimonialIndex(prev => (prev - 1 + testimonialsData.length) % testimonialsData.length)}
             >
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -744,7 +828,7 @@ const Home = () => {
             </button>
 
             <button 
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white/10 border border-white/20 rounded-full flex items-center justify-center hover:bg-white/20 transition-all"
               onClick={() => setCurrentTestimonialIndex(prev => (prev + 1) % testimonialsData.length)}
             >
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -770,11 +854,27 @@ const Home = () => {
                 return (
                   <motion.div 
                     key={index} 
-                    className="gradient-card-orange card-glow-orange p-10 rounded-3xl shadow-card-elevated-lg"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    className="group relative bg-black/90 p-10 rounded-3xl border border-[#FF5728] overflow-hidden"
+                    style={{
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                      transformStyle: 'preserve-3d'
+                    }}
+                    initial={{ opacity: 0, scale: 0.9, rotateX: -5 }}
+                    animate={{ opacity: 1, scale: 1, rotateX: 0 }}
                     transition={{ duration: 0.5 }}
+                    whileHover={{ 
+                      y: -8,
+                      scale: 1.02,
+                      rotateX: 2,
+                      transition: { duration: 0.3 }
+                    }}
                   >
+                    {/* Shine effect */}
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                    </div>
+                    <div className="relative z-10">
                     {testimonial.videoUrl && (
                       <div className="relative mb-6 rounded-2xl overflow-hidden">
                         <video
@@ -788,7 +888,7 @@ const Home = () => {
                           onClick={() => toggleTestimonialVideo(index)}
                           className="absolute inset-0 flex items-center justify-center bg-black/30"
                         >
-                          <div className={`w-16 h-16 bg-gradient-to-r ${gradientClass} rounded-full flex items-center justify-center`}>
+                          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
                             {isTestimonialVideoPlaying[index] ? (
                               <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
@@ -805,16 +905,17 @@ const Home = () => {
                     
                     <div className="premium-card-content">
                       <div className="flex items-center space-x-4 mb-6">
-                        <div className={`w-16 h-16 bg-gradient-to-br ${gradientClass} rounded-full flex items-center justify-center shadow-xl border-2 border-white/20`}>
+                        <div className="w-16 h-16 bg-[#FF5728] rounded-full flex items-center justify-center border-2 border-[#FF5728]">
                           <span className="text-white font-black text-xl">{testimonial.avatar}</span>
                         </div>
                         <div>
                           <h4 className="font-black text-xl text-white mb-1">{testimonial.name}</h4>
-                          <p className="text-sm text-orange-300 font-bold">{testimonial.role}</p>
-                          <p className="text-xs text-gray-300 font-medium">{testimonial.location}</p>
+                          <p className="text-sm text-gray-300 font-bold">{testimonial.role}</p>
+                          <p className="text-xs text-gray-400 font-medium">{testimonial.location}</p>
                         </div>
                       </div>
                       <p className="text-lg leading-relaxed text-gray-200 font-medium italic">"{testimonial.content}"</p>
+                    </div>
                     </div>
                   </motion.div>
                 );
@@ -847,22 +948,37 @@ const Home = () => {
             
             {/* Success Rate Card - Premium */}
             <motion.div 
-              className="gradient-card-green card-glow-green rounded-3xl p-10 max-w-5xl mx-auto shadow-card-elevated-lg"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={featuresInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
+              className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-10 max-w-5xl mx-auto overflow-hidden"
+              style={{
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset',
+                transformStyle: 'preserve-3d'
+              }}
+              initial={{ opacity: 0, scale: 0.9, rotateX: -5 }}
+              animate={featuresInView ? { opacity: 1, scale: 1, rotateX: 0 } : { opacity: 0, scale: 0.9, rotateX: -5 }}
               transition={{ duration: 0.6 }}
+              whileHover={{ 
+                y: -8,
+                scale: 1.02,
+                rotateX: 2,
+                transition: { duration: 0.3 }
+              }}
             >
-              <div className="premium-card-content flex items-center justify-center space-x-6">
-                <div className="w-20 h-20 bg-gradient-to-br from-green-400 via-emerald-500 to-emerald-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-green-500/40 border-2 border-green-300/30">
+              {/* Shine effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              </div>
+              <div className="premium-card-content flex items-center justify-center space-x-6 relative z-10">
+                <div className="w-20 h-20 bg-[#FF5728] rounded-3xl flex items-center justify-center border-2 border-[#FF5728]">
                   <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div className="text-left">
-                  <h3 className="text-3xl font-black text-green-200 mb-3 leading-tight">
+                  <h3 className="text-3xl font-black text-white mb-3 leading-tight">
                     Overall Success Rate: <span className="text-4xl text-white">91%</span>
                   </h3>
-                  <p className="text-green-100 text-xl font-bold leading-relaxed">
+                  <p className="text-gray-200 text-xl font-bold leading-relaxed">
                     ElevateCareer.Cloud users experience up to a <span className="text-white font-black">91% increase</span> in their chances of landing a better job, building a stronger career path, and excelling in real-life job simulations.
                   </p>
                 </div>
@@ -879,43 +995,45 @@ const Home = () => {
               }}
             >
               {featuresData.map((feature, index) => {
-                const cardStyles = [
-                  'gradient-card-orange card-glow-orange',
-                  'gradient-card-blue card-glow-blue',
-                  'gradient-card-green card-glow-green',
-                  'gradient-card-orange card-glow-orange',
-                  'gradient-card-blue card-glow-blue',
-                  'gradient-card-green card-glow-green'
-                ];
-                const cardStyle = cardStyles[index % cardStyles.length];
-                
                 return (
                   <motion.div 
                     key={index} 
-                    className={`${cardStyle} flex-shrink-0 min-h-[450px] flex flex-col justify-between rounded-3xl shadow-card-elevated-lg transition-all duration-500`}
+                    className="group relative bg-black/90 border border-[#FF5728] flex-shrink-0 min-h-[450px] flex flex-col justify-between rounded-3xl overflow-hidden"
                     style={{ 
                       width: 'calc(50% - 0.75rem)',
-                      padding: '2.5rem'
+                      padding: '2.5rem',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                      transformStyle: 'preserve-3d'
                     }}
-                    initial={{ opacity: 0, y: 50 }}
-                    animate={featuresInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
+                    initial={{ opacity: 0, y: 50, rotateX: -5 }}
+                    animate={featuresInView ? { opacity: 1, y: 0, rotateX: 0 } : { opacity: 0, y: 50, rotateX: -5 }}
                     transition={{ duration: 0.5, delay: (index % 2) * 0.1 }}
-                    whileHover={{ scale: 1.05, y: -10 }}
+                    whileHover={{ 
+                      y: -12,
+                      scale: 1.02,
+                      rotateX: 3,
+                      transition: { duration: 0.3 }
+                    }}
                   >
-                    <div className="premium-card-content">
+                    {/* Shine effect */}
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                    </div>
+                    <div className="premium-card-content relative z-10">
                       <div className="mb-6">
-                        <div className="w-16 h-16 bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-orange-500/30 mb-5 border border-orange-400/20">
+                        <div className="w-16 h-16 bg-[#FF5728] rounded-3xl flex items-center justify-center mb-5 border border-[#FF5728]">
                           <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d={feature.icon} />
                           </svg>
                         </div>
                         <h3 className="text-2xl font-black text-white mb-3 leading-tight">{feature.title}</h3>
-                        <p className="text-orange-300 font-bold text-sm mb-5 tracking-wide">{feature.statistics}</p>
+                        <p className="text-gray-300 font-bold text-sm mb-5 tracking-wide">{feature.statistics}</p>
                       </div>
                       <p className="text-gray-200 text-base leading-relaxed font-medium">{feature.description}</p>
                     </div>
                     <button 
-                      className="premium-card-content px-7 py-3.5 text-white font-bold transition-all duration-300 hover:text-orange-300 flex items-center space-x-2 group mt-8 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10"
+                      className="premium-card-content px-7 py-3.5 text-white font-bold transition-all duration-300 hover:text-gray-300 flex items-center space-x-2 group mt-8 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10"
                       onClick={() => handleLearnMore(feature.title)}
                     >
                       <span>Learn More</span>
@@ -934,11 +1052,11 @@ const Home = () => {
             {Array.from({ length: Math.ceil(featuresData.length / 2) }).map((_, index) => (
               <motion.div
                 key={index}
-                className={`w-3 h-3 rounded-full cursor-pointer transition-all duration-300 ${
-                  index === currentFeature 
-                    ? 'bg-orange-500 w-8 shadow-lg shadow-orange-500/50' 
-                    : 'bg-gray-600'
-                }`}
+                  className={`w-3 h-3 rounded-full cursor-pointer transition-all duration-300 ${
+                    index === currentFeature 
+                      ? 'bg-white w-8 shadow-lg' 
+                      : 'bg-gray-600'
+                  }`}
                 onClick={() => setCurrentFeature(index)}
                 whileHover={{ scale: 1.3 }}
                 whileTap={{ scale: 0.9 }}
@@ -950,7 +1068,7 @@ const Home = () => {
 
           {/* Why Choose Section - Carousel with 2 Cards */}
           <section className="py-20 relative z-10" id="why-choose">
-            <div className="max-w-7xl mx-auto px-6 relative z-10">
+            <div className="max-w-7xl mx-auto px-6 relative z-10 overflow-hidden">
           <div className="text-center mb-16">
             <motion.h2 
               className="text-4xl md:text-5xl font-black mb-8 leading-tight text-white"
@@ -959,7 +1077,7 @@ const Home = () => {
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
             >
-              Why Choose <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">ElevateCareer.Cloud?</span>
+              Why Choose <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">ElevateCareer.ai?</span>
             </motion.h2>
             <motion.p 
               className="max-w-4xl mx-auto text-xl mb-8 text-gray-300"
@@ -972,84 +1090,71 @@ const Home = () => {
             </motion.p>
           </div>
 
-          {/* Why Choose Carousel - 2 Cards at Once */}
-          <div className="overflow-hidden relative w-full py-4">
-            <motion.div 
-              className="flex transition-transform duration-700 ease-in-out gap-6 pl-2"
-              style={{ 
-                transform: `translateX(calc(-${currentWhyChooseIndex * 100}% - 0.5rem))`,
-              }}
-            >
-              {whyChooseData.map((item, index) => (
-                <motion.div 
-                  key={index}
-                  className={`${item.cardStyle} flex-shrink-0 min-h-[500px] flex flex-col justify-between rounded-3xl shadow-card-elevated-lg transition-all duration-500`}
-                  style={{ 
-                    width: 'calc(50% - 0.75rem)',
-                    padding: '2.5rem'
-                  }}
-                  initial={{ opacity: 0, y: 50 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: (index % 2) * 0.1 }}
-                  whileHover={{ scale: 1.05, y: -10 }}
-                >
-                  <div className="premium-card-content space-y-6">
-                    <div className="flex items-center space-x-5 mb-8">
-                      <div className="w-20 h-20 bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-orange-500/30 border border-orange-400/20">
-                        <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                        </svg>
-                      </div>
+          {/* Why Choose Grid - 2x2 Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {whyChooseData.map((item, index) => (
+              <motion.div 
+                key={index}
+                className="group relative bg-black/90 border border-[#FF5728] min-h-[500px] flex flex-col justify-between rounded-3xl overflow-hidden"
+                style={{ 
+                  padding: '2.5rem',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                  transformStyle: 'preserve-3d'
+                }}
+                initial={{ opacity: 0, y: 50, rotateX: -5 }}
+                whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ 
+                  y: -12,
+                  scale: 1.02,
+                  rotateX: 3,
+                  transition: { duration: 0.3 }
+                }}
+              >
+                {/* Shine effect */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                </div>
+                <div className="premium-card-content space-y-6 relative z-10">
+                  <div className="flex items-center space-x-5 mb-8">
+                    <div className="w-20 h-20 bg-[#FF5728] rounded-3xl flex items-center justify-center border border-[#FF5728]">
+                      <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-white mb-2">{item.title}</h3>
+                      <p className="text-sm text-gray-300 font-medium leading-relaxed">{item.subtitle}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-5">
+                    <div className="flex items-start space-x-4 p-5 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm shadow-lg">
+                      <span className="text-gray-400 text-2xl font-black mt-0.5">❌</span>
                       <div>
-                        <h3 className="text-2xl font-black text-orange-200 mb-2">{item.title}</h3>
-                        <p className="text-sm text-gray-300 font-medium leading-relaxed">{item.subtitle}</p>
+                        <p className="text-gray-200 font-black text-base mb-2">Competitors:</p>
+                        <p className="text-sm text-gray-300 leading-relaxed font-medium">{item.competitor}</p>
                       </div>
                     </div>
                     
-                    <div className="space-y-5">
-                      <div className="flex items-start space-x-4 p-5 bg-red-900/25 rounded-2xl border-2 border-red-500/40 backdrop-blur-sm shadow-lg">
-                        <span className="text-red-300 text-2xl font-black mt-0.5">❌</span>
-                        <div>
-                          <p className="text-red-200 font-black text-base mb-2">Competitors:</p>
-                          <p className="text-sm text-gray-200 leading-relaxed font-medium">{item.competitor}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-start space-x-4 p-5 bg-green-900/25 rounded-2xl border-2 border-green-500/40 backdrop-blur-sm shadow-lg">
-                        <span className="text-green-300 text-2xl font-black mt-0.5">✅</span>
-                        <div>
-                          <p className="text-green-200 font-black text-base mb-2">ElevateCareer:</p>
-                          <p className="text-sm text-gray-200 leading-relaxed font-medium">{item.elevate}</p>
-                        </div>
+                    <div className="flex items-start space-x-4 p-5 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm shadow-lg">
+                      <span className="text-gray-300 text-2xl font-black mt-0.5">✅</span>
+                      <div>
+                        <p className="text-gray-200 font-black text-base mb-2">ElevateCareer:</p>
+                        <p className="text-sm text-gray-300 leading-relaxed font-medium">{item.elevate}</p>
                       </div>
                     </div>
                   </div>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-          
-          {/* Navigation dots */}
-          <div className="flex justify-center space-x-3 mt-12">
-            {Array.from({ length: Math.ceil(whyChooseData.length / 2) }).map((_, index) => (
-              <motion.div
-                key={index}
-                className={`w-3 h-3 rounded-full cursor-pointer transition-all duration-300 ${
-                  index === currentWhyChooseIndex 
-                    ? 'bg-orange-500 w-8 shadow-lg shadow-orange-500/50' 
-                    : 'bg-gray-600'
-                }`}
-                onClick={() => setCurrentWhyChooseIndex(index)}
-                whileHover={{ scale: 1.3 }}
-                whileTap={{ scale: 0.9 }}
-              />
+                </div>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-          {/* Achievements Section - Clean Carousel */}
+          {/* Achievements Section - Deck Style Carousel */}
           <section ref={achievementsRef} className="py-20 relative z-10" id="achievements">
             <div className="max-w-7xl mx-auto px-6 relative z-10">
           <motion.h2 
@@ -1061,59 +1166,116 @@ const Home = () => {
             Our <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">Achievements</span>
           </motion.h2>
 
-          {/* Carousel Container */}
-          <div className="relative overflow-hidden w-full">
-            <motion.div 
-              className="flex transition-transform duration-700 ease-in-out gap-6 pl-2"
-              style={{ 
-                transform: `translateX(calc(-${currentAchievementIndex * 100}% - 0.5rem))`,
-              }}
-            >
-              {achievementsData.map((achievement, index) => (
-                <motion.div
-                  key={index}
-                  className="gradient-card-orange card-glow-orange rounded-3xl shadow-card-elevated-lg flex-shrink-0"
-                  style={{ 
-                    width: 'calc(50% - 0.75rem)',
-                    minHeight: '340px',
-                    padding: '2.5rem'
-                  }}
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={achievementsInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  whileHover={{ scale: 1.05, y: -8 }}
-                >
-                  <div className="premium-card-content text-center h-full flex flex-col justify-center">
-                    {/* Icon */}
-                    <div className={`w-20 h-20 bg-gradient-to-br ${achievement.color} rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl border border-white/20`}>
-                      <span className="text-white font-black text-3xl">{index + 1}</span>
-                    </div>
-                    
-                    {/* Number */}
-                    <h3 className="text-5xl font-black text-white mb-4 tracking-tight">
-                      {achievement.label.includes('Rate') || achievement.label.includes('Support') ? (
-                        <>{achievement.number}%</>
-                      ) : (
-                        <CountUp end={parseInt(achievement.number)} duration={2.5} separator="," suffix="+" />
+          {/* Deck Style Container */}
+          <div 
+            className="relative h-[500px] flex items-center justify-center"
+            style={{ perspective: '1000px', perspectiveOrigin: 'center center' }}
+          >
+            <div className="relative w-full h-full flex items-center justify-center">
+              {achievementsData.map((achievement, index) => {
+                const distanceFromCenter = index - currentAchievementIndex;
+                const absDistance = Math.abs(distanceFromCenter);
+                
+                // Calculate position and styles based on distance from center
+                const isCenter = distanceFromCenter === 0;
+                const isLeft = distanceFromCenter < 0;
+                const isRight = distanceFromCenter > 0;
+                
+                // Calculate transform values
+                const xOffset = distanceFromCenter * 280; // Horizontal spacing
+                const zOffset = absDistance * -50; // Z-depth (cards behind)
+                const scale = isCenter ? 1 : 0.75 - (absDistance * 0.15); // Scale down side cards
+                const opacity = isCenter ? 1 : 0.4 - (absDistance * 0.2); // Fade side cards
+                const blur = isCenter ? 0 : absDistance * 8; // Blur side cards
+                const rotateY = isCenter ? 0 : (isLeft ? 15 : -15); // Slight rotation for side cards
+                
+                return (
+                  <motion.div
+                    key={index}
+                    className="absolute cursor-pointer"
+                    style={{
+                      width: '320px',
+                      minHeight: '400px',
+                      transformStyle: 'preserve-3d',
+                      zIndex: achievementsData.length - absDistance, // Center card on top
+                    }}
+                    initial={{ opacity: 0, y: 50 }}
+                    animate={{
+                      x: xOffset,
+                      z: zOffset,
+                      scale: scale,
+                      opacity: Math.max(0.1, opacity),
+                      rotateY: rotateY,
+                      filter: `blur(${blur}px)`,
+                    }}
+                    transition={{
+                      duration: 0.7,
+                      ease: [0.4, 0, 0.2, 1],
+                    }}
+                    onClick={() => setCurrentAchievementIndex(index)}
+                    whileHover={isCenter ? {
+                      scale: 1.05,
+                      transition: { duration: 0.3 }
+                    } : {
+                      scale: scale + 0.05,
+                      opacity: Math.min(1, opacity + 0.2),
+                      filter: `blur(${Math.max(0, blur - 4)}px)`,
+                      transition: { duration: 0.3 }
+                    }}
+                  >
+                    <div className="relative bg-black/90 border border-[#FF5728] rounded-3xl h-full overflow-hidden w-full"
+                      style={{
+                        boxShadow: isCenter 
+                          ? '0 20px 60px rgba(255, 87, 40, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset' 
+                          : '0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 87, 40, 0.2) inset',
+                        transformStyle: 'preserve-3d',
+                        padding: '2.5rem',
+                      }}
+                    >
+                      {/* Shine effect - only on center card */}
+                      {isCenter && (
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                          <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                        </div>
                       )}
-                    </h3>
-                    
-                    {/* Label */}
-                    <p className="text-orange-300 font-black text-xl mb-4 tracking-wide">{achievement.label}</p>
-                    
-                    {/* Description */}
-                    <p className="text-gray-200 text-base leading-relaxed font-medium">{achievement.description}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
+                      <div className="premium-card-content text-center h-full flex flex-col justify-center relative z-10">
+                        {/* Icon */}
+                        <div className="w-20 h-20 bg-[#FF5728] rounded-3xl flex items-center justify-center mx-auto mb-8 border border-[#FF5728]">
+                          <span className="text-white font-black text-3xl">{index + 1}</span>
+                        </div>
+                        
+                        {/* Number */}
+                        <h3 className="text-5xl font-black text-white mb-4 tracking-tight">
+                          {achievement.label.includes('Rate') || achievement.label.includes('Support') ? (
+                            <>{achievement.number}%</>
+                          ) : (
+                            isCenter ? (
+                              <CountUp end={parseInt(achievement.number)} duration={2.5} separator="," suffix="+" />
+                            ) : (
+                              <>{achievement.number}{achievement.label.includes('Rate') || achievement.label.includes('Support') ? '%' : '+'}</>
+                            )
+                          )}
+                        </h3>
+                        
+                        {/* Label */}
+                        <p className="text-gray-300 font-black text-xl mb-4 tracking-wide">{achievement.label}</p>
+                        
+                        {/* Description */}
+                        <p className="text-gray-200 text-base leading-relaxed font-medium">{achievement.description}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Navigation Controls */}
-          <div className="flex justify-center items-center space-x-8 mt-12">
+          <div className="flex justify-center items-center space-x-8 mt-16">
             <motion.button
-              onClick={() => setCurrentAchievementIndex(prev => (prev - 1 + Math.ceil(achievementsData.length / 2)) % Math.ceil(achievementsData.length / 2))}
-              className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all"
+              onClick={() => setCurrentAchievementIndex(prev => (prev - 1 + achievementsData.length) % achievementsData.length)}
+              className="w-12 h-12 bg-white/10 border border-white/20 rounded-full flex items-center justify-center shadow-lg hover:bg-white/20 transition-all"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -1124,13 +1286,13 @@ const Home = () => {
 
             {/* Dots Indicator */}
             <div className="flex space-x-3">
-              {Array.from({ length: Math.ceil(achievementsData.length / 2) }).map((_, index) => (
+              {achievementsData.map((_, index) => (
                 <motion.button
                   key={index}
                   onClick={() => setCurrentAchievementIndex(index)}
                   className={`h-3 rounded-full transition-all duration-300 ${
                     index === currentAchievementIndex 
-                      ? 'bg-orange-500 w-8 shadow-lg shadow-orange-500/50' 
+                      ? 'bg-white w-8 shadow-lg' 
                       : 'bg-gray-600 w-3'
                   }`}
                   whileHover={{ scale: 1.2 }}
@@ -1140,8 +1302,8 @@ const Home = () => {
             </div>
 
             <motion.button
-              onClick={() => setCurrentAchievementIndex(prev => (prev + 1) % Math.ceil(achievementsData.length / 2))}
-              className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all"
+              onClick={() => setCurrentAchievementIndex(prev => (prev + 1) % achievementsData.length)}
+              className="w-12 h-12 bg-white/10 border border-white/20 rounded-full flex items-center justify-center shadow-lg hover:bg-white/20 transition-all"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -1199,15 +1361,29 @@ const Home = () => {
             ].map((solution, index) => (
               <motion.div 
                 key={index}
-                className={`${solution.gradient} card-glow-orange p-12 rounded-3xl shadow-card-elevated-lg`}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                className="group relative bg-black/90 border border-[#FF5728] p-12 rounded-3xl overflow-hidden"
+                style={{
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                  transformStyle: 'preserve-3d'
+                }}
+                initial={{ opacity: 0, scale: 0.9, rotateX: -5 }}
+                whileInView={{ opacity: 1, scale: 1, rotateX: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ scale: 1.05, y: -12 }}
+                whileHover={{ 
+                  y: -12,
+                  scale: 1.02,
+                  rotateX: 3,
+                  transition: { duration: 0.3 }
+                }}
               >
-                <div className="premium-card-content space-y-7">
-                  <div className="w-20 h-20 bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-orange-500/30 border border-orange-400/20">
+                {/* Shine effect */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                </div>
+                <div className="premium-card-content space-y-7 relative z-10">
+                  <div className="w-20 h-20 bg-[#FF5728] rounded-3xl flex items-center justify-center border border-[#FF5728]">
                     <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d={solution.icon} />
                     </svg>

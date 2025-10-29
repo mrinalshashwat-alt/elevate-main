@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 
 const AICommunication = () => {
   const router = useRouter();
@@ -429,24 +430,16 @@ const AICommunication = () => {
             {/* Enhanced Robot Section */}
             <div className="flex items-center justify-center relative">
               <div className="relative w-full aspect-video max-w-lg">
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/30 via-purple-500/20 to-blue-500/30 blur-3xl animate-pulse"></div>
-                <div className="relative w-full h-full overflow-hidden group transition-all duration-500 hover:scale-105">
-                  <video
-                    className="w-full h-full object-cover rounded-2xl shadow-2xl"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                  >
-                    <source src="/robo.mp4" type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                  <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-blue-500/10 group-hover:from-orange-500/20 group-hover:to-blue-500/20 transition-all pointer-events-none rounded-2xl"></div>
-                  <div className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-md rounded-lg p-3 border border-white/10">
-                    <p className="text-sm text-white/90 font-medium">💬 AI-Powered Communication Training</p>
-                    <p className="text-xs text-white/60 mt-1">Master professional communication with real-time feedback</p>
-                  </div>
-                </div>
+                <video
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                >
+                  <source src="/robo.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
               </div>
             </div>
 
@@ -613,7 +606,25 @@ const AICommunication = () => {
           </div>
         ) : sessionType === 'text' ? (
           <div className="max-w-4xl mx-auto">
-            <div className="bg-black backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
+            <motion.div 
+              className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-8 overflow-hidden"
+              style={{
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                transformStyle: 'preserve-3d'
+              }}
+              whileHover={{ 
+                y: -8,
+                scale: 1.02,
+                rotateX: 2,
+                transition: { duration: 0.3 }
+              }}
+            >
+              {/* Shine effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              </div>
+              <div className="premium-card-content relative z-10">
               {/* Enhanced Header */}
               <div className="mb-8">
                 <div className="flex justify-between items-center mb-6">
@@ -657,7 +668,6 @@ const AICommunication = () => {
                   ></div>
                 </div>
               </div>
-            </div>
 
               {/* Enhanced Scenario */}
               <div className="mb-8">
@@ -717,14 +727,32 @@ const AICommunication = () => {
                   </button>
                 </div>
               </div>
+              </div>
+            </motion.div>
           </div>
         ) : (
           <div className="flex gap-6 pb-8 min-h-[calc(100vh-120px)]">
             {/* Enhanced Left Side - AI Bot */}
-            <div className="w-1/3 bg-black backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden h-fit sticky top-24">
-              {/* Animated background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-blue-500/5"></div>
-              <div className="relative w-full max-w-sm mb-6 z-10">
+            <motion.div 
+              className="group relative w-1/3 bg-black/90 border border-[#FF5728] rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden h-fit sticky top-24"
+              style={{
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                transformStyle: 'preserve-3d'
+              }}
+              whileHover={{ 
+                y: -8,
+                scale: 1.02,
+                rotateX: 2,
+                transition: { duration: 0.3 }
+              }}
+            >
+              {/* Shine effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              </div>
+              <div className="premium-card-content relative z-10 w-full flex flex-col items-center">
+              <div className="relative w-full max-w-sm mb-6">
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/30 via-purple-500/20 to-blue-500/30 blur-3xl animate-pulse"></div>
                 <div className="relative bg-gradient-to-br from-orange-500/20 to-blue-500/20 rounded-3xl p-8 backdrop-blur-sm border border-white/10">
                   {isSpeaking ? (
@@ -821,10 +849,29 @@ const AICommunication = () => {
                   End Session
                 </button>
               </div>
-            </div>
+              </div>
+            </motion.div>
 
             {/* Enhanced Right Side - Interview Questions */}
-            <div className="flex-1 bg-black backdrop-blur-xl border border-white/10 rounded-3xl p-8 flex flex-col shadow-2xl">
+            <motion.div 
+              className="group relative flex-1 bg-black/90 border border-[#FF5728] rounded-3xl p-8 flex flex-col overflow-hidden"
+              style={{
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                transformStyle: 'preserve-3d'
+              }}
+              whileHover={{ 
+                y: -8,
+                scale: 1.02,
+                rotateX: 2,
+                transition: { duration: 0.3 }
+              }}
+            >
+              {/* Shine effect */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              </div>
+              <div className="premium-card-content relative z-10 flex flex-col flex-1">
               {/* Enhanced Header */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">
@@ -952,7 +999,8 @@ const AICommunication = () => {
                 </div>
               </div>
               </div>
-            </div>
+              </div>
+            </motion.div>
           </div>
         )}
       </main>
