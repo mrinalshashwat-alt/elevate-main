@@ -23,11 +23,16 @@ const AICommunication = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [textAnswer, setTextAnswer] = useState('');
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [showLoader, setShowLoader] = useState(true);
+  const [loaderFade, setLoaderFade] = useState(false);
   
   // Refs
   const recognitionRef = useRef(null);
   const synthRef = useRef(null);
   const durationTimerRef = useRef(null);
+  const loaderVideoRef = useRef(null);
 
   const coachingScenarios = {
     'presentation': [
@@ -109,6 +114,48 @@ const AICommunication = () => {
     'interview': ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
     'meeting': ['Beginner', 'Intermediate', 'Advanced', 'Expert']
   };
+
+  // Handle video loader
+  useEffect(() => {
+    if (loaderVideoRef.current && showLoader) {
+      const video = loaderVideoRef.current;
+      let fallbackTimeout;
+      
+      const handleVideoEnd = () => {
+        if (fallbackTimeout) clearTimeout(fallbackTimeout);
+        setLoaderFade(true);
+        setTimeout(() => {
+          setShowLoader(false);
+        }, 500);
+      };
+
+      const playVideo = async () => {
+        try {
+          video.volume = 1;
+          await video.play();
+        } catch (error) {
+          console.log('Autoplay with sound blocked, attempting muted playback');
+          video.muted = true;
+          await video.play();
+        }
+      };
+
+      video.addEventListener('ended', handleVideoEnd);
+      
+      playVideo();
+      
+      fallbackTimeout = setTimeout(() => {
+        if (showLoader) {
+          handleVideoEnd();
+        }
+      }, 8000);
+
+      return () => {
+        video.removeEventListener('ended', handleVideoEnd);
+        if (fallbackTimeout) clearTimeout(fallbackTimeout);
+      };
+    }
+  }, [showLoader]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -227,9 +274,11 @@ const AICommunication = () => {
       try {
         setIsRecording(false);
         recognitionRef.current.stop();
-        if (transcript.trim()) {
-          saveResponse(transcript);
-        }
+      if (transcript.trim()) {
+        saveResponse(transcript);
+        setShowFeedback(true);
+        setTimeout(() => setShowFeedback(false), 3000);
+      }
       } catch (error) {
         console.error('Error stopping recognition:', error);
         setIsRecording(false);
@@ -286,7 +335,19 @@ const AICommunication = () => {
   };
 
   const handleBackToAgents = () => {
-    window.history.back();
+    if (isSessionStarted) {
+      if (confirm('Are you sure you want to leave? Your progress will be lost.')) {
+        setIsSessionStarted(false);
+        if (isRecording) stopRecording();
+        if (synthRef.current) synthRef.current.cancel();
+      }
+    } else {
+      window.history.back();
+    }
+  };
+
+  const getWordCount = (text) => {
+    return text.trim().split(/\s+/).filter(word => word.length > 0).length;
   };
 
   const resetSession = () => {
@@ -311,63 +372,102 @@ const AICommunication = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white overflow-hidden">
+    <div className="min-h-screen bg-black text-white overflow-visible relative">
+      {/* Video Loader */}
+      {showLoader && (
+        <div 
+          className={`fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-500 ${
+            loaderFade ? 'opacity-0' : 'opacity-100'
+          }`}
+          style={{ pointerEvents: loaderFade ? 'none' : 'auto' }}
+        >
+          <video
+            ref={loaderVideoRef}
+            className="w-full h-full object-cover"
+            autoPlay
+            playsInline
+          >
+            <source src="/ai.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      )}
+
+      {/* Animated Background Effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+      </div>
+
       {/* Navigation Header */}
-      <header className="bg-black/30 backdrop-blur-md border-b border-white/5 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+      <header className="bg-black/40 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 shadow-2xl">
+        <div className="max-w-7xl mx-auto px-4 py-5 flex justify-between items-center">
           <button 
             onClick={handleBackToAgents}
-            className="flex items-center space-x-2 hover:text-orange-500 transition-colors"
+            className="flex items-center space-x-2 hover:text-orange-400 transition-all group px-3 py-2 rounded-lg hover:bg-white/5"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
             </svg>
-            <span>Back to Agents</span>
+            <span className="font-medium">Back to Agents</span>
           </button>
-          <h1 className="text-2xl font-bold">AI Communication Coach</h1>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/30">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">AI Communication Coach</h1>
+          </div>
           <div className="w-32"></div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 relative z-10 overflow-visible">
         {!isSessionStarted ? (
           <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[80vh]">
-            {/* Visual Section */}
-            <div className="flex items-center justify-center">
-              <div className="relative w-full aspect-video max-w-md">
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 via-transparent to-blue-500/20 blur-3xl"></div>
-                <div className="relative w-full h-full overflow-hidden group transition-all">
+            {/* Enhanced Robot Section */}
+            <div className="flex items-center justify-center relative">
+              <div className="relative w-full aspect-video max-w-lg">
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/30 via-purple-500/20 to-blue-500/30 blur-3xl animate-pulse"></div>
+                <div className="relative w-full h-full overflow-hidden group transition-all duration-500 hover:scale-105">
                   <video
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover rounded-2xl shadow-2xl"
                     autoPlay
                     muted
                     loop
                     playsInline
                   >
-                    <source src="/robo.webm" type="video/webm" />
+                    <source src="/robo.mp4" type="video/mp4" />
                     Your browser does not support the video tag.
                   </video>
-                  <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-blue-500/5 group-hover:from-orange-500/10 group-hover:to-blue-500/10 transition-all pointer-events-none"></div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-blue-500/10 group-hover:from-orange-500/20 group-hover:to-blue-500/20 transition-all pointer-events-none rounded-2xl"></div>
+                  <div className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-md rounded-lg p-3 border border-white/10">
+                    <p className="text-sm text-white/90 font-medium">💬 AI-Powered Communication Training</p>
+                    <p className="text-xs text-white/60 mt-1">Master professional communication with real-time feedback</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Form Section */}
-            <div className="space-y-8">
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            {/* Enhanced Form Section */}
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-14 h-14 bg-gradient-to-br from-orange-500 via-orange-600 to-orange-700 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/30 animate-pulse">
+                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
-                  <h2 className="text-4xl font-bold">AI Communication Coach</h2>
+                  <div>
+                    <h2 className="text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">AI Communication Coach</h2>
+                    <p className="text-gray-400 mt-1">Premium communication training with AI</p>
+                  </div>
                 </div>
-                <p className="text-gray-400 text-lg">Master professional communication with personalized AI coaching and real-time feedback.</p>
-        </div>
+              </div>
 
               {error && (
-                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-3">
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-3 animate-shake">
                   <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -376,110 +476,124 @@ const AICommunication = () => {
               )}
 
               <div className="space-y-4">
-          <input
-            type="text"
-                  placeholder="Your Name"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all placeholder-gray-600"
-                />
+                <div className="relative group">
+                  <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Your Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter your name"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600"
+                  />
+                </div>
 
-                <select
-                  value={coachingMode}
-                  onChange={(e) => {
-                    setCoachingMode(e.target.value);
-                    setSelectedSkill('');
-                    setDifficulty('');
-                  }}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all text-gray-400 appearance-none cursor-pointer"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23999'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 1rem center',
-                    backgroundSize: '1.25rem',
-                    paddingRight: '2.5rem'
-                  }}
-                >
-                  <option value="">Select Communication Skill</option>
-                  <option value="presentation">Presentation Skills</option>
-                  <option value="negotiation">Negotiation</option>
-                  <option value="public-speaking">Public Speaking</option>
-                  <option value="interview">Interview Skills</option>
-                  <option value="meeting">Meeting Leadership</option>
-                </select>
+                <div className="relative group">
+                  <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Communication Skill</label>
+                  <select
+                    value={coachingMode}
+                    onChange={(e) => {
+                      setCoachingMode(e.target.value);
+                      setSelectedSkill('');
+                      setDifficulty('');
+                    }}
+                    className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 appearance-none cursor-pointer"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f97316'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 1rem center',
+                      backgroundSize: '1.25rem',
+                      paddingRight: '2.5rem'
+                    }}
+                  >
+                    <option value="" className="bg-slate-900">Select Communication Skill</option>
+                    <option value="presentation" className="bg-slate-900">Presentation Skills</option>
+                    <option value="negotiation" className="bg-slate-900">Negotiation</option>
+                    <option value="public-speaking" className="bg-slate-900">Public Speaking</option>
+                    <option value="interview" className="bg-slate-900">Interview Skills</option>
+                    <option value="meeting" className="bg-slate-900">Meeting Leadership</option>
+                  </select>
+                </div>
 
                 {coachingMode && (
                   <>
-                    <select
-                      value={selectedSkill}
-                      onChange={(e) => setSelectedSkill(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all text-gray-400 appearance-none cursor-pointer"
-                      style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23999'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 1rem center',
-                        backgroundSize: '1.25rem',
-                        paddingRight: '2.5rem'
-                      }}
-                    >
-                      <option value="">Select Scenario</option>
-                      {coachingScenarios[coachingMode]?.map((scenario, index) => (
-                        <option key={index} value={index}>{scenario.title}</option>
-                      ))}
-                    </select>
+                    <div className="relative group">
+                      <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Scenario</label>
+                      <select
+                        value={selectedSkill}
+                        onChange={(e) => setSelectedSkill(e.target.value)}
+                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 appearance-none cursor-pointer"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f97316'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 1rem center',
+                          backgroundSize: '1.25rem',
+                          paddingRight: '2.5rem'
+                        }}
+                      >
+                        <option value="" className="bg-slate-900">Select Scenario</option>
+                        {coachingScenarios[coachingMode]?.map((scenario, index) => (
+                          <option key={index} value={index} className="bg-slate-900">{scenario.title}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                    <select
-                      value={difficulty}
-                      onChange={(e) => setDifficulty(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all text-gray-400 appearance-none cursor-pointer"
-                      style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23999'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 1rem center',
-                        backgroundSize: '1.25rem',
-                        paddingRight: '2.5rem'
-                      }}
-                    >
-                      <option value="">Select Difficulty Level</option>
-                      {skillLevels[coachingMode]?.map((level, index) => (
-                        <option key={index} value={level}>{level}</option>
-                      ))}
-                    </select>
+                    <div className="relative group">
+                      <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Level</label>
+                      <select
+                        value={difficulty}
+                        onChange={(e) => setDifficulty(e.target.value)}
+                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 appearance-none cursor-pointer"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f97316'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 1rem center',
+                          backgroundSize: '1.25rem',
+                          paddingRight: '2.5rem'
+                        }}
+                      >
+                        <option value="" className="bg-slate-900">Select Level</option>
+                        {skillLevels[coachingMode]?.map((level, index) => (
+                          <option key={index} value={level} className="bg-slate-900">{level}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                    <div className="space-y-1">
-                      <label className="text-sm text-gray-400">Session Duration (minutes)</label>
+                    <div className="relative group">
+                      <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Duration (minutes)</label>
                       <input
                         type="number"
                         min="5"
                         max="60"
                         value={sessionDuration}
                         onChange={(e) => setSessionDuration(e.target.value)}
-                        className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all placeholder-gray-600"
+                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600"
                       />
                     </div>
                   </>
                 )}
               </div>
 
-              {/* Session Type Toggle */}
-              <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all cursor-pointer" onClick={() => setEnableVoice(!enableVoice)}>
-                <div className="flex items-center gap-3">
-                  <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
+              {/* Enhanced Interview Type Toggle */}
+              <div className="flex items-center justify-between p-5 bg-gradient-to-r from-white/5 to-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-orange-500/30 transition-all cursor-pointer group" onClick={() => setEnableVoice(!enableVoice)}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${enableVoice ? 'bg-orange-500/20 text-orange-400' : 'bg-white/5 text-gray-400'}`}>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </div>
                   <div>
-                    <span className="font-medium block">Voice Mode</span>
-                    <span className="text-xs text-gray-400">Practice with voice interaction</span>
+                    <span className="font-semibold block text-white">Voice Mode</span>
+                    <span className="text-xs text-gray-400">Practice with real-time voice interaction</span>
                   </div>
                 </div>
                 <button
-                  className={`relative w-14 h-8 rounded-full transition-all ${
-                    enableVoice ? 'bg-gradient-to-r from-orange-500 to-orange-600' : 'bg-white/10'
+                  className={`relative w-16 h-9 rounded-full transition-all duration-300 ${
+                    enableVoice ? 'bg-gradient-to-r from-orange-500 to-orange-600 shadow-lg shadow-orange-500/30' : 'bg-white/10'
                   }`}
                 >
                   <div
-                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all ${
-                      enableVoice ? 'translate-x-6' : ''
+                    className={`absolute top-1 left-1 w-7 h-7 bg-white rounded-full transition-all duration-300 shadow-lg ${
+                      enableVoice ? 'translate-x-7' : ''
                     }`}
                   ></div>
                 </button>
@@ -487,197 +601,281 @@ const AICommunication = () => {
 
               <button
                 onClick={handleStartSession}
-                className="w-full px-6 py-4 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-orange-500/30 text-lg"
+                className="w-full px-6 py-4 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-lg hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
               >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 Start Communication Session
               </button>
             </div>
           </div>
         ) : sessionType === 'text' ? (
-          <div className="max-w-4xl mx-auto space-y-6">
-            {/* Session Header */}
-            <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6">
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-orange-400">
-                    {coachingScenarios[coachingMode]?.[selectedSkill]?.title}
-                  </h2>
-                  <p className="text-gray-400 mt-1">
-                    {coachingScenarios[coachingMode]?.[selectedSkill]?.description}
-                  </p>
-                </div>
-          <button
-                  onClick={resetSession}
-                  className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-all"
-                >
-                  End Session
-                </button>
-              </div>
-              <div className="flex justify-between items-center text-sm text-gray-400">
-                <span>Difficulty: {difficulty}</span>
-                <span>Duration: {sessionDuration} minutes</span>
-                <span>Time: {formatTime(sessionTime)}</span>
-              </div>
-            </div>
-
-            {/* Scenario Card */}
-            <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6">
-              <h3 className="text-xl font-bold mb-4">Scenario</h3>
-              <div className="bg-gradient-to-r from-orange-500/10 to-blue-500/10 border border-orange-500/20 rounded-xl p-4 mb-6">
-                <p className="text-gray-200 leading-relaxed">
-                  {coachingScenarios[coachingMode]?.[selectedSkill]?.prompt}
-                </p>
-              </div>
-              
-              <h4 className="text-lg font-semibold mb-3">Key Tips:</h4>
-              <div className="grid md:grid-cols-2 gap-3">
-                {coachingScenarios[coachingMode]?.[selectedSkill]?.tips?.map((tip, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg">
-                    <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-orange-400 text-sm font-bold">{index + 1}</span>
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-black backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
+              {/* Enhanced Header */}
+              <div className="mb-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
                     </div>
-                    <p className="text-gray-300 text-sm">{tip}</p>
+                    <div>
+                      <h2 className="text-2xl font-bold text-white">
+                        {coachingScenarios[coachingMode]?.[selectedSkill]?.title}
+                      </h2>
+                      <p className="text-gray-400 mt-1 text-sm">
+                        {coachingScenarios[coachingMode]?.[selectedSkill]?.description}
+                      </p>
+                      <div className="flex items-center gap-4 mt-2">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {formatTime(sessionTime)}
+                        </div>
+                        <div className="px-2.5 py-1 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                          <span className="text-xs text-orange-400 font-medium">{difficulty}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ))}
+                  <button
+                    onClick={resetSession}
+                    className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-all font-medium"
+                  >
+                    End Session
+                  </button>
+                </div>
+                <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 h-3 rounded-full transition-all duration-500 shadow-lg shadow-orange-500/30"
+                    style={{ width: '100%' }}
+                  ></div>
+                </div>
               </div>
             </div>
 
-            {/* Practice Area */}
-            <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6">
-              <h3 className="text-xl font-bold mb-4">Your Response</h3>
-              <textarea
-                className="w-full h-64 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-orange-500/50 focus:bg-white/10 resize-none transition-all placeholder-gray-600"
-                placeholder="Practice your response here. Focus on clarity, confidence, and structure..."
-              ></textarea>
-              
-              <div className="flex justify-between items-center mt-4">
-                <div className="flex gap-2">
-                  <button className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-all">
-                    Get AI Feedback
+              {/* Enhanced Scenario */}
+              <div className="mb-8">
+                <div className="bg-gradient-to-br from-orange-500/10 to-blue-500/10 border border-orange-500/20 rounded-2xl p-6 mb-6">
+                  <h3 className="text-2xl font-bold text-white mb-3 leading-relaxed">Scenario</h3>
+                  <p className="text-gray-200 leading-relaxed text-lg">
+                    {coachingScenarios[coachingMode]?.[selectedSkill]?.prompt}
+                  </p>
+                  {coachingScenarios[coachingMode]?.[selectedSkill]?.tips && (
+                    <div className="mt-4 pt-4 border-t border-white/10">
+                      <p className="text-sm text-gray-400 flex items-start gap-2 mb-2">
+                        <svg className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span><strong className="text-orange-400">Key Tips:</strong></span>
+                      </p>
+                      <div className="grid md:grid-cols-2 gap-2 mt-2">
+                        {coachingScenarios[coachingMode]?.[selectedSkill]?.tips?.map((tip, index) => (
+                          <div key={index} className="flex items-start gap-2 text-sm text-gray-300">
+                            <span className="text-orange-400 font-bold">{index + 1}.</span>
+                            <span>{tip}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="relative">
+                  <textarea
+                    value={textAnswer}
+                    onChange={(e) => setTextAnswer(e.target.value)}
+                    className="w-full h-64 px-5 py-4 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 resize-none transition-all placeholder-gray-600 text-white text-lg leading-relaxed"
+                    placeholder="Type your response here... Be detailed and specific."
+                  ></textarea>
+                  <div className="absolute bottom-3 right-3 flex items-center gap-4 text-xs text-gray-500">
+                    <span>{getWordCount(textAnswer)} words</span>
+                    <span>{textAnswer.length} characters</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Enhanced Navigation */}
+              <div className="pt-6 border-t border-white/10">
+                <div className="flex justify-between gap-4">
+                  <button className="px-6 py-3.5 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all font-medium flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Get Feedback
                   </button>
-                  <button className="px-4 py-2 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-all">
-                    Record Practice
+                  <button className="px-10 py-3.5 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-lg hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 flex items-center gap-3 transform hover:scale-105 active:scale-95 border-2 border-transparent hover:border-orange-400/50">
+                    <span>Submit Response</span>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                    </svg>
                   </button>
                 </div>
-                <button className="px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-semibold hover:from-orange-600 hover:to-orange-700 transition-all">
-                  Submit Response
-          </button>
-        </div>
-            </div>
+              </div>
           </div>
         ) : (
-          <div className="h-[calc(100vh-120px)] flex gap-4">
-            {/* Left Side - AI Bot/Placeholder */}
-            <div className="w-1/3 bg-gradient-to-br from-gray-900 to-gray-950 border border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center">
-              <div className="relative w-full max-w-sm mb-6">
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 via-transparent to-blue-500/20 blur-3xl animate-pulse"></div>
-                <div className="relative bg-gradient-to-br from-orange-500/10 to-blue-500/10 rounded-2xl p-8 backdrop-blur-sm">
+          <div className="flex gap-6 pb-8 min-h-[calc(100vh-120px)]">
+            {/* Enhanced Left Side - AI Bot */}
+            <div className="w-1/3 bg-black backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden h-fit sticky top-24">
+              {/* Animated background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-blue-500/5"></div>
+              <div className="relative w-full max-w-sm mb-6 z-10">
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/30 via-purple-500/20 to-blue-500/30 blur-3xl animate-pulse"></div>
+                <div className="relative bg-gradient-to-br from-orange-500/20 to-blue-500/20 rounded-3xl p-8 backdrop-blur-sm border border-white/10">
                   {isSpeaking ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-3 h-12 bg-orange-500 rounded animate-pulse"></div>
-                      <div className="w-3 h-16 bg-orange-500 rounded animate-pulse" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-3 h-20 bg-orange-500 rounded animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-3 h-14 bg-orange-500 rounded animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-                      <div className="w-3 h-10 bg-orange-500 rounded animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                    <div className="flex items-center justify-center gap-2 h-32">
+                      <div className="w-2 h-12 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0s' }}></div>
+                      <div className="w-2 h-20 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-16 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-2 h-24 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
+                      <div className="w-2 h-14 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-blue-500 rounded-full flex items-center justify-center mb-4">
-                        <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex flex-col items-center justify-center h-32">
+                      <div className="w-28 h-28 bg-gradient-to-br from-orange-500 via-orange-600 to-blue-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-orange-500/30 animate-pulse-slow">
+                        <svg className="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                       </div>
-                      <p className="text-gray-400 text-center">AI Communication Coach</p>
+                      <p className="text-gray-300 text-center font-medium">AI Communication Coach</p>
+                      <p className="text-gray-500 text-xs text-center mt-1">Ready to coach</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Recording Status */}
+              {/* Enhanced Recording Status */}
               {isRecording && (
-                <div className="bg-red-500/20 border border-red-500/50 rounded-xl px-4 py-2 flex items-center gap-2 animate-pulse">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  <span className="text-sm font-medium text-red-400">Recording...</span>
+                <div className="bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-500/50 rounded-2xl px-6 py-3 flex items-center gap-3 animate-pulse z-10 mb-4">
+                  <div className="relative">
+                    <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                    <div className="absolute inset-0 w-4 h-4 bg-red-500 rounded-full animate-ping"></div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-semibold text-red-400 block">Recording</span>
+                    <span className="text-xs text-red-300">Speak clearly...</span>
+                  </div>
                 </div>
               )}
 
-              {/* Session Info */}
-              <div className="mt-auto w-full space-y-2 text-sm">
-                <div className="flex justify-between text-gray-400">
-                  <span>Mode:</span>
-                  <span className="text-white capitalize">{coachingMode}</span>
+              {/* Feedback Badge */}
+              {showFeedback && (
+                <div className="bg-gradient-to-r from-green-500/20 to-green-600/20 border border-green-500/30 rounded-xl px-4 py-2 flex items-center gap-2 z-10 mb-4 animate-bounce-in">
+                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-sm font-medium text-green-400">Response saved!</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
-                  <span>Difficulty:</span>
-                  <span className="text-white">{difficulty}</span>
+              )}
+
+              {/* Enhanced Interview Info */}
+              <div className="mt-auto w-full space-y-3 text-sm z-10">
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-400">Mode</span>
+                    <span className="text-xl font-bold text-white capitalize">{coachingMode}</span>
+                  </div>
+                  <div className="w-full bg-white/10 rounded-full h-2 mt-3">
+                    <div 
+                      className="bg-gradient-to-r from-orange-500 to-orange-600 h-2 rounded-full transition-all duration-500"
+                      style={{ width: '100%' }}
+                    ></div>
+                  </div>
                 </div>
-                <div className="flex justify-between text-gray-400">
-                  <span>Duration:</span>
-                  <span className="text-white">{formatTime(sessionTime)}</span>
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-400">Difficulty</span>
+                    <span className="text-lg font-bold text-white">{difficulty}</span>
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Duration
+                    </span>
+                    <span className="text-lg font-bold text-white">{formatTime(sessionTime)}</span>
+                  </div>
                 </div>
               </div>
 
               {/* Control Buttons */}
-              <div className="w-full mt-4 space-y-2">
+              <div className="w-full mt-4 space-y-2 z-10">
                 <button
                   onClick={handleReplayPrompt}
-                  className="w-full px-4 py-2 bg-orange-500/20 border border-orange-500/30 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-all text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-orange-500/20 border border-orange-500/30 text-orange-400 rounded-xl hover:bg-orange-500/30 transition-all text-sm font-semibold"
                 >
                   Replay Prompt
                 </button>
                 <button
                   onClick={resetSession}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-all text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-xl hover:bg-white/20 transition-all text-sm font-semibold"
                 >
                   End Session
                 </button>
               </div>
             </div>
 
-            {/* Right Side - Coaching Content */}
-            <div className="flex-1 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-8 flex flex-col overflow-y-auto custom-scrollbar">
-              {/* Header */}
-              <div className="mb-6 pb-4 border-b border-white/10">
-                <h2 className="text-2xl font-bold text-orange-400 mb-2">
-                  {coachingScenarios[coachingMode]?.[selectedSkill]?.title}
-                </h2>
-                <p className="text-gray-400">{coachingScenarios[coachingMode]?.[selectedSkill]?.description}</p>
+            {/* Enhanced Right Side - Interview Questions */}
+            <div className="flex-1 bg-black backdrop-blur-xl border border-white/10 rounded-3xl p-8 flex flex-col shadow-2xl">
+              {/* Enhanced Header */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-white mb-1">
+                        {coachingScenarios[coachingMode]?.[selectedSkill]?.title}
+                      </h2>
+                      <p className="text-sm text-gray-400">{coachingScenarios[coachingMode]?.[selectedSkill]?.description}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 h-2.5 rounded-full transition-all duration-500 shadow-lg shadow-orange-500/30"
+                    style={{ width: '100%' }}
+                  ></div>
+                </div>
               </div>
 
-              {/* Scenario Prompt */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  Scenario
-                </h3>
-                <div className="bg-gradient-to-r from-orange-500/10 to-blue-500/10 border border-orange-500/20 rounded-xl p-4">
-                  <p className="text-gray-200 leading-relaxed">
+              {/* Enhanced Question */}
+              <div className="mb-6 flex flex-col">
+                <div className="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-blue-500/10 border border-orange-500/20 rounded-2xl p-6 mb-6">
+                  <h3 className="text-2xl font-bold mb-4 text-white leading-relaxed">Scenario</h3>
+                  <p className="text-gray-200 leading-relaxed text-lg">
                     {coachingScenarios[coachingMode]?.[selectedSkill]?.prompt}
                   </p>
-                </div>
-              </div>
-              
-              {/* Tips */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Key Tips
-                </h3>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {coachingScenarios[coachingMode]?.[selectedSkill]?.tips?.map((tip, index) => (
-                    <div key={index} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg">
-                      <div className="w-6 h-6 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-orange-400 text-sm font-bold">{index + 1}</span>
+                  {coachingScenarios[coachingMode]?.[selectedSkill]?.tips && (
+                    <div className="mt-4 pt-4 border-t border-white/10">
+                      <p className="text-sm text-gray-400 flex items-start gap-2">
+                        <svg className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span><strong className="text-orange-400">Key Tips:</strong></span>
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {coachingScenarios[coachingMode]?.[selectedSkill]?.tips?.map((tip, index) => (
+                          <div key={index} className="flex items-start gap-2 text-sm text-gray-300">
+                            <span className="text-orange-400 font-bold">{index + 1}.</span>
+                            <span>{tip}</span>
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-gray-300 text-sm">{tip}</p>
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
 
               {/* Practice Area */}
               <div className="mt-auto pt-6 border-t border-white/10">
@@ -688,37 +886,71 @@ const AICommunication = () => {
                   Your Response
                 </h3>
                 
-                {/* Transcript/Answer Display */}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4 min-h-[200px] max-h-[400px] overflow-y-auto custom-scrollbar mb-4">
+                {/* Enhanced Transcript/Answer Display */}
+                <div className="bg-black/20 border border-white/10 rounded-2xl p-5 min-h-[200px] max-h-[300px] overflow-y-auto custom-scrollbar flex flex-col mb-6">
                   {transcript ? (
-                    <p className="text-gray-300 whitespace-pre-wrap">{transcript}</p>
+                    <div className="relative">
+                      <p className="text-gray-200 whitespace-pre-wrap text-lg leading-relaxed">{transcript}</p>
+                      {isRecording && (
+                        <div className="absolute bottom-2 right-2 flex items-center gap-2 text-xs text-gray-500">
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                          <span>Live transcription</span>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-gray-500 italic">Your response will appear here as you speak...</p>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          </svg>
+                        </div>
+                        <p className="text-gray-500 italic">Your answer will appear here as you speak...</p>
+                        <p className="text-gray-600 text-sm mt-2">Click the microphone button to start recording</p>
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Recording Button */}
-                {!isSpeaking && (
-                  <div className="flex justify-center">
+                {/* Enhanced Recording Controls */}
+                <div className="flex justify-center">
+                  {!isSpeaking ? (
                     <button
                       onClick={toggleRecording}
-                      className={`px-8 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                      className={`px-10 py-4 rounded-2xl font-bold text-lg transition-all flex items-center gap-3 shadow-xl transform hover:scale-105 active:scale-95 ${
                         isRecording 
-                          ? 'bg-red-500 hover:bg-red-600' 
-                          : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700'
+                          ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white' 
+                          : 'bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 hover:from-orange-600 hover:to-orange-800 text-white'
                       }`}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        {isRecording ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                        )}
-                      </svg>
-                      {isRecording ? 'Stop Recording' : 'Start Recording'}
+                      {isRecording ? (
+                        <>
+                          <div className="relative">
+                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+                            </svg>
+                            <div className="absolute inset-0 bg-red-500 rounded-full animate-ping"></div>
+                          </div>
+                          Stop Recording
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          </svg>
+                          Start Recording
+                        </>
+                      )}
                     </button>
-                  </div>
-                )}
+                  ) : (
+                    <div className="px-8 py-4 bg-blue-500/20 border border-blue-500/30 rounded-2xl flex items-center gap-3">
+                      <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
+                      <span className="text-blue-400 font-medium">AI is speaking... Please wait</span>
+                    </div>
+                  )}
+                </div>
+              </div>
               </div>
             </div>
           </div>
@@ -727,22 +959,72 @@ const AICommunication = () => {
 
       <style jsx>{`
         @keyframes pulse {
-          0%, 100% { height: 20px; }
-          50% { height: 50px; }
+          0%, 100% { 
+            height: 20px;
+            opacity: 0.7;
+          }
+          50% { 
+            height: 60px;
+            opacity: 1;
+          }
+        }
+        
+        @keyframes pulse-slow {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.05);
+            opacity: 0.9;
+          }
+        }
+
+        @keyframes bounce-in {
+          0% {
+            transform: scale(0.8);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.1);
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        
+        .animate-pulse-slow {
+          animation: pulse-slow 3s ease-in-out infinite;
+        }
+
+        .animate-bounce-in {
+          animation: bounce-in 0.5s ease-out;
+        }
+
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
         }
         
         .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
+          width: 8px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 3px;
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.3);
         }
       `}</style>
     </div>

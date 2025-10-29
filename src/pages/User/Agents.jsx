@@ -16,7 +16,8 @@ const Agents = () => {
       image: '/img.png',
       available: true,
       route: '/user/ai-communication',
-      color: 'from-purple-500 to-pink-500'
+      accentColor: 'blue',
+      hoverGlow: 'blue-500/20'
     },
     {
       id: '2',
@@ -26,7 +27,8 @@ const Agents = () => {
       image: '/img.png',
       available: true,
       route: '/user/ai-mock-interview',
-      color: 'from-blue-500 to-cyan-500'
+      accentColor: 'orange',
+      hoverGlow: 'orange-500/20'
     },
     {
       id: '3',
@@ -36,7 +38,8 @@ const Agents = () => {
       image: '/img.png',
       available: true,
       route: '/user/ai-career-coach',
-      color: 'from-orange-500 to-red-500'
+      accentColor: 'purple',
+      hoverGlow: 'purple-500/20'
     }
   ];
 
@@ -83,7 +86,7 @@ const Agents = () => {
         // Draw particle
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 140, 50, 0.6)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.fill();
 
         // Draw connections
@@ -96,8 +99,8 @@ const Agents = () => {
             ctx.beginPath();
             ctx.moveTo(particle.x, particle.y);
             ctx.lineTo(otherParticle.x, otherParticle.y);
-            const opacity = (1 - distance / connectionDistance) * 0.3;
-            ctx.strokeStyle = `rgba(255, 120, 40, ${opacity})`;
+            const opacity = (1 - distance / connectionDistance) * 0.1;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
           }
@@ -124,38 +127,37 @@ const Agents = () => {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Neural network canvas */}
+      {/* Neural network canvas - subtle white */}
       <canvas
         ref={canvasRef}
-        className="fixed inset-0 pointer-events-none z-0"
+        className="fixed inset-0 pointer-events-none z-0 opacity-30"
       />
 
-      {/* Ambient background effects */}
-      <div className="fixed inset-0 bg-gradient-to-br from-orange-900/20 via-black to-red-900/20"></div>
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,100,30,0.1),transparent_50%)]"></div>
-      
-      {/* Floating orbs */}
-      <div className="fixed top-20 left-20 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl animate-pulse"></div>
-      <div className="fixed bottom-20 right-20 w-96 h-96 bg-red-500/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+      {/* Subtle Ambient background effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-[120px] animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-[120px] animate-pulse [animation-delay:2s]"></div>
+      </div>
 
-      {/* Premium Header with Dark Orange Glass Theme */}
-      <header className="relative z-10 border-b border-orange-500/20 bg-gradient-to-r from-orange-950/40 via-black/40 to-red-950/40 backdrop-blur-2xl shadow-lg shadow-orange-500/10">
-        <div className="max-w-7xl mx-auto px-8 py-6">
+      {/* Premium Header - Consistent with Dashboard */}
+      <header className="relative z-10 bg-black/70 backdrop-blur-2xl border-b border-white/20 sticky top-0 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-transparent to-blue-500/5 opacity-50"></div>
+        <div className="relative max-w-7xl mx-auto px-6 py-5">
           <div className="flex justify-between items-center">
             <button 
               onClick={() => handleNavigation('/user/dashboard')} 
-              className="group flex items-center space-x-3 text-orange-300 hover:text-orange-100 transition-all duration-300"
+              className="group flex items-center space-x-3 text-white hover:text-orange-400 transition-all duration-300"
             >
-              <div className="p-2 rounded-xl bg-orange-500/10 group-hover:bg-orange-500/20 backdrop-blur-xl border border-orange-500/30 group-hover:border-orange-400/50 transition-all duration-300 group-hover:scale-110 shadow-lg shadow-orange-500/20">
+              <div className="p-2 rounded-xl bg-white/10 backdrop-blur-xl border border-white/20 group-hover:border-orange-500/50 transition-all duration-300 group-hover:scale-110">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
                 </svg>
               </div>
-              <span className="font-medium">Dashboard</span>
+              <span className="font-semibold">Dashboard</span>
             </button>
             
             <div className="absolute left-1/2 transform -translate-x-1/2">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-200 via-orange-300 to-red-200 bg-clip-text text-transparent drop-shadow-lg">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
                 AI Agents
               </h1>
             </div>
@@ -166,53 +168,72 @@ const Agents = () => {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-8 py-20">
-        {/* Hero Section */}
-        <div className="text-center mb-24">
-          <div className="inline-block mb-6 px-6 py-2 rounded-full bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 backdrop-blur-xl shadow-lg shadow-orange-500/20">
-            <span className="text-sm font-semibold bg-gradient-to-r from-orange-300 to-red-300 bg-clip-text text-transparent">
-              POWERED BY ADVANCED AI
+      <main className="relative z-10 max-w-7xl mx-auto px-6 py-16">
+        {/* Premium Hero Section */}
+        <div className="text-center mb-20">
+          <div className="inline-block mb-6 px-6 py-2 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg">
+            <span className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
+              Powered by Advanced AI
             </span>
           </div>
-          <h2 className="text-7xl font-bold mb-6 bg-gradient-to-b from-white via-orange-100 to-orange-500 bg-clip-text text-transparent leading-tight">
+          <h2 className="text-6xl font-bold mb-6 bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent leading-tight">
             AI-Powered Career Tools
           </h2>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light">
             Transform your career with intelligent agents designed to elevate your professional journey
           </p>
         </div>
 
-        {/* Agent Cards */}
+        {/* Premium Agent Cards */}
         {isLoading ? (
           <div className="text-center py-32">
-            <div className="inline-block w-16 h-16 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
+            <div className="inline-block w-16 h-16 border-4 border-white/20 border-t-orange-500 rounded-full animate-spin"></div>
             <p className="mt-6 text-gray-400">Loading agents...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {agents.map((agent, idx) => (
-              <div
-                key={agent.id}
-                className="group relative animate-fadeInUp"
-                style={{
-                  animationDelay: `${idx * 0.1}s`
-                }}
-              >
-                {/* 3D Card Container */}
-                <div className="relative h-full perspective-1000">
-                  <div className="relative h-full transform-gpu transition-all duration-500 hover:scale-105 hover:-translate-y-2">
+            {agents.map((agent, idx) => {
+              const accentColors = {
+                blue: 'from-blue-500 to-blue-600',
+                orange: 'from-orange-500 to-orange-600',
+                purple: 'from-purple-500 to-purple-600'
+              };
+              const borderColors = {
+                blue: 'border-blue-500/50',
+                orange: 'border-orange-500/50',
+                purple: 'border-purple-500/50'
+              };
+              const glowColors = {
+                blue: 'shadow-blue-500/20',
+                orange: 'shadow-orange-500/20',
+                purple: 'shadow-purple-500/20'
+              };
+
+              return (
+                <div
+                  key={agent.id}
+                  className="group relative"
+                  style={{
+                    animationDelay: `${idx * 0.1}s`
+                  }}
+                >
+                  {/* Premium Glass Card */}
+                  <div className="relative h-full transform transition-all duration-300 hover:scale-[1.02] hover:-translate-y-2" style={{ transformStyle: 'preserve-3d', perspective: '1000px' }}>
                     {/* Glow effect */}
-                    <div className={`absolute inset-0 bg-gradient-to-r ${agent.color} opacity-0 group-hover:opacity-20 blur-2xl transition-opacity duration-500 rounded-3xl`}></div>
+                    <div className={`absolute inset-0 bg-gradient-to-r ${accentColors[agent.accentColor]} opacity-0 group-hover:opacity-10 blur-2xl transition-opacity duration-500 rounded-3xl`}></div>
                     
                     {/* Main card */}
-                    <div className="relative h-full bg-gradient-to-b from-white/5 to-white/[0.02] backdrop-blur-2xl rounded-3xl border border-white/10 group-hover:border-white/20 transition-all duration-500 overflow-hidden">
-                      {/* Top gradient bar */}
-                      <div className={`h-1 bg-gradient-to-r ${agent.color}`}></div>
+                    <div className={`relative h-full bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 transition-all duration-300 overflow-hidden shadow-xl group-hover:shadow-2xl ${
+                      agent.accentColor === 'blue' ? 'group-hover:border-blue-500/50 group-hover:shadow-blue-500/20' :
+                      agent.accentColor === 'orange' ? 'group-hover:border-orange-500/50 group-hover:shadow-orange-500/20' :
+                      'group-hover:border-purple-500/50 group-hover:shadow-purple-500/20'
+                    }`}>
+                      {/* Subtle top accent */}
+                      <div className={`h-1 bg-gradient-to-r ${accentColors[agent.accentColor]} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
                       
                       <div className="p-8">
-                        {/* Image Container - Fixed positioning */}
-                        <div className="relative mb-8 aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-white/10 to-white/5 border border-white/10 group-hover:border-white/20 transition-all duration-500">
-                          {/* Image with proper z-index and display */}
+                        {/* Image Container */}
+                        <div className="relative mb-8 aspect-square rounded-2xl overflow-hidden bg-white/5 border border-white/10 group-hover:border-white/20 transition-all duration-300">
                           {!imageErrors[agent.id] ? (
                             <img 
                               src={agent.image} 
@@ -224,10 +245,8 @@ const Agents = () => {
                               style={{ display: 'block' }}
                             />
                           ) : (
-                            // Fallback icon if image fails
-                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-white/10 to-white/5">
-                              <div className="relative transform transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6">
-                                <div className={`absolute inset-0 bg-gradient-to-r ${agent.color} blur-2xl opacity-50`}></div>
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/5">
+                              <div className="relative transform transition-transform duration-500 group-hover:scale-110">
                                 <span className="relative text-8xl filter drop-shadow-2xl">
                                   {agent.icon}
                                 </span>
@@ -235,33 +254,31 @@ const Agents = () => {
                             </div>
                           )}
                           
-                          {/* Gradient overlay for depth */}
-                          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-black/20 to-black/40 pointer-events-none"></div>
-                          <div className={`absolute inset-0 bg-gradient-to-br ${agent.color} opacity-20 mix-blend-overlay group-hover:opacity-30 transition-opacity duration-500 pointer-events-none`}></div>
-                          
-                          {/* Shine effect */}
-                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent transform -skew-x-12 translate-x-full group-hover:translate-x-[-200%] transition-transform duration-1000"></div>
-                          </div>
+                          {/* Subtle gradient overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-black/10 to-black/30 pointer-events-none"></div>
                         </div>
 
                         {/* Content */}
                         <div className="space-y-4">
-                          <h3 className="text-2xl font-bold text-white group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:from-white group-hover:to-gray-300 transition-all duration-300">
+                          <h3 className="text-2xl font-bold text-white">
                             {agent.name}
                           </h3>
                           
-                          <p className="text-gray-400 leading-relaxed min-h-[4.5rem]">
+                          <p className="text-gray-300 leading-relaxed min-h-[4.5rem]">
                             {agent.description}
                           </p>
 
-                          {/* Launch Button */}
+                          {/* Premium Launch Button */}
                           <button
                             onClick={() => agent.available && handleNavigation(agent.route)}
                             disabled={!agent.available}
                             className={`relative w-full mt-6 py-4 rounded-xl font-semibold overflow-hidden transition-all duration-300 ${
                               agent.available
-                                ? 'bg-gradient-to-r from-white/10 to-white/5 text-white hover:from-white/15 hover:to-white/10 border border-white/20 hover:border-white/30 hover:shadow-2xl hover:shadow-white/20 active:scale-95'
+                                ? `bg-white/10 text-white border border-white/20 hover:shadow-xl active:scale-95 backdrop-blur-sm ${
+                                    agent.accentColor === 'blue' ? 'hover:border-blue-500/50 hover:shadow-blue-500/20' :
+                                    agent.accentColor === 'orange' ? 'hover:border-orange-500/50 hover:shadow-orange-500/20' :
+                                    'hover:border-purple-500/50 hover:shadow-purple-500/20'
+                                  }`
                                 : 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5'
                             }`}
                           >
@@ -273,7 +290,7 @@ const Agents = () => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                                   </svg>
                                 </span>
-                                <div className={`absolute inset-0 bg-gradient-to-r ${agent.color} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
+                                <div className={`absolute inset-0 bg-gradient-to-r ${accentColors[agent.accentColor]} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
                               </>
                             ) : (
                               'Coming Soon'
@@ -283,12 +300,12 @@ const Agents = () => {
                       </div>
 
                       {/* Bottom accent line */}
-                      <div className={`h-1 bg-gradient-to-r ${agent.color} opacity-50 group-hover:opacity-100 transition-opacity duration-500`}></div>
+                      <div className={`h-1 bg-gradient-to-r ${accentColors[agent.accentColor]} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
