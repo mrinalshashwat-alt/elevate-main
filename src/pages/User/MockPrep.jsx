@@ -23,7 +23,10 @@ const MockPrep = () => {
             </svg>
             <span>Back to Dashboard</span>
           </button>
-          <h1 className="text-2xl font-bold">Mock Prep</h1>
+          <div className="flex items-center space-x-3">
+            <img src="/logo.jpg" alt="Logo" className="w-10 h-10 object-contain" />
+            <h1 className="text-2xl font-bold">Mock Prep</h1>
+          </div>
           <div className="w-24"></div>
         </div>
       </header>

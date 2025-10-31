@@ -35,6 +35,46 @@ const AICommunication = () => {
   const durationTimerRef = useRef(null);
   const loaderVideoRef = useRef(null);
 
+  // Custom glass popover select (dark orange glass menu)
+  const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '' }) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    useEffect(() => {
+      const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+      document.addEventListener('mousedown', handler);
+      return () => document.removeEventListener('mousedown', handler);
+    }, []);
+    const selected = options.find((o) => o.value === value);
+    return (
+      <div ref={ref} className={`relative ${className}`}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 flex items-center justify-between"
+        >
+          <span className={`${selected ? 'text-gray-200' : 'text-gray-500'}`}>{selected ? selected.label : placeholder}</span>
+          <svg className={`w-4 h-4 text-orange-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        {open && (
+          <div className="absolute z-50 mt-2 w-full rounded-xl overflow-hidden border border-orange-500/30 backdrop-blur-md" style={{ background: 'linear-gradient(180deg, rgba(33,20,14,0.9) 0%, rgba(191,54,12,0.6) 100%)', boxShadow: '0 12px 32px rgba(255,87,34,0.25)' }}>
+            <div className="max-h-60 overflow-y-auto">
+              {options.map((opt) => (
+                <button
+                  key={opt.value || 'empty'}
+                  type="button"
+                  onClick={() => { onChange(opt.value); setOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === opt.value ? 'bg-white/10 text-white' : 'text-gray-200 hover:bg-white/10'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const coachingScenarios = {
     'presentation': [
       {
@@ -388,7 +428,7 @@ const AICommunication = () => {
             autoPlay
             playsInline
           >
-            <source src="/ai.mp4" type="video/mp4" />
+            <source src="/ai2.mp4" type="video/mp4" />
             Your browser does not support the video tag.
           </video>
         </div>
@@ -413,11 +453,7 @@ const AICommunication = () => {
             <span className="font-medium">Back to Agents</span>
           </button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/30">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
+            <img src="/logo.jpg" alt="Logo" className="w-10 h-10 object-contain" />
             <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">AI Communication Coach</h1>
           </div>
           <div className="w-32"></div>
@@ -429,7 +465,7 @@ const AICommunication = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[80vh]">
             {/* Enhanced Robot Section */}
             <div className="flex items-center justify-center relative">
-              <div className="relative w-full aspect-video max-w-lg">
+              <div className="relative w-full aspect-video max-w-2xl">
                 <video
                   className="w-full h-full object-cover"
                   autoPlay
@@ -444,10 +480,10 @@ const AICommunication = () => {
             </div>
 
             {/* Enhanced Form Section */}
-            <div className="space-y-6">
+            <div className="space-y-8">
               <div className="space-y-3">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-14 h-14 bg-gradient-to-br from-orange-500 via-orange-600 to-orange-700 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/30 animate-pulse">
+                  <div className="w-14 h-14 bg-gradient-to-br from-orange-500 via-orange-600 to-orange-700 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/30">
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
@@ -468,7 +504,7 @@ const AICommunication = () => {
                 </div>
               )}
 
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div className="relative group">
                   <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Your Name</label>
                   <input
@@ -482,73 +518,41 @@ const AICommunication = () => {
 
                 <div className="relative group">
                   <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Communication Skill</label>
-                  <select
+                  <GlassSelect
                     value={coachingMode}
-                    onChange={(e) => {
-                      setCoachingMode(e.target.value);
-                      setSelectedSkill('');
-                      setDifficulty('');
-                    }}
-                    className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 appearance-none cursor-pointer"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f97316'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
-                      backgroundRepeat: 'no-repeat',
-                      backgroundPosition: 'right 1rem center',
-                      backgroundSize: '1.25rem',
-                      paddingRight: '2.5rem'
-                    }}
-                  >
-                    <option value="" className="bg-slate-900">Select Communication Skill</option>
-                    <option value="presentation" className="bg-slate-900">Presentation Skills</option>
-                    <option value="negotiation" className="bg-slate-900">Negotiation</option>
-                    <option value="public-speaking" className="bg-slate-900">Public Speaking</option>
-                    <option value="interview" className="bg-slate-900">Interview Skills</option>
-                    <option value="meeting" className="bg-slate-900">Meeting Leadership</option>
-                  </select>
+                    onChange={(v) => { setCoachingMode(v); setSelectedSkill(''); setDifficulty(''); }}
+                    placeholder="Select Communication Skill"
+                    options={[
+                      { value: '', label: 'Select Communication Skill' },
+                      { value: 'presentation', label: 'Presentation Skills' },
+                      { value: 'negotiation', label: 'Negotiation' },
+                      { value: 'public-speaking', label: 'Public Speaking' },
+                      { value: 'interview', label: 'Interview Skills' },
+                      { value: 'meeting', label: 'Meeting Leadership' }
+                    ]}
+                  />
                 </div>
 
                 {coachingMode && (
                   <>
                     <div className="relative group">
                       <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Scenario</label>
-                      <select
+                      <GlassSelect
                         value={selectedSkill}
-                        onChange={(e) => setSelectedSkill(e.target.value)}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 appearance-none cursor-pointer"
-                        style={{
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f97316'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'right 1rem center',
-                          backgroundSize: '1.25rem',
-                          paddingRight: '2.5rem'
-                        }}
-                      >
-                        <option value="" className="bg-slate-900">Select Scenario</option>
-                        {coachingScenarios[coachingMode]?.map((scenario, index) => (
-                          <option key={index} value={index} className="bg-slate-900">{scenario.title}</option>
-                        ))}
-                      </select>
+                        onChange={setSelectedSkill}
+                        placeholder="Select Scenario"
+                        options={[{ value: '', label: 'Select Scenario' }, ...(coachingScenarios[coachingMode] || []).map((scenario, index) => ({ value: String(index), label: scenario.title }))]}
+                      />
                     </div>
 
                     <div className="relative group">
                       <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Level</label>
-                      <select
+                      <GlassSelect
                         value={difficulty}
-                        onChange={(e) => setDifficulty(e.target.value)}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 appearance-none cursor-pointer"
-                        style={{
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f97316'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 14l-7 7m0 0l-7-7m7 7V3'%3E%3C/path%3E%3C/svg%3E")`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'right 1rem center',
-                          backgroundSize: '1.25rem',
-                          paddingRight: '2.5rem'
-                        }}
-                      >
-                        <option value="" className="bg-slate-900">Select Level</option>
-                        {skillLevels[coachingMode]?.map((level, index) => (
-                          <option key={index} value={level} className="bg-slate-900">{level}</option>
-                        ))}
-                      </select>
+                        onChange={setDifficulty}
+                        placeholder="Select Level"
+                        options={[{ value: '', label: 'Select Level' }, ...(skillLevels[coachingMode] || []).map((lvl) => ({ value: lvl, label: lvl }))]}
+                      />
                     </div>
 
                     <div className="relative group">
@@ -765,7 +769,7 @@ const AICommunication = () => {
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-32">
-                      <div className="w-28 h-28 bg-gradient-to-br from-orange-500 via-orange-600 to-blue-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-orange-500/30 animate-pulse-slow">
+                      <div className="w-28 h-28 bg-gradient-to-br from-orange-500 via-orange-600 to-blue-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-orange-500/30">
                         <svg className="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>

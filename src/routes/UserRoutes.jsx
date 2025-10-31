@@ -14,6 +14,8 @@ import AICareerCoach from '../pages/User/AICareerCoach';
 import Courses from '../pages/User/Courses';
 import Content from '../pages/User/Content';
 import Test from '../pages/User/Test';
+import SystemCheck from '../pages/User/SystemCheck';
+import Assessment from '../pages/User/Assessment';
 
 const UserRoutes = () => {
   return (
@@ -89,6 +91,14 @@ const UserRoutes = () => {
             <Test />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/system-check"
+        element={<SystemCheck />}
+      />
+      <Route
+        path="/assessment"
+        element={<Assessment />}
       />
     </Routes>
   );

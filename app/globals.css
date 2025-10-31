@@ -361,6 +361,30 @@ html {
     0% { left: -100%; }
     100% { left: 100%; }
   }
+
+  /* Performance optimizations */
+  @supports (backdrop-filter: blur(10px)) {
+    .backdrop-blur-optimized {
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+    }
+  }
+
+  /* Smooth transitions for interactive elements */
+  button, a, input {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Respect reduced motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
   
   /* Animated border */
   .animated-border {

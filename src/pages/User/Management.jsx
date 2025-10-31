@@ -1,0 +1,463 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+const Management = () => {
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
+
+  const courses = [
+    {
+      id: 1,
+      title: 'Accounting Fundamentals & Principles',
+      description: 'Master the fundamentals of accounting including financial statements, balance sheets, income statements, and cash flow analysis for informed decision-making.',
+      difficulty: 'Beginner',
+      duration: '6 weeks',
+      students: 18340,
+      rating: 4.7,
+      level: 'Beginner'
+    },
+    {
+      id: 2,
+      title: 'Critical Thinking',
+      description: 'Develop analytical and critical thinking skills to evaluate information, solve problems systematically, and make well-reasoned decisions in business contexts.',
+      difficulty: 'Intermediate',
+      duration: '5 weeks',
+      students: 21450,
+      rating: 4.8,
+      level: 'Intermediate'
+    },
+    {
+      id: 3,
+      title: 'Design Thinking',
+      description: 'Learn human-centered design methodologies to innovate and solve complex business challenges. Master ideation, prototyping, and user experience principles.',
+      difficulty: 'Intermediate',
+      duration: '7 weeks',
+      students: 15230,
+      rating: 4.6,
+      level: 'Intermediate'
+    },
+    {
+      id: 4,
+      title: 'Economics for Managers',
+      description: 'Understand economic principles and their application to business strategy. Learn market dynamics, pricing strategies, and economic forecasting.',
+      difficulty: 'Intermediate',
+      duration: '8 weeks',
+      students: 12460,
+      rating: 4.7,
+      level: 'Intermediate'
+    },
+    {
+      id: 5,
+      title: 'EQ & IQ',
+      description: 'Balance emotional intelligence and cognitive intelligence for effective leadership. Develop self-awareness, empathy, and strategic thinking capabilities.',
+      difficulty: 'Intermediate',
+      duration: '6 weeks',
+      students: 18920,
+      rating: 4.9,
+      level: 'Intermediate'
+    },
+    {
+      id: 6,
+      title: 'Escalation & Judgement',
+      description: 'Master decision-making frameworks for escalation management and sound judgment. Learn when and how to escalate issues and make critical business decisions.',
+      difficulty: 'Intermediate',
+      duration: '5 weeks',
+      students: 11280,
+      rating: 4.6,
+      level: 'Intermediate'
+    },
+    {
+      id: 7,
+      title: 'Etiquettes',
+      description: 'Professional etiquette and business communication skills. Master networking, email etiquette, meeting conduct, and cross-cultural business practices.',
+      difficulty: 'Beginner',
+      duration: '4 weeks',
+      students: 22340,
+      rating: 4.8,
+      level: 'Beginner'
+    },
+    {
+      id: 8,
+      title: 'Financial Analysis for Decision Making',
+      description: 'Analyze financial data to support strategic decisions. Learn ratio analysis, financial modeling, and investment evaluation techniques.',
+      difficulty: 'Advanced',
+      duration: '9 weeks',
+      students: 9870,
+      rating: 4.7,
+      level: 'Advanced'
+    },
+    {
+      id: 9,
+      title: 'Generative AI in Business',
+      description: 'Leverage generative AI tools for business innovation. Learn to implement AI solutions for content creation, automation, and strategic advantage.',
+      difficulty: 'Intermediate',
+      duration: '7 weeks',
+      students: 15680,
+      rating: 4.8,
+      level: 'Intermediate'
+    },
+    {
+      id: 10,
+      title: 'Intrapersonal Management & Competencies',
+      description: 'Develop self-management skills and core competencies. Master time management, stress management, and personal productivity strategies.',
+      difficulty: 'Intermediate',
+      duration: '6 weeks',
+      students: 17890,
+      rating: 4.7,
+      level: 'Intermediate'
+    },
+    {
+      id: 11,
+      title: 'Management of Organisation',
+      description: 'Comprehensive organizational management principles. Learn structure design, change management, and organizational behavior for effective leadership.',
+      difficulty: 'Advanced',
+      duration: '10 weeks',
+      students: 13420,
+      rating: 4.8,
+      level: 'Advanced'
+    },
+    {
+      id: 12,
+      title: 'Marketing Management',
+      description: 'Strategic marketing management and brand positioning. Master digital marketing, market research, customer segmentation, and campaign management.',
+      difficulty: 'Intermediate',
+      duration: '8 weeks',
+      students: 19240,
+      rating: 4.7,
+      level: 'Intermediate'
+    },
+    {
+      id: 13,
+      title: 'Modern Leadership',
+      description: 'Contemporary leadership principles for the digital age. Learn adaptive leadership, remote team management, and inclusive leadership practices.',
+      difficulty: 'Advanced',
+      duration: '9 weeks',
+      students: 14560,
+      rating: 4.9,
+      level: 'Advanced'
+    },
+    {
+      id: 14,
+      title: 'Negotiation',
+      description: 'Master negotiation strategies and tactics for business success. Learn win-win techniques, conflict resolution, and deal-making fundamentals.',
+      difficulty: 'Intermediate',
+      duration: '6 weeks',
+      students: 16780,
+      rating: 4.8,
+      level: 'Intermediate'
+    },
+    {
+      id: 15,
+      title: 'Operations Management',
+      description: 'Optimize business operations for efficiency and quality. Master supply chain management, process optimization, and operational excellence frameworks.',
+      difficulty: 'Advanced',
+      duration: '10 weeks',
+      students: 11230,
+      rating: 4.7,
+      level: 'Advanced'
+    },
+    {
+      id: 16,
+      title: 'Personal Leadership',
+      description: 'Develop personal leadership capabilities and authentic leadership style. Build self-confidence, vision, and the ability to inspire others.',
+      difficulty: 'Intermediate',
+      duration: '7 weeks',
+      students: 18940,
+      rating: 4.8,
+      level: 'Intermediate'
+    },
+    {
+      id: 17,
+      title: 'Statistics for Managers',
+      description: 'Apply statistical methods to business decision-making. Learn data analysis, forecasting, hypothesis testing, and statistical modeling for managers.',
+      difficulty: 'Intermediate',
+      duration: '8 weeks',
+      students: 10240,
+      rating: 4.6,
+      level: 'Intermediate'
+    },
+    {
+      id: 18,
+      title: 'Story Telling & Execution Presence',
+      description: 'Master the art of storytelling for business communication and build executive presence. Learn to present ideas compellingly and influence stakeholders.',
+      difficulty: 'Intermediate',
+      duration: '6 weeks',
+      students: 14320,
+      rating: 4.7,
+      level: 'Intermediate'
+    },
+    {
+      id: 19,
+      title: 'Strategy Formulation & Execution',
+      description: 'Develop and execute strategic plans effectively. Master strategic analysis, competitive positioning, and strategy implementation frameworks.',
+      difficulty: 'Advanced',
+      duration: '10 weeks',
+      students: 12890,
+      rating: 4.8,
+      level: 'Advanced'
+    },
+    {
+      id: 20,
+      title: 'Understanding Competencies & Capabilities',
+      description: 'Assess and develop organizational competencies and capabilities. Learn capability mapping, gap analysis, and building competitive advantages.',
+      difficulty: 'Intermediate',
+      duration: '7 weeks',
+      students: 9870,
+      rating: 4.6,
+      level: 'Intermediate'
+    }
+  ];
+
+  const filteredCourses = courses.filter(course => {
+    const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         course.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDifficulty = difficultyFilter === 'all' || 
+                             course.level.toLowerCase() === difficultyFilter.toLowerCase();
+    return matchesSearch && matchesDifficulty;
+  });
+
+  const getLevelColor = (level) => {
+    switch (level) {
+      case 'Beginner':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'Intermediate':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'Advanced':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+    }
+  };
+
+  const handleBackToHome = () => {
+    router.push('/');
+  };
+
+  return (
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-[120px] animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-[120px] animate-pulse [animation-delay:2s]"></div>
+      </div>
+
+      {/* Header */}
+      <header className="relative z-10 bg-black/70 backdrop-blur-2xl border-b border-white/20 sticky top-0 shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-transparent to-blue-500/5 opacity-50"></div>
+        <div className="relative max-w-7xl mx-auto px-6 py-5">
+          <div className="flex justify-between items-center">
+            <button
+              onClick={handleBackToHome}
+              className="group flex items-center space-x-3 text-white hover:text-orange-400 transition-all duration-300"
+            >
+              <div className="p-2 rounded-xl bg-white/10 backdrop-blur-xl border border-white/20 group-hover:border-orange-500/50 transition-all duration-300 group-hover:scale-110">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                </svg>
+              </div>
+              <span className="font-semibold">Back to Home</span>
+            </button>
+            
+            <div className="absolute left-1/2 transform -translate-x-1/2">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+                Management Courses
+              </h1>
+            </div>
+            
+            <div className="w-32"></div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="relative z-10 max-w-7xl mx-auto px-6 py-12">
+        {/* Hero Section */}
+        <div className="text-center mb-12">
+          <div className="inline-block mb-6 px-6 py-2 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg">
+            <span className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
+              Management & Leadership Programs
+            </span>
+          </div>
+          <h2 className="text-5xl font-bold mb-4 bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent leading-tight">
+            Develop Management Excellence
+          </h2>
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light">
+            Comprehensive management courses covering leadership, strategy, finance, and organizational skills
+          </p>
+        </div>
+
+        {/* Search and Filter Section */}
+        <div className="mb-8 space-y-6">
+          {/* Search Bar */}
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-blue-500/10 rounded-xl blur-xl opacity-50"></div>
+            <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-4">
+              <div className="flex items-center space-x-4">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search courses..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 text-lg"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Level Filters */}
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setDifficultyFilter('all')}
+              className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
+                difficultyFilter === 'all'
+                  ? 'bg-white/10 backdrop-blur-xl border-2 border-orange-500/50 text-white shadow-lg shadow-orange-500/20'
+                  : 'bg-white/5 backdrop-blur-xl border border-white/10 text-gray-300 hover:border-white/20 hover:text-white'
+              }`}
+            >
+              All Levels
+            </button>
+            <button
+              onClick={() => setDifficultyFilter('beginner')}
+              className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
+                difficultyFilter === 'beginner'
+                  ? 'bg-green-500/20 backdrop-blur-xl border-2 border-green-500/50 text-green-400 shadow-lg shadow-green-500/20'
+                  : 'bg-white/5 backdrop-blur-xl border border-white/10 text-gray-300 hover:border-white/20 hover:text-white'
+              }`}
+            >
+              Beginner
+            </button>
+            <button
+              onClick={() => setDifficultyFilter('intermediate')}
+              className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
+                difficultyFilter === 'intermediate'
+                  ? 'bg-yellow-500/20 backdrop-blur-xl border-2 border-yellow-500/50 text-yellow-400 shadow-lg shadow-yellow-500/20'
+                  : 'bg-white/5 backdrop-blur-xl border border-white/10 text-gray-300 hover:border-white/20 hover:text-white'
+              }`}
+            >
+              Intermediate
+            </button>
+            <button
+              onClick={() => setDifficultyFilter('advanced')}
+              className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${
+                difficultyFilter === 'advanced'
+                  ? 'bg-red-500/20 backdrop-blur-xl border-2 border-red-500/50 text-red-400 shadow-lg shadow-red-500/20'
+                  : 'bg-white/5 backdrop-blur-xl border border-white/10 text-gray-300 hover:border-white/20 hover:text-white'
+              }`}
+            >
+              Advanced
+            </button>
+          </div>
+        </div>
+
+        {/* Courses Grid */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-white">
+              {filteredCourses.length} {filteredCourses.length === 1 ? 'Course' : 'Courses'} Available
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredCourses.map((course) => (
+              <div
+                key={course.id}
+                className="group relative"
+              >
+                {/* Course Card */}
+                <div className="relative h-full transform transition-all duration-300 hover:scale-[1.02] hover:-translate-y-2">
+                  {/* Glow effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 blur-2xl transition-opacity duration-500 rounded-3xl"></div>
+                  
+                  {/* Main card */}
+                  <div className="relative h-full bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 transition-all duration-300 overflow-hidden shadow-xl group-hover:shadow-2xl group-hover:border-orange-500/50 group-hover:shadow-orange-500/20">
+                    {/* Top accent */}
+                    <div className="h-1 bg-gradient-to-r from-orange-500 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    
+                    <div className="p-6">
+                      {/* Course Header */}
+                      <div className="mb-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <span className={`px-3 py-1 rounded-lg text-xs font-semibold border ${getLevelColor(course.level)}`}>
+                            {course.level}
+                          </span>
+                          <div className="flex items-center gap-1 text-yellow-400">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                            <span className="text-sm font-semibold">{course.rating}</span>
+                          </div>
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2 line-clamp-2 min-h-[3rem]">
+                          {course.title}
+                        </h3>
+                        <p className="text-gray-300 text-sm leading-relaxed line-clamp-3 min-h-[4.5rem]">
+                          {course.description}
+                        </p>
+                      </div>
+
+                      {/* Course Meta */}
+                      <div className="space-y-3 pt-4 border-t border-white/10">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center space-x-4 text-gray-400">
+                            <span className="flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              {course.duration}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                              </svg>
+                              {(course.students / 1000).toFixed(1)}k students
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Button */}
+                      <button
+                        className="relative w-full mt-6 py-3.5 rounded-xl font-semibold overflow-hidden transition-all duration-300 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 text-white border-0 hover:shadow-xl hover:shadow-orange-500/40 active:scale-95"
+                      >
+                        <span className="relative z-10 flex items-center justify-center space-x-2">
+                          <span>Start Course</span>
+                          <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Bottom accent line */}
+                    <div className="h-1 bg-gradient-to-r from-orange-500 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {filteredCourses.length === 0 && (
+            <div className="text-center py-20">
+              <div className="inline-block p-6 rounded-full bg-white/5 mb-4">
+                <svg className="w-16 h-16 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-gray-400 text-lg">No courses found matching your criteria</p>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default Management;
+
+
