@@ -115,9 +115,9 @@ const SystemCheck = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="h-screen bg-black text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4 flex justify-between items-center">
+      <header className="border-b border-gray-800 px-6 py-4 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center space-x-3">
           <img src="/logo.jpg" alt="Logo" className="w-10 h-10 object-contain" />
           <span className="text-xl font-bold">AI Assessment</span>
@@ -130,23 +130,24 @@ const SystemCheck = () => {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="flex-1 overflow-y-auto">
+        <div className="h-full max-w-7xl mx-auto px-4 lg:px-6 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8 h-full">
           {/* Left Panel - Camera & Microphone Setup */}
-          <div className="lg:col-span-2 space-y-6">
-            <div>
+          <div className="lg:col-span-3 space-y-6 flex flex-col">
+            <div className="flex-shrink-0">
               <h1 className="text-3xl font-bold mb-2">Camera & Microphone Setup</h1>
               <p className="text-gray-400 mb-6">Ensure your camera and microphone are working properly before starting the assessment</p>
             </div>
 
             {/* Camera Preview */}
-            <div className="w-full flex justify-center">
+            <div className="w-full flex justify-start flex-shrink-0">
               <motion.div 
                 className="group relative bg-black/90 border border-[#FF5728] rounded-3xl overflow-hidden"
                 style={{ 
                   aspectRatio: '4/3',
                   width: '100%',
-                  maxWidth: '500px',
+                  maxWidth: '700px',
                   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
                   transformStyle: 'preserve-3d'
                 }}
@@ -170,13 +171,13 @@ const SystemCheck = () => {
               </motion.div>
             </div>
 
-            <div className="space-y-4">
-              <p className="text-orange-500 text-sm text-center max-w-[500px] mx-auto">
+            <div className="space-y-4 flex-shrink-0">
+              <p className="text-orange-500 text-sm text-left max-w-[700px]">
                 Center your face, ensure good lighting and a neutral background.
               </p>
 
               {/* Device Indicators */}
-              <div className="flex flex-wrap justify-center gap-4 max-w-[500px] mx-auto">
+              <div className="flex flex-wrap justify-start gap-4 max-w-[700px]">
                 <div className="flex items-center space-x-2 px-4 py-2 bg-black/90 border border-gray-700 rounded-full">
                   <FiCamera className="text-gray-400" />
                   <span className="text-sm text-gray-300">Camera: Integrated Webcam</span>
@@ -190,7 +191,7 @@ const SystemCheck = () => {
 
             {/* Camera Status */}
             <div 
-              className={`group relative flex items-center justify-between px-5 py-4 rounded-2xl overflow-hidden max-w-[500px] mx-auto ${
+              className={`group relative flex items-center justify-between px-5 py-4 rounded-2xl overflow-hidden max-w-[700px] flex-shrink-0 min-w-0 ${
                 cameraStatus === 'passed' ? 'bg-green-900/30 border border-green-500/30' : 'bg-black/90 border border-[#FF5728]'
               }`}
               style={{
@@ -199,34 +200,34 @@ const SystemCheck = () => {
               }}
             >
               {/* Shine effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-2xl">
+                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
               </div>
-              <div className="flex items-center space-x-3 relative z-10">
-                <FiCamera className="text-gray-400 text-lg" />
-                <span className="font-medium">Camera Status</span>
+              <div className="flex items-center space-x-3 relative z-10 flex-shrink-0">
+                <FiCamera className="text-gray-400 text-lg flex-shrink-0" />
+                <span className="font-medium whitespace-nowrap">Camera Status</span>
               </div>
-              {cameraStatus === 'passed' && (
-                <div className="flex items-center space-x-2 relative z-10">
-                  <FiCheck className="text-green-500 text-lg" />
-                  <span className="text-green-500 font-semibold">Passed</span>
-                </div>
-              )}
-              {cameraStatus === 'checking' && (
-                <div className="relative z-10">
-                  <span className="text-gray-400">Checking...</span>
-                </div>
-              )}
-              {cameraStatus === 'failed' && (
-                <div className="relative z-10">
-                  <span className="text-red-500">Failed</span>
-                </div>
-              )}
+              <div className="relative z-10 flex-shrink-0 ml-4">
+                {cameraStatus === 'passed' && (
+                  <div className="flex items-center space-x-2">
+                    <FiCheck className="text-green-500 text-lg" />
+                    <span className="text-green-500 font-semibold whitespace-nowrap">Passed</span>
+                  </div>
+                )}
+                {cameraStatus === 'checking' && (
+                  <span className="text-gray-400 whitespace-nowrap">Checking...</span>
+                )}
+                {cameraStatus === 'failed' && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-red-500 whitespace-nowrap">Failed</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 max-w-[500px] mx-auto">
+            <div className="flex flex-col sm:flex-row gap-4 max-w-[700px] flex-shrink-0">
               <button
                 onClick={handleStartTest}
                 disabled={cameraStatus !== 'passed' || micStatus !== 'passed'}
@@ -244,7 +245,7 @@ const SystemCheck = () => {
             </div>
 
             {/* Demo Start Button */}
-            <div className="max-w-[500px] mx-auto">
+            <div className="max-w-[700px] flex-shrink-0">
               <button
                 onClick={() => router.push('/user/assessment')}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors w-full"
@@ -254,16 +255,16 @@ const SystemCheck = () => {
             </div>
 
             {/* Disclaimer */}
-            <p className="text-gray-500 text-xs text-center max-w-[500px] mx-auto mt-6">
+            <p className="text-gray-500 text-xs text-left max-w-[700px] mt-6 flex-shrink-0">
               Your camera, microphone, network, and browser details are only used to verify readiness for your assessment.
             </p>
           </div>
 
           {/* Right Panel - Voice Check & Section Breakdown */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-2 space-y-6 flex flex-col">
           {/* Voice Check Card */}
           <motion.div 
-            className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden"
+            className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden flex-shrink-0"
             style={{
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
               transformStyle: 'preserve-3d'
@@ -272,11 +273,11 @@ const SystemCheck = () => {
             transition={{ duration: 0.3 }}
           >
             {/* Shine effect */}
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+              <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
             </div>
-            <div className="premium-card-content relative z-10">
+            <div className="premium-card-content relative z-20">
             <h2 className="text-xl font-bold mb-4">Voice Check</h2>
             
             <div className="mb-4">
@@ -317,7 +318,7 @@ const SystemCheck = () => {
 
           {/* Section Breakdown Card */}
           <motion.div 
-            className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden"
+            className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden flex-shrink-0"
             style={{
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
               transformStyle: 'preserve-3d'
@@ -326,11 +327,11 @@ const SystemCheck = () => {
             transition={{ duration: 0.3 }}
           >
             {/* Shine effect */}
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+              <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
             </div>
-            <div className="premium-card-content relative z-10">
+            <div className="premium-card-content relative z-20">
             <h2 className="text-xl font-bold mb-4">Section Breakdown</h2>
             
             <div className="space-y-3 mb-4">
@@ -372,6 +373,7 @@ const SystemCheck = () => {
             </div>
           </motion.div>
           </div>
+        </div>
         </div>
       </div>
     </div>

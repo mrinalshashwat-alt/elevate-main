@@ -1,9 +1,14 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import ProtectedRoute from '../../../src/routes/ProtectedRoute';
 
 const AICareerCoach = dynamic(() => import('../../../src/pages/User/AICareerCoach'), { ssr: false });
 
 export default function AICareerCoachPage() {
-  return <AICareerCoach />;
+  return (
+    <ProtectedRoute requiredRole="user">
+      <AICareerCoach />
+    </ProtectedRoute>
+  );
 }

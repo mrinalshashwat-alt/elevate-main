@@ -1,9 +1,14 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import ProtectedRoute from '../../../src/routes/ProtectedRoute';
 
 const Agents = dynamic(() => import('../../../src/pages/User/Agents'), { ssr: false });
 
 export default function AgentsPage() {
-  return <Agents />;
+  return (
+    <ProtectedRoute requiredRole="user">
+      <Agents />
+    </ProtectedRoute>
+  );
 }

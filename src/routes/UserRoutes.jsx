@@ -16,6 +16,8 @@ import Content from '../pages/User/Content';
 import Test from '../pages/User/Test';
 import SystemCheck from '../pages/User/SystemCheck';
 import Assessment from '../pages/User/Assessment';
+import Technical from '../pages/User/Technical';
+import Management from '../pages/User/Management';
 
 const UserRoutes = () => {
   return (
@@ -99,6 +101,22 @@ const UserRoutes = () => {
       <Route
         path="/assessment"
         element={<Assessment />}
+      />
+      <Route
+        path="/technical"
+        element={
+          <ProtectedRoute requiredRole="user">
+            <Technical />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/management"
+        element={
+          <ProtectedRoute requiredRole="user">
+            <Management />
+          </ProtectedRoute>
+        }
       />
     </Routes>
   );

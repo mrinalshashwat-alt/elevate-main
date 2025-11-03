@@ -320,11 +320,11 @@ const UserDashboard = () => {
               whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
               </div>
-              <div className="premium-card-content relative z-10">
+              <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Total Courses</h3>
                   <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
@@ -351,11 +351,11 @@ const UserDashboard = () => {
               whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
               </div>
-              <div className="premium-card-content relative z-10">
+              <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Completed</h3>
                   <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
@@ -382,11 +382,11 @@ const UserDashboard = () => {
               whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
               </div>
-              <div className="premium-card-content relative z-10">
+              <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Interviews</h3>
                   <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl">
@@ -413,11 +413,11 @@ const UserDashboard = () => {
               whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
               </div>
-              <div className="premium-card-content relative z-10">
+              <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Skill Score</h3>
                   <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
@@ -459,11 +459,11 @@ const UserDashboard = () => {
                     whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                     </div>
-                    <div className="premium-card-content relative z-10">
+                    <div className="premium-card-content relative z-20">
                       <div className="mb-5 transform group-hover:scale-110 transition-transform duration-500 text-gray-300 group-hover:text-white">
                         {action.icon}
                       </div>
@@ -503,11 +503,11 @@ const UserDashboard = () => {
                     whileHover={{ y: -4, scale: 1.01 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                     </div>
-                    <div className="premium-card-content relative z-10">
+                    <div className="premium-card-content relative z-20">
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="font-bold text-sm text-white leading-tight">{event.title}</h3>
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
@@ -555,11 +555,11 @@ const UserDashboard = () => {
                     whileHover={{ y: -4, scale: 1.01 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                     </div>
-                    <div className="premium-card-content relative z-10 flex items-start space-x-4">
+                    <div className="premium-card-content relative z-20 flex items-start space-x-4">
                       <div className="text-3xl filter drop-shadow-lg">{activity.icon}</div>
                       <div className="flex-1">
                         <h3 className="font-bold text-sm mb-2 text-white">{activity.title}</h3>
@@ -600,11 +600,11 @@ const UserDashboard = () => {
                     whileHover={{ y: -4, scale: 1.01 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                     </div>
-                    <div className="premium-card-content relative z-10">
+                    <div className="premium-card-content relative z-20">
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-bold text-sm text-white">{skill.name}</span>
                         <span className="text-sm font-semibold text-gray-300">{skill.progress}%</span>

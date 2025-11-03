@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence, useScroll, useSpring, useInView, useReducedMotion } from 'framer-motion';
 import CountUp from 'react-countup';
-import { FiEye, FiEyeOff, FiX, FiCheck, FiLoader, FiAward, FiStar, FiUsers, FiTrendingUp, FiClock, FiArrowRight, FiMessageSquare, FiUserCheck, FiCompass, FiCode, FiTarget } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiX, FiCheck, FiLoader, FiAward, FiStar, FiUsers, FiTrendingUp, FiClock, FiArrowRight, FiMessageSquare, FiUserCheck, FiCompass, FiCode, FiTarget, FiBriefcase, FiHome, FiZap, FiPackage } from 'react-icons/fi';
 
 // Custom Hooks
 const useTypewriter = (text, speed = 50) => {
@@ -1095,7 +1096,7 @@ const Sparkline = ({
 
 const Home = () => {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const prefersReducedMotion = useReducedMotion();
   
   // State management
@@ -1470,16 +1471,32 @@ const Home = () => {
     };
 
     if (openDropdown !== null) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+      // Use a slight delay to allow navigation clicks to process first
+      const timeoutId = setTimeout(() => {
+        document.addEventListener('click', handleClickOutside);
+      }, 100);
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
   }, [openDropdown]);
 
   const toggleDropdown = (dropdownName) => {
     setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
+  };
+
+  // Handle navigation - direct navigation without auth check
+  const handleNavigation = (route, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setOpenDropdown(null);
+    // Use window.location.href for immediate navigation
+    // This ensures the route is navigated to regardless of router state
+    window.location.href = route;
   };
 
   const toggleTestimonialVideo = (index) => {
@@ -1662,7 +1679,11 @@ const Home = () => {
             className="flex items-center"
             whileHover={{ scale: 1.05 }}
           >
-            <button className="flex items-center space-x-3 filter drop-shadow-lg" aria-label="Home">
+            <button 
+              onClick={() => router.push('/')} 
+              className="flex items-center space-x-3 filter drop-shadow-lg" 
+              aria-label="Home"
+            >
               <img 
                 src="/logo.jpg" 
                 alt="Elevate Career AI Logo" 
@@ -1694,9 +1715,9 @@ const Home = () => {
               </button>
               {openDropdown === 'ai-mock-agents' && (
                 <div className="absolute top-full left-0 min-w-48 bg-black/95 backdrop-blur-lg border border-white/10 rounded-lg p-2 z-[200] mt-2" role="menu">
-                  <a href="/user/ai-communication" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5 focus:outline-none focus:ring-2 focus:ring-orange-400" role="menuitem">AI Communication Coach</a>
-                  <a href="/user/ai-mock-interview" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5 focus:outline-none focus:ring-2 focus:ring-orange-400" role="menuitem">AI Mock Interview Agent</a>
-                  <a href="/user/ai-career-coach" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5 focus:outline-none focus:ring-2 focus:ring-orange-400" role="menuitem">AI Career Guide</a>
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNavigation('/user/ai-communication', e); }} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5 focus:outline-none focus:ring-2 focus:ring-orange-400" role="menuitem">AI Communication Coach</button>
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNavigation('/user/ai-mock-interview', e); }} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5 focus:outline-none focus:ring-2 focus:ring-orange-400" role="menuitem">AI Mock Interview Agent</button>
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNavigation('/user/ai-career-coach', e); }} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5 focus:outline-none focus:ring-2 focus:ring-orange-400" role="menuitem">AI Career Guide</button>
                 </div>
               )}
             </div>
@@ -1718,10 +1739,10 @@ const Home = () => {
                   ? 'opacity-100 visible translate-y-0' 
                   : 'opacity-0 invisible translate-y-2 pointer-events-none'
               }`}>
-                <a href="/user/courses" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Coder Arena</a>
-                <a href="/user/mock-prep" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Interview Prep</a>
-                <a href="/user/ai-mock-interview" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Mock Interviews</a>
-                <a href="/user/ai-communication" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Communication Practice</a>
+                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNavigation('/user/courses', e); }} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Coder Arena</button>
+                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNavigation('/user/mock-prep', e); }} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Interview Prep</button>
+                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNavigation('/user/ai-mock-interview', e); }} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Mock Interviews</button>
+                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNavigation('/user/ai-communication', e); }} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Communication Practice</button>
               </div>
             </div>
 
@@ -1741,9 +1762,9 @@ const Home = () => {
                 openDropdown === 'exam-prep' 
                   ? 'opacity-100 visible translate-y-0' 
                   : 'opacity-0 invisible translate-y-2 pointer-events-none'
-              }`}>
-                <a href="/user/test" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Aptitude Prep</a>
-                <a href="/user/content" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Exam Prep</a>
+              }`} onClick={(e) => e.stopPropagation()}>
+                <button type="button" onClick={(e) => handleNavigation('/user/test', e)} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Aptitude Prep</button>
+                <button type="button" onClick={(e) => handleNavigation('/user/content', e)} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Exam Prep</button>
               </div>
             </div>
 
@@ -1763,9 +1784,9 @@ const Home = () => {
                 openDropdown === 'course-prep' 
                   ? 'opacity-100 visible translate-y-0' 
                   : 'opacity-0 invisible translate-y-2 pointer-events-none'
-              }`}>
-                <a href="/user/technical" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Technical</a>
-                <a href="/user/management" onClick={() => setOpenDropdown(null)} className="block px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Management</a>
+              }`} onClick={(e) => e.stopPropagation()}>
+                <button type="button" onClick={(e) => handleNavigation('/user/technical', e)} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Technical</button>
+                <button type="button" onClick={(e) => handleNavigation('/user/management', e)} className="block w-full text-left px-4 py-2 text-white/80 hover:text-orange-400 hover:bg-orange-500/10 rounded-md transition-all duration-200 text-sm border-l-2 border-transparent hover:border-orange-400 hover:pl-5">Management</button>
               </div>
             </div>
           </nav>
@@ -1880,12 +1901,12 @@ const Home = () => {
                 } : {}}
               >
                 {/* Shine effect */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                  <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                   <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                 </div>
                 
-                <div className="premium-card-content relative z-10 space-y-3 md:space-y-4">
+                <div className="premium-card-content relative z-20 space-y-3 md:space-y-4">
                   {(() => {
                     const iconMap = [FiMessageSquare, FiUserCheck, FiCompass, FiCode, FiTarget];
                     const Icon = iconMap[currentSlide % iconMap.length];
@@ -1908,7 +1929,7 @@ const Home = () => {
                   </p>
                 </div>
                 
-                <div className="premium-card-content relative z-10 pt-1">
+                <div className="premium-card-content relative z-20 pt-1">
                   <motion.button 
                     className="inline-flex items-center gap-2 px-8 md:px-10 py-3 md:py-4 rounded-full text-white font-extrabold text-sm md:text-base transition-all focus:outline-none border border-orange-400/40 shadow-[0_8px_24px_rgba(255,87,40,0.35)] hover:shadow-[0_12px_32px_rgba(255,87,40,0.5)]"
                     style={{
@@ -1978,6 +1999,34 @@ const Home = () => {
           </div>
         </motion.div>
       </main>
+
+      {/* Partner Companies Marquee */}
+      <section className="py-12 bg-black/50 border-y border-white/5 overflow-hidden relative">
+        <div className="flex animate-marquee whitespace-nowrap">
+          {/* First set of logos */}
+          {Array.from({ length: 10 }, (_, i) => {
+            const icons = [FiBriefcase, FiHome, FiZap, FiPackage, FiAward, FiTarget, FiTrendingUp, FiUsers, FiStar, FiCode];
+            const Icon = icons[i % icons.length];
+            return (
+              <div key={`first-${i}`} className="flex items-center gap-4 mx-16 flex-shrink-0 group">
+                <Icon className="text-white/30 text-2xl group-hover:text-white/50 transition-colors duration-300" />
+                <span className="text-white/30 text-3xl font-light tracking-wider group-hover:text-white/50 transition-colors duration-300">abc</span>
+              </div>
+            );
+          })}
+          {/* Duplicate set for seamless loop */}
+          {Array.from({ length: 10 }, (_, i) => {
+            const icons = [FiBriefcase, FiHome, FiZap, FiPackage, FiAward, FiTarget, FiTrendingUp, FiUsers, FiStar, FiCode];
+            const Icon = icons[i % icons.length];
+            return (
+              <div key={`second-${i}`} className="flex items-center gap-4 mx-16 flex-shrink-0 group">
+                <Icon className="text-white/30 text-2xl group-hover:text-white/50 transition-colors duration-300" />
+                <span className="text-white/30 text-3xl font-light tracking-wider group-hover:text-white/50 transition-colors duration-300">abc</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Matte Black Background Container for all sections after hero */}
       <div className="relative bg-matte-black">
@@ -2097,8 +2146,8 @@ const Home = () => {
                 }}
               >
                 {/* Shine effect */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                  <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                   <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                 </div>
                 <div className="premium-card-content space-y-8 relative z-10">
@@ -2372,7 +2421,7 @@ const Home = () => {
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                     </div>
-                    <div className="premium-card-content relative z-10">
+                    <div className="premium-card-content relative z-20">
                       {/* Icon top center */}
                       <div className="flex flex-col items-center text-center mb-5">
                         <div className="w-16 h-16 bg-[#FF5728] rounded-3xl flex items-center justify-center mb-4 border border-[#FF5728]">
@@ -2630,8 +2679,8 @@ const Home = () => {
                 }}
               >
                 {/* Shine effect */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+                  <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                   <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                 </div>
                 <div className="premium-card-content space-y-7 relative z-10">
@@ -2694,8 +2743,30 @@ const Home = () => {
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-8 text-center">
-            <p className="text-sm text-gray-400">&copy; 2024 Elevate Career. All rights reserved.</p>
+          <div className="border-t border-white/10 pt-8">
+            <div className="flex flex-col items-center gap-4">
+              {/* Demo Button for Admin Dashboard */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6 }}
+              >
+                <Link 
+                  href="/admin/assessment-list"
+                  className="inline-flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 via-purple-700 to-orange-600 rounded-xl font-bold text-white hover:shadow-2xl hover:shadow-purple-500/40 transform hover:scale-105 active:scale-95 transition-all shadow-xl"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>Demo: Assessment List</span>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </Link>
+              </motion.div>
+              <p className="text-sm text-gray-400">&copy; 2024 Elevate Career. All rights reserved.</p>
+            </div>
           </div>
         </div>
         </footer>

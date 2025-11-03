@@ -623,12 +623,12 @@ const AICommunication = () => {
                 transition: { duration: 0.3 }
               }}
             >
-              {/* Shine effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
-              <div className="premium-card-content relative z-10">
+            {/* Shine effect */}
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+              <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            </div>
+              <div className="premium-card-content relative z-20">
               {/* Enhanced Header */}
               <div className="mb-8">
                 <div className="flex justify-between items-center mb-6">
@@ -750,12 +750,12 @@ const AICommunication = () => {
                 transition: { duration: 0.3 }
               }}
             >
-              {/* Shine effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
-              <div className="premium-card-content relative z-10 w-full flex flex-col items-center">
+            {/* Shine effect */}
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+              <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            </div>
+              <div className="premium-card-content relative z-20 w-full flex flex-col items-center">
               <div className="relative w-full max-w-sm mb-6">
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/30 via-purple-500/20 to-blue-500/30 blur-3xl animate-pulse"></div>
                 <div className="relative bg-gradient-to-br from-orange-500/20 to-blue-500/20 rounded-3xl p-8 backdrop-blur-sm border border-white/10">
@@ -870,12 +870,12 @@ const AICommunication = () => {
                 transition: { duration: 0.3 }
               }}
             >
-              {/* Shine effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
-              <div className="premium-card-content relative z-10 flex flex-col flex-1">
+            {/* Shine effect */}
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
+              <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            </div>
+              <div className="premium-card-content relative z-20 flex flex-col flex-1">
               {/* Enhanced Header */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">

@@ -3,12 +3,14 @@
 import dynamic from 'next/dynamic';
 import ProtectedRoute from '../../../src/routes/ProtectedRoute';
 
-const AssessmentList = dynamic(() => import('../../../src/pages/Admin/AssessmentList'), { ssr: false });
+const CandidatesList = dynamic(() => import('../../../src/pages/Admin/CandidatesList'), { ssr: false });
 
-export default function AssessmentListPage() {
+export default function CandidatesPage() {
   return (
     <ProtectedRoute requiredRole="admin">
-      <AssessmentList />
+      <CandidatesList />
     </ProtectedRoute>
   );
 }
+
+

@@ -309,8 +309,6 @@ html {
     position: relative;
     z-index: 10;
     isolation: isolate;
-    overflow: hidden;
-    border-radius: inherit;
   }
 
   /* Enhanced glass effect for cards */
@@ -541,5 +539,25 @@ html {
     pointer-events: none;
     z-index: 0;
     mix-blend-mode: overlay;
+  }
+
+  /* Infinite Marquee Animation */
+  @keyframes marquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee {
+    animation: marquee 30s linear infinite;
+    display: flex;
+    width: fit-content;
+  }
+
+  .animate-marquee:hover {
+    animation-play-state: paused;
   }
 }
