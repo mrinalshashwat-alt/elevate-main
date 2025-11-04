@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiStop, FiRotateCw } from 'react-icons/fi';
+import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiRotateCw } from 'react-icons/fi';
 
 const Assessment = () => {
   const router = useRouter();
@@ -1053,7 +1053,7 @@ func main() {
                           onClick={handleStopRecording}
                           className="flex items-center space-x-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
                         >
-                          <FiStop />
+                          <FiSquare />
                           <span>Stop</span>
                         </button>
                       )}
