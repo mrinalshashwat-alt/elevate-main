@@ -349,7 +349,6 @@ const CandidatesList = () => {
                   <tr>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Candidate Name</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Email</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Score (%)</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Competency Match</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">View Report</th>
                   </tr>
@@ -364,13 +363,15 @@ const CandidatesList = () => {
                       transition={{ duration: 0.3, delay: index * 0.1 }}
                     >
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-white">{candidate.name}</p>
+                        <button
+                          onClick={() => router.push(`/admin/results?candidateId=${candidate.id}&tab=profile`)}
+                          className="font-semibold text-white hover:text-orange-400 transition-colors cursor-pointer text-left"
+                        >
+                          {candidate.name}
+                        </button>
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-gray-400">{candidate.email}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-white font-bold">{candidate.score}</p>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -387,7 +388,7 @@ const CandidatesList = () => {
                       </td>
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => router.push('/admin/results')}
+                          onClick={() => router.push('/admin/results?tab=report')}
                           className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg text-white font-semibold hover:shadow-lg transition-all transform hover:scale-105"
                         >
                           View Full Report

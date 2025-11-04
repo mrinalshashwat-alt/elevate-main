@@ -1,14 +1,55 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAssessments, deleteAssessment } from '../../api/admin';
+import { getAssessments, deleteAssessment, getJobs, createJob } from '../../api/admin';
+
+// Custom glass popover select component matching AIMockInterview style
+const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const selected = options.find((o) => o.value === value);
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 flex items-center justify-between"
+      >
+        <span className={`${selected ? 'text-gray-200' : 'text-gray-500'}`}>{selected ? selected.label : placeholder}</span>
+        <svg className={`w-4 h-4 text-orange-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-2 w-full rounded-xl overflow-hidden border border-orange-500/30 backdrop-blur-md" style={{ background: 'linear-gradient(180deg, rgba(33,20,14,0.9) 0%, rgba(191,54,12,0.6) 100%)', boxShadow: '0 12px 32px rgba(255,87,34,0.25)' }}>
+          <div className="max-h-60 overflow-y-auto">
+            {options.map((opt) => (
+              <button
+                key={opt.value || 'empty'}
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === opt.value ? 'bg-white/10 text-white' : 'text-gray-200 hover:bg-white/10'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AssessmentList = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [activeMainTab, setActiveMainTab] = useState('jobs'); // 'jobs' or 'assessments'
   const [showNewAssessment, setShowNewAssessment] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
@@ -17,6 +58,20 @@ const AssessmentList = () => {
   const [numQuestions, setNumQuestions] = useState(2);
   const [totalTime, setTotalTime] = useState(1);
   const [makePublic, setMakePublic] = useState(true);
+  
+  // Job creation states
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [newJob, setNewJob] = useState({
+    title: '',
+    company: '',
+    location: '',
+    type: 'full-time',
+    salary: '',
+    competencies: [],
+  });
+  const [newCompetency, setNewCompetency] = useState('');
+  const [selectedAssessmentFilter, setSelectedAssessmentFilter] = useState('');
+  const [createdJobId, setCreatedJobId] = useState(null); // Track newly created job for "Go to Assessment" button
 
   // AI Generation states
   const [aiPrompt, setAiPrompt] = useState('');
@@ -38,6 +93,15 @@ const AssessmentList = () => {
   const { data: assessmentsData, isLoading } = useQuery({
     queryKey: ['adminAssessments'],
     queryFn: () => getAssessments(),
+    retry: false, // Don't retry failed requests since we use mock data
+    refetchOnWindowFocus: false, // Don't refetch on window focus for mock data
+  });
+
+  const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
+    queryKey: ['adminJobs'],
+    queryFn: () => getJobs(),
+    retry: false, // Don't retry failed requests since we use mock data
+    refetchOnWindowFocus: false, // Don't refetch on window focus for mock data
   });
 
   const deleteMutation = useMutation({
@@ -47,10 +111,63 @@ const AssessmentList = () => {
     },
   });
 
+  const createJobMutation = useMutation({
+    mutationFn: createJob,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+      setCreatedJobId(data.id);
+      // Keep modal open to show "Go to Assessment" button
+    },
+  });
+
   const handleDelete = (assessmentId) => {
     if (confirm('Are you sure you want to delete this assessment?')) {
       deleteMutation.mutate(assessmentId);
     }
+  };
+
+  const handleCreateJob = () => {
+    createJobMutation.mutate({
+      title: newJob.title,
+      company: 'Company',
+      location: 'Location',
+      type: 'full-time',
+      salary: '',
+      competencies: newJob.competencies,
+      status: 'active',
+      postedAt: new Date().toISOString().split('T')[0],
+    });
+  };
+
+  const addCompetency = () => {
+    if (newCompetency.trim() && !newJob.competencies.includes(newCompetency.trim())) {
+      setNewJob({
+        ...newJob,
+        competencies: [...newJob.competencies, newCompetency.trim()],
+      });
+      setNewCompetency('');
+    }
+  };
+
+  const removeCompetency = (comp) => {
+    setNewJob({
+      ...newJob,
+      competencies: newJob.competencies.filter(c => c !== comp),
+    });
+  };
+
+  const handleGoToAssessment = () => {
+    setShowJobModal(false);
+    setCreatedJobId(null);
+    setNewJob({
+      title: '',
+      company: '',
+      location: '',
+      type: 'full-time',
+      salary: '',
+      competencies: [],
+    });
+    router.push(`/admin/create-assessment?jobId=${createdJobId}`);
   };
 
   const addManualQuestion = () => {
@@ -69,12 +186,12 @@ const AssessmentList = () => {
     {
       id: 1,
       title: 'Java Developer Entry Level',
+      jobTitle: 'Senior Java Developer',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
       ),
-      type: 'Video',
       description: 'We are seeking a skilled Java developer to join our entry-level cohort.',
       details: 'Automated technical screening with coding prompts and behavioral Q&A.',
       completed: 12,
@@ -83,12 +200,12 @@ const AssessmentList = () => {
     {
       id: 2,
       title: 'Data Analyst - SQL & BI',
+      jobTitle: 'Data Analyst',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       ),
-      type: 'AI',
       description: 'Evaluate SQL fluency, dashboard literacy, and stakeholder communication.',
       details: 'Adaptive question routing using knowledge graph alignment.',
       completed: 7,
@@ -97,12 +214,12 @@ const AssessmentList = () => {
     {
       id: 3,
       title: 'Frontend Engineer - React',
+      jobTitle: 'Frontend Developer',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
       ),
-      type: 'Video',
       description: 'Assess React patterns, accessibility, and UI problem solving.',
       details: 'Includes live UI critique and code reading tasks.',
       completed: 19,
@@ -111,12 +228,12 @@ const AssessmentList = () => {
     {
       id: 4,
       title: 'DevOps Engineer - Entry',
+      jobTitle: 'DevOps Engineer',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       ),
-      type: 'AI',
       description: 'Scenario-based on-call drills and IaC comprehension.',
       details: 'Agent-led incident walkthrough with scoring rubric.',
       completed: 4,
@@ -125,12 +242,12 @@ const AssessmentList = () => {
     {
       id: 5,
       title: 'Associate, ML Data Operations',
+      jobTitle: 'ML Data Associate',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       ),
-      type: 'AI',
       description: 'Evaluate labeling quality, ambiguity handling, and escalation judgment.',
       details: 'Rubric-aligned scoring with explanation traces.',
       completed: 9,
@@ -144,7 +261,6 @@ const AssessmentList = () => {
       title: 'Backend Coding Challenge',
       role: 'Software Engineering',
       candidates: 54,
-      avgScore: 82,
       dateCompleted: 'Sep 28, 2025'
     },
     {
@@ -152,7 +268,6 @@ const AssessmentList = () => {
       title: 'Product Sense Interview',
       role: 'Product / PM',
       candidates: 27,
-      avgScore: 74,
       dateCompleted: 'Sep 22, 2025'
     },
     {
@@ -160,7 +275,6 @@ const AssessmentList = () => {
       title: 'Data Analyst SQL Test',
       role: 'Analytics',
       candidates: 41,
-      avgScore: 69,
       dateCompleted: 'Sep 20, 2025'
     },
     {
@@ -168,7 +282,6 @@ const AssessmentList = () => {
       title: 'UI/UX Portfolio Review',
       role: 'Design',
       candidates: 33,
-      avgScore: 81,
       dateCompleted: 'Sep 18, 2025'
     },
     {
@@ -176,10 +289,13 @@ const AssessmentList = () => {
       title: 'Security Fundamentals',
       role: 'IT / Security',
       candidates: 19,
-      avgScore: 76,
       dateCompleted: 'Sep 12, 2025'
     }
   ];
+
+  const filteredCompletedAssessments = selectedAssessmentFilter
+    ? completedAssessments.filter(a => a.title === selectedAssessmentFilter)
+    : completedAssessments;
 
   const totalAssessments = 24;
   const totalCandidates = 312;
@@ -221,26 +337,53 @@ const AssessmentList = () => {
         {/* Toggle Section */}
         <div className="flex gap-4 mb-8">
           <button
-            onClick={() => setActiveSection('active')}
+            onClick={() => setActiveMainTab('jobs')}
             className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              activeSection === 'active'
+              activeMainTab === 'jobs'
                 ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-xl shadow-orange-500/40'
                 : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
             }`}
           >
-            Active Assessments ({activeAssessments.length})
+            Jobs ({jobsData?.data?.length || 0})
           </button>
           <button
-            onClick={() => setActiveSection('completed')}
+            onClick={() => setActiveMainTab('assessments')}
             className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              activeSection === 'completed'
+              activeMainTab === 'assessments'
                 ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-xl shadow-orange-500/40'
                 : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
             }`}
           >
-            Completed Assessments ({completedAssessments.length})
+            Assessments ({activeAssessments.length})
           </button>
         </div>
+
+        {/* Assessments Tab Content */}
+        {activeMainTab === 'assessments' && (
+          <>
+            {/* Toggle between Active and Completed */}
+            <div className="flex gap-4 mb-8">
+              <button
+                onClick={() => setActiveSection('active')}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                  activeSection === 'active'
+                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-xl shadow-orange-500/40'
+                    : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                }`}
+              >
+                Active Assessments ({activeAssessments.length})
+              </button>
+              <button
+                onClick={() => setActiveSection('completed')}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                  activeSection === 'completed'
+                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-xl shadow-orange-500/40'
+                    : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                }`}
+              >
+                Completed Assessments ({completedAssessments.length})
+              </button>
+            </div>
 
         {/* Active Assessments Section */}
         {activeSection === 'active' && (
@@ -251,7 +394,7 @@ const AssessmentList = () => {
             </div>
             <div className="flex justify-end mb-6">
               <button
-                onClick={() => setShowNewAssessment(true)}
+                onClick={() => router.push('/admin/create-assessment')}
                 className="px-6 py-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-105 active:scale-95 flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,9 +420,11 @@ const AssessmentList = () => {
                         <div>
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="text-2xl font-bold text-white">{assessment.title}</h3>
-                            <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-semibold">
-                              {assessment.type}
-                            </span>
+                            {assessment.jobTitle && (
+                              <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-semibold">
+                                {assessment.jobTitle}
+                              </span>
+                            )}
                           </div>
                           <p className="text-gray-400 mb-2">{assessment.description}</p>
                           <p className="text-sm text-gray-500">{assessment.details}</p>
@@ -303,7 +448,7 @@ const AssessmentList = () => {
           </>
         )}
 
-        {/* Completed Assessments Section */}
+                  {/* Completed Assessments Section */}
         {activeSection === 'completed' && (
           <>
             <div className="mb-8">
@@ -312,7 +457,7 @@ const AssessmentList = () => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-2 gap-6 mb-8">
               <motion.div
                 className="bg-white/5 border border-white/10 rounded-2xl p-6"
                 whileHover={{ scale: 1.05 }}
@@ -329,14 +474,25 @@ const AssessmentList = () => {
                 <h3 className="text-sm text-gray-400 mb-2">Candidates</h3>
                 <p className="text-4xl font-bold text-white">{totalCandidates}</p>
               </motion.div>
-              <motion.div
-                className="bg-white/5 border border-white/10 rounded-2xl p-6"
-                whileHover={{ scale: 1.05 }}
-                transition={{ duration: 0.2 }}
-              >
-                <h3 className="text-sm text-gray-400 mb-2">Avg. Score</h3>
-                <p className="text-4xl font-bold text-white">{avgScore}%</p>
-              </motion.div>
+            </div>
+
+            {/* Filter Dropdown */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-400 mb-3">Filter by Assessment</label>
+              <div className="w-full max-w-md">
+                <GlassSelect
+                  value={selectedAssessmentFilter}
+                  onChange={(value) => setSelectedAssessmentFilter(value)}
+                  placeholder="All Assessments"
+                  options={[
+                    { value: '', label: 'All Assessments' },
+                    ...completedAssessments.map((assessment) => ({
+                      value: assessment.title,
+                      label: assessment.title
+                    }))
+                  ]}
+                />
+              </div>
             </div>
 
             {/* Completed Assessments Table */}
@@ -355,13 +511,12 @@ const AssessmentList = () => {
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Role / Department</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Total Candidates</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Average Score</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Date Completed</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {completedAssessments.map((assessment, index) => (
+                    {filteredCompletedAssessments.map((assessment, index) => (
                       <motion.tr
                         key={assessment.id}
                         className="border-b border-white/10 hover:bg-white/5 transition-colors"
@@ -377,11 +532,6 @@ const AssessmentList = () => {
                         </td>
                         <td className="px-6 py-4">
                           <p className="text-white font-semibold">{assessment.candidates}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm font-semibold">
-                            {assessment.avgScore}%
-                  </span>
                         </td>
                         <td className="px-6 py-4">
                           <p className="text-gray-400">{assessment.dateCompleted}</p>
@@ -402,6 +552,124 @@ const AssessmentList = () => {
             </div>
           </>
         )}
+          </>
+        )}
+
+        {/* Jobs Section */}
+         {activeMainTab === 'jobs' && (
+           <>
+             <div className="mb-8">
+               <h2 className="text-4xl font-bold mb-2 text-white">Jobs</h2>
+               <p className="text-gray-400">Create jobs and add competencies for assessment creation.</p>
+             </div>
+             <div className="flex justify-end mb-6">
+               <button
+                 onClick={() => {
+                   setShowJobModal(true);
+                   setCreatedJobId(null);
+                   setNewJob({
+                     title: '',
+                     company: '',
+                     location: '',
+                     type: 'full-time',
+                     salary: '',
+                     competencies: [],
+                   });
+                 }}
+                 className="px-6 py-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-105 active:scale-95 flex items-center gap-2"
+               >
+                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                 </svg>
+                 Create New Job
+               </button>
+             </div>
+             <div className="space-y-4">
+               {jobsLoading ? (
+                 <motion.div
+                   className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
+                   initial={{ opacity: 0 }}
+                   animate={{ opacity: 1 }}
+                 >
+                   <div className="flex items-center justify-center">
+                     <svg className="w-8 h-8 animate-spin text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                     </svg>
+                     <span className="ml-3 text-gray-400">Loading jobs...</span>
+                   </div>
+                 </motion.div>
+               ) : (jobsData?.data && Array.isArray(jobsData.data) && jobsData.data.length > 0) ? (
+                 jobsData.data.map((job, index) => (
+                   <motion.div
+                     key={job.id || index}
+                     className="group relative bg-black/90 border border-white/10 rounded-3xl p-6 overflow-hidden hover:border-orange-500/50 transition-all"
+                     initial={{ opacity: 0, y: 20 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     transition={{ duration: 0.3, delay: index * 0.1 }}
+                     whileHover={{ y: -4 }}
+                   >
+                     <div className="flex items-start gap-6">
+                       <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                         <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                         </svg>
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-start justify-between mb-3">
+                           <div className="flex-1 min-w-0">
+                             <h3 className="text-2xl font-bold text-white mb-3">{job.title || 'Untitled Job'}</h3>
+                             {job.competencies && Array.isArray(job.competencies) && job.competencies.length > 0 ? (
+                               <div>
+                                 <p className="text-sm text-gray-400 mb-2">Competencies:</p>
+                                 <div className="flex flex-wrap gap-2">
+                                   {job.competencies.map((comp, idx) => (
+                                     <span key={idx} className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm font-semibold">
+                                       {comp}
+                                     </span>
+                                   ))}
+                                 </div>
+                               </div>
+                             ) : (
+                               <p className="text-gray-500 text-sm">No competencies added yet</p>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   </motion.div>
+                 ))
+               ) : (
+                 <motion.div
+                   className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
+                   initial={{ opacity: 0, y: 20 }}
+                   animate={{ opacity: 1, y: 0 }}
+                 >
+                   <svg className="w-24 h-24 mx-auto mb-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                   </svg>
+                   <h3 className="text-2xl font-bold mb-3 text-white">No jobs created yet</h3>
+                   <p className="text-gray-400 mb-6">Create your first job to get started</p>
+                   <button
+                     onClick={() => {
+                       setShowJobModal(true);
+                       setNewJob({
+                         title: '',
+                         company: '',
+                         location: '',
+                         type: 'full-time',
+                         salary: '',
+                         competencies: [],
+                       });
+                     }}
+                     className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
+                   >
+                     Create Job
+                   </button>
+                 </motion.div>
+               )}
+             </div>
+           </>
+         )}
       </main>
 
       {/* New Assessment Modal */}
@@ -458,15 +726,16 @@ const AssessmentList = () => {
                   {/* Assessment Type Dropdown */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-400 mb-3">Select Assessment Type</label>
-                    <select
+                    <GlassSelect
                       value={assessmentType}
-                      onChange={(e) => setAssessmentType(e.target.value)}
-                      className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-orange-500"
-                    >
-                      <option value="coding">Coding</option>
-                      <option value="video">Video</option>
-                      <option value="mcq">MCQ</option>
-                    </select>
+                      onChange={(value) => setAssessmentType(value)}
+                      placeholder="Select Assessment Type"
+                      options={[
+                        { value: 'coding', label: 'Coding' },
+                        { value: 'video', label: 'Video' },
+                        { value: 'mcq', label: 'MCQ' }
+                      ]}
+                    />
                   </div>
 
                   {/* Assessment Metrics */}
@@ -623,15 +892,16 @@ const AssessmentList = () => {
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-400 mb-3">Difficulty</label>
-                    <select
+                    <GlassSelect
                       value={aiDifficulty}
-                      onChange={(e) => setAiDifficulty(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-orange-500"
-                    >
-                      <option value="easy">Easy</option>
-                      <option value="medium">Medium</option>
-                      <option value="hard">Hard</option>
-                    </select>
+                      onChange={(value) => setAiDifficulty(value)}
+                      placeholder="Select difficulty"
+                      options={[
+                        { value: 'easy', label: 'Easy' },
+                        { value: 'medium', label: 'Medium' },
+                        { value: 'hard', label: 'Hard' }
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-400 mb-3">Number of Questions</label>
@@ -702,15 +972,16 @@ const AssessmentList = () => {
                 {/* Question Type Selector */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-400 mb-3">Question Type</label>
-                  <select
+                  <GlassSelect
                     value={newQuestion.type}
-                    onChange={(e) => setNewQuestion({ ...newQuestion, type: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-orange-500"
-                  >
-                    <option value="coding">Coding</option>
-                    <option value="video">Video</option>
-                    <option value="mcq">MCQ</option>
-                  </select>
+                    onChange={(value) => setNewQuestion({ ...newQuestion, type: value })}
+                    placeholder="Select question type"
+                    options={[
+                      { value: 'coding', label: 'Coding' },
+                      { value: 'video', label: 'Video' },
+                      { value: 'mcq', label: 'MCQ' }
+                    ]}
+                  />
                 </div>
 
                 {/* Question Input */}
@@ -844,6 +1115,163 @@ const AssessmentList = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* New Job Modal */}
+      <AnimatePresence>
+        {showJobModal && (
+          <motion.div
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[1000] p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowJobModal(false)}
+          >
+            <motion.div
+              className="group relative bg-black/95 border border-orange-500/50 rounded-3xl p-8 max-w-2xl w-full"
+              initial={{ scale: 0.9, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 50 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="relative z-20">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-bold text-white">Create New Job</h2>
+                  <button
+                    onClick={() => {
+                      setShowJobModal(false);
+                      setCreatedJobId(null);
+                      setNewJob({
+                        title: '',
+                        company: '',
+                        location: '',
+                        type: 'full-time',
+                        salary: '',
+                        competencies: [],
+                      });
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-400 mb-3">Job Name *</label>
+                    <input
+                      type="text"
+                      value={newJob.title}
+                      onChange={(e) => setNewJob({ ...newJob, title: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                      placeholder="e.g., Senior Software Engineer"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-400 mb-3">Add Competencies</label>
+                    <div className="flex flex-wrap items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl min-h-[60px]">
+                      {newJob.competencies.length > 0 ? (
+                        newJob.competencies.map((comp, index) => (
+                          <span key={index} className="px-3 py-1.5 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm font-semibold flex items-center gap-2">
+                            {comp}
+                            <button
+                              type="button"
+                              onClick={() => removeCompetency(comp)}
+                              className="text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 text-sm">No competencies added yet</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <input
+                        type="text"
+                        value={newCompetency}
+                        onChange={(e) => setNewCompetency(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addCompetency();
+                          }
+                        }}
+                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                        placeholder="Type competency and press Enter to add"
+                      />
+                      <button
+                        type="button"
+                        onClick={addCompetency}
+                        disabled={!newCompetency.trim()}
+                        className="px-6 py-3 bg-orange-500/20 border border-orange-500/50 text-orange-400 rounded-xl font-semibold hover:bg-orange-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                  {createdJobId ? (
+                    <div className="space-y-4">
+                      <div className="bg-green-500/20 border border-green-500/50 rounded-xl p-4 text-center">
+                        <p className="text-green-400 font-semibold">Job created successfully!</p>
+                      </div>
+                      <button
+                        onClick={handleGoToAssessment}
+                        className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Go to Assessment
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowJobModal(false);
+                          setCreatedJobId(null);
+                          setNewJob({
+                            title: '',
+                            company: '',
+                            location: '',
+                            type: 'full-time',
+                            salary: '',
+                            competencies: [],
+                          });
+                        }}
+                        className="w-full px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setShowJobModal(false)}
+                        className="px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateJob}
+                        disabled={createJobMutation.isPending || !newJob.title.trim()}
+                        className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {createJobMutation.isPending ? 'Creating...' : 'Create Job'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
     </div>
   );
 };

@@ -42,6 +42,7 @@ const mockJobs: Job[] = [
     salary: '$120k - $150k',
     postedAt: '2024-01-10',
     status: 'active',
+    competencies: ['React', 'JavaScript', 'TypeScript', 'CSS'],
   },
   {
     id: '2',
@@ -52,6 +53,7 @@ const mockJobs: Job[] = [
     salary: '$130k - $160k',
     postedAt: '2024-01-12',
     status: 'active',
+    competencies: ['Node.js', 'Python', 'Database Design', 'API Development'],
   },
 ];
 
@@ -64,6 +66,12 @@ const mockAssessments: Assessment[] = [
     questions: 20,
     createdAt: '2024-01-01',
     status: 'published',
+    jobId: '1',
+    jobTitle: 'Senior Frontend Developer',
+    questionTypes: [
+      { type: 'coding', count: 10 },
+      { type: 'mcq', count: 10 }
+    ],
   },
   {
     id: '2',
@@ -73,6 +81,12 @@ const mockAssessments: Assessment[] = [
     questions: 25,
     createdAt: '2024-01-05',
     status: 'published',
+    jobId: '2',
+    jobTitle: 'Backend Engineer',
+    questionTypes: [
+      { type: 'coding', count: 15 },
+      { type: 'essay', count: 10 }
+    ],
   },
 ];
 
@@ -149,8 +163,12 @@ export const getJobs = async (page = 1, pageSize = 10): Promise<PaginatedRespons
       `/admin/jobs?page=${page}&pageSize=${pageSize}`
     );
     return response.data.data;
-  } catch (error) {
-    console.log('Using mock jobs data');
+  } catch (error: any) {
+    // Silently fall back to mock data for 404 errors (expected in development)
+    if (error?.response?.status !== 404) {
+      console.error('Error fetching jobs:', error);
+    }
+    // Return mock data - this is expected in development
     return {
       data: mockJobs,
       total: mockJobs.length,
@@ -195,8 +213,12 @@ export const getAssessments = async (page = 1, pageSize = 10): Promise<Paginated
       `/admin/assessments?page=${page}&pageSize=${pageSize}`
     );
     return response.data.data;
-  } catch (error) {
-    console.log('Using mock assessments data');
+  } catch (error: any) {
+    // Silently fall back to mock data for 404 errors (expected in development)
+    if (error?.response?.status !== 404) {
+      console.error('Error fetching assessments:', error);
+    }
+    // Return mock data - this is expected in development
     return {
       data: mockAssessments,
       total: mockAssessments.length,
