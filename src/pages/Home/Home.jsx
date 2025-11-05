@@ -75,37 +75,42 @@ const staggerContainer = {
   }
 };
 
-// Enhanced dynamic donut chart with animations and trend indicators
-const Donut = ({ value = 75, size = 120, stroke = 12, label = '', color = '#FF5728', trendData = [], delay = 0 }) => {
+// Creative 3D Stat Card with Animated Elements
+const InteractiveStatCard = ({ value = 75, label = '', color = '#FF5728', trendData = [], delay = 0 }) => {
   const [animatedValue, setAnimatedValue] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   
-  // Generate trend data if not provided (slight upward trend with small variations)
-  const defaultTrend = trendData.length > 0 ? trendData : Array.from({ length: 6 }, (_, i) => {
-    const baseValue = value - 15 + (i * (100 - value + 15) / 5);
-    // Small deterministic variation based on index (sin wave for smooth curve)
-    const variation = Math.sin(i * 0.8) * 3;
-    return Math.max(0, Math.min(100, baseValue + variation));
-  });
-  
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.min(Math.max(animatedValue, 0), 100) / 100);
-  
-  // Get gradient colors based on base color
+  // Get gradient colors
   const getGradientColors = (baseColor) => {
-    if (baseColor === '#FF5728') return { from: '#FF5728', to: '#FF8A65' }; // Orange
-    if (baseColor === '#133561' || baseColor === '#3B82F6') return { from: '#3B82F6', to: '#60A5FA' }; // Blue
-    if (baseColor === '#FFAB00') return { from: '#FFAB00', to: '#FFC107' }; // Yellow
-    return { from: baseColor, to: baseColor };
+    if (baseColor === '#FF5728') return { 
+      from: '#FF5728', 
+      to: '#FF8A65', 
+      glow: 'rgba(255, 87, 40, 0.4)',
+      bg: 'rgba(255, 87, 40, 0.1)',
+      light: '#FF7043'
+    };
+    if (baseColor === '#133561' || baseColor === '#3B82F6') return { 
+      from: '#3B82F6', 
+      to: '#60A5FA', 
+      glow: 'rgba(59, 130, 246, 0.4)',
+      bg: 'rgba(59, 130, 246, 0.1)',
+      light: '#4A90E2'
+    };
+    if (baseColor === '#FFAB00') return { 
+      from: '#FFAB00', 
+      to: '#FFC107', 
+      glow: 'rgba(255, 171, 0, 0.4)',
+      bg: 'rgba(255, 171, 0, 0.1)',
+      light: '#FFB300'
+    };
+    return { from: baseColor, to: baseColor, glow: `${baseColor}66`, bg: `${baseColor}1A`, light: baseColor };
   };
   
-  const { from, to } = getGradientColors(color);
-  const gradientId = `donut-gradient-${color.replace('#', '')}-${size}`;
+  const { from, to, glow, bg, light } = getGradientColors(color);
   
-  // Animate value on mount and when value changes
+  // Animate value
   useEffect(() => {
-    const duration = 1500 + delay * 200;
+    const duration = 1800 + delay * 200;
     const startTime = Date.now();
     const startValue = 0;
     const targetValue = value;
@@ -113,7 +118,6 @@ const Donut = ({ value = 75, size = 120, stroke = 12, label = '', color = '#FF57
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      // Easing function (ease-out-cubic)
       const eased = 1 - Math.pow(1 - progress, 3);
       setAnimatedValue(startValue + (targetValue - startValue) * eased);
       
@@ -125,201 +129,158 @@ const Donut = ({ value = 75, size = 120, stroke = 12, label = '', color = '#FF57
     requestAnimationFrame(animate);
   }, [value, delay]);
   
-  // Calculate trend points for mini sparkline
-  const trendWidth = size * 0.6;
-  const trendHeight = size * 0.25;
-  const trendPadding = 8;
-  const trendMax = Math.max(...defaultTrend, 100);
-  const trendMin = Math.min(...defaultTrend, 0);
-  const trendRange = trendMax - trendMin || 1;
-  const pointSpacing = (trendWidth - trendPadding * 2) / (defaultTrend.length - 1);
-  
-  const trendPoints = defaultTrend.map((val, i) => {
-    const x = trendPadding + i * pointSpacing;
-    const y = trendHeight - ((val - trendMin) / trendRange) * (trendHeight - trendPadding * 2) - trendPadding;
-    return { x, y, value: val };
-  });
-  
-  const trendPath = trendPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const percentage = Math.min(Math.max(animatedValue, 0), 100) / 100;
   
   return (
-    <motion.div 
-      className="flex flex-col items-center justify-center relative group"
+    <motion.div
+      className="relative group"
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5, delay: delay * 0.1 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: delay * 0.15 }}
     >
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="block">
-          <defs>
-            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={from} stopOpacity="1" />
-              <stop offset="100%" stopColor={to} stopOpacity="0.8" />
-            </linearGradient>
-            <filter id={`glow-${gradientId}`}>
-              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-              <feMerge>
-                <feMergeNode in="coloredBlur"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
-            </filter>
-          </defs>
-          
-          {/* Background circle with subtle pattern */}
-          <circle 
-            cx={size/2} 
-            cy={size/2} 
-            r={radius} 
-            stroke="rgba(255,255,255,0.08)" 
-            strokeWidth={stroke} 
-            fill="none"
-          />
-          
-          {/* Animated progress circle with gradient */}
-          <motion.circle
-            cx={size/2}
-            cy={size/2}
-            r={radius}
-            stroke={`url(#${gradientId})`}
-            strokeWidth={stroke}
-            fill="none"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ 
-              strokeDashoffset: offset,
-              filter: isHovered ? `url(#glow-${gradientId})` : 'none'
-            }}
-            transition={{ duration: 1.5 + delay * 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-          />
-          
-          {/* Inner glow effect on hover */}
-          {isHovered && (
-            <circle
-              cx={size/2}
-              cy={size/2}
-              r={radius - stroke * 0.5}
-              fill="none"
-              stroke={color}
-              strokeWidth={2}
-              opacity={0.3}
-              className="animate-pulse"
-            />
-          )}
-          
-          {/* Trend sparkline inside donut */}
-          <g transform={`translate(${(size - trendWidth) / 2}, ${size * 0.38})`}>
-            <defs>
-              <linearGradient id={`trend-${gradientId}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor={color} stopOpacity="0.6" />
-                <stop offset="100%" stopColor={color} stopOpacity="0.2" />
-              </linearGradient>
-            </defs>
-            <motion.path
-              d={trendPath}
-              stroke={color}
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={0.6}
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 1, delay: 0.8 + delay * 0.1 }}
-            />
-            {/* Area fill under trend */}
-            <motion.path
-              d={`${trendPath} L ${trendPoints[trendPoints.length - 1].x} ${trendHeight} L ${trendPoints[0].x} ${trendHeight} Z`}
-              fill={`url(#trend-${gradientId})`}
-              opacity={0.3}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.3 }}
-              transition={{ duration: 0.8, delay: 1 + delay * 0.1 }}
-            />
-            {/* Trend points */}
-            {trendPoints.map((point, i) => (
-              <motion.circle
-                key={i}
-                cx={point.x}
-                cy={point.y}
-                r={2}
-                fill={color}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ duration: 0.3, delay: 1.2 + delay * 0.1 + i * 0.05 }}
-              />
-            ))}
-          </g>
-          
-          {/* Center value text */}
-          <motion.text 
-            x="50%" 
-            y="45%" 
-            dominantBaseline="middle" 
-            textAnchor="middle" 
-            fill="#fff" 
-            fontSize="18" 
-            fontWeight="900"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.5 + delay * 0.1 }}
-          >
-            {Math.round(animatedValue)}%
-          </motion.text>
-          
-          {/* Percentage symbol */}
-          <text 
-            x="50%" 
-            y="58%" 
-            dominantBaseline="middle" 
-            textAnchor="middle" 
-            fill="rgba(255,255,255,0.5)" 
-            fontSize="10" 
-            fontWeight="600"
-          >
-            %
-          </text>
-        </svg>
+      <motion.div
+        className="relative bg-gradient-to-br from-black/90 via-black/80 to-black/90 rounded-2xl p-6 overflow-hidden border border-white/10"
+        style={{
+          boxShadow: isHovered 
+            ? `0 20px 60px ${glow}, 0 0 0 1px ${from}40 inset, 0 0 40px ${from}20` 
+            : '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset',
+        }}
+        whileHover={{ 
+          y: -8,
+          scale: 1.02,
+          transition: { duration: 0.3 }
+        }}
+      >
+        {/* Animated background gradient */}
+        <motion.div
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+          style={{
+            background: `radial-gradient(circle at 50% 0%, ${bg}, transparent 70%)`,
+          }}
+        />
         
-        {/* Pulsing ring on hover */}
-        {isHovered && (
+        {/* Animated corner accent */}
+        <motion.div
+          className="absolute top-0 right-0 w-20 h-20 opacity-30"
+          style={{
+            background: `radial-gradient(circle at top right, ${from}, transparent 70%)`,
+          }}
+          animate={isHovered ? { scale: 1.5, opacity: 0.5 } : { scale: 1, opacity: 0.3 }}
+          transition={{ duration: 0.5 }}
+        />
+        
+        {/* Content */}
+        <div className="relative z-10">
+          {/* Header with value - centered */}
+          <div className="flex items-center justify-center mb-6">
+            <motion.div
+              className="text-center"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 + delay * 0.1 }}
+            >
+              <motion.div
+                className="text-5xl font-black mb-1"
+                style={{ 
+                  background: `linear-gradient(135deg, ${from}, ${to})`,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+                animate={isHovered ? { scale: 1.05 } : { scale: 1 }}
+              >
+                {Math.round(animatedValue)}%
+              </motion.div>
+            </motion.div>
+          </div>
+          
+          {/* Animated progress bar */}
+          <div className="relative h-3 bg-white/5 rounded-full overflow-hidden mb-3 backdrop-blur-sm">
+            <motion.div
+              className="h-full rounded-full relative"
+              style={{
+                background: `linear-gradient(90deg, ${from}, ${light}, ${to})`,
+                boxShadow: `0 0 12px ${glow}`,
+              }}
+              initial={{ width: 0 }}
+              animate={{ width: `${percentage * 100}%` }}
+              transition={{ duration: 1.8 + delay * 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+            >
+              {/* Animated shimmer */}
+              {isHovered && (
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '200%' }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                />
+              )}
+              {/* Pulsing dot at end */}
+              <motion.div
+                className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full"
+                style={{ background: to }}
+                animate={{ 
+                  scale: [1, 1.3, 1],
+                  opacity: [0.8, 1, 0.8],
+                  boxShadow: [`0 0 0 0 ${glow}`, `0 0 8px 4px ${glow}`, `0 0 0 0 ${glow}`]
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+            </motion.div>
+          </div>
+          
+          {/* Label */}
           <motion.div
-            className="absolute inset-0 rounded-full border-2"
-            style={{ borderColor: color }}
-            initial={{ scale: 1, opacity: 0.5 }}
-            animate={{ scale: 1.2, opacity: 0 }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          />
-        )}
-      </div>
-      
-      {/* Label with trend indicator */}
-      <div className="mt-3 text-center">
-        <span className="text-xs text-gray-300 font-semibold tracking-wide block">{label}</span>
-        {/* Trend indicator */}
-        <div className="flex items-center justify-center gap-1 mt-1">
-          <motion.svg 
-            width="12" 
-            height="8" 
-            viewBox="0 0 12 8"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1 + delay * 0.1 }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 + delay * 0.1 }}
           >
-            <path 
-              d="M 0 8 L 6 0 L 12 8" 
-              fill={color} 
-              opacity={0.7}
-            />
-          </motion.svg>
-          <span className="text-[10px] text-gray-400 font-medium">
-            {defaultTrend.length > 1 && defaultTrend[defaultTrend.length - 1] > defaultTrend[0] ? '+' : ''}
-            {Math.round(((defaultTrend[defaultTrend.length - 1] || 0) - (defaultTrend[0] || 0)) / (defaultTrend.length - 1) * 10) / 10}%
-          </span>
+            <span className="text-sm text-gray-300 font-bold tracking-wide block">
+              {label}
+            </span>
+          </motion.div>
         </div>
-      </div>
+        
+        {/* Bottom accent line */}
+        <motion.div
+          className="absolute bottom-0 left-0 h-1 rounded-full"
+          style={{
+            background: `linear-gradient(90deg, ${from}, ${to})`,
+            boxShadow: `0 0 8px ${glow}`,
+          }}
+          initial={{ width: 0 }}
+          animate={{ width: '100%' }}
+          transition={{ duration: 1.5, delay: 0.5 + delay * 0.1 }}
+        />
+        
+        {/* Hover glow rings */}
+        {isHovered && (
+          <>
+            <motion.div
+              className="absolute -inset-1 rounded-2xl border-2 pointer-events-none"
+              style={{ borderColor: from }}
+              initial={{ opacity: 0.5, scale: 1 }}
+              animate={{ 
+                scale: [1, 1.05, 1],
+                opacity: [0.5, 0.8, 0.5]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+            <motion.div
+              className="absolute -inset-2 rounded-2xl border pointer-events-none"
+              style={{ borderColor: `${from}40` }}
+              initial={{ opacity: 0, scale: 1 }}
+              animate={{ 
+                scale: [1, 1.08, 1],
+                opacity: [0, 0.4, 0]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+          </>
+        )}
+      </motion.div>
     </motion.div>
   );
 };
@@ -1113,10 +1074,12 @@ const Home = () => {
   const [currentWhyIndex, setCurrentWhyIndex] = useState(0);
   
   // Loading states
+  const [mounted, setMounted] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isHeroVideoLoaded, setIsHeroVideoLoaded] = useState(false);
   const [isBrainVideoLoaded, setIsBrainVideoLoaded] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState(false);
+  const [showVideoLoader, setShowVideoLoader] = useState(true);
   
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -1154,6 +1117,29 @@ const Home = () => {
   // Typewriter effect for hero
   const { displayText: heroText } = useTypewriter('Elevate Your Career', 100);
 
+  // Set mounted state on client-side only and ensure loader always hides
+  useEffect(() => {
+    setMounted(true);
+    
+    // Safety timeout - ALWAYS hide loader after 2 seconds maximum
+    // This ensures page is always visible even if video loading fails
+    const safetyTimeout = setTimeout(() => {
+      setShowVideoLoader(false);
+      setIsHeroVideoLoaded(true); // Show video even if not fully loaded
+    }, 2000);
+    
+    return () => clearTimeout(safetyTimeout);
+  }, []);
+
+  // Hide loader when video is loaded
+  useEffect(() => {
+    if (!mounted) return;
+    
+    if (isHeroVideoLoaded || videoLoadError) {
+      setShowVideoLoader(false);
+    }
+  }, [mounted, isHeroVideoLoaded, videoLoadError]);
+
   // Refs for animations
   const heroRef = useRef(null);
   const heroEdgeRef = useRef(null);
@@ -1166,9 +1152,14 @@ const Home = () => {
   const heroInView = useInView(heroRef, { once: true, amount: 0.3 });
   const isHeroEdgeInView = useInView(heroEdgeRef, { margin: '-72px 0px 0px 0px' });
   const enableHeaderGlass = !isHeroEdgeInView; // glass after we pass hero edge
+  // Show logo when hero section is in view (not past the edge)
+  const showLogo = useInView(heroRef, { amount: 0.1 }); // logo stays visible while any part of hero is visible
   const featuresInView = useInView(featuresRef, { once: true, amount: 0.2 });
   const testimonialsInView = useInView(testimonialsRef, { once: true, amount: 0.2 });
   const achievementsInView = useInView(achievementsRef, { once: true, amount: 0.2 });
+  
+  // State for feature stat cards hover
+  const [featureCardHovered, setFeatureCardHovered] = useState({});
 
   // Data arrays
   const carouselItems = [
@@ -1263,31 +1254,31 @@ const Home = () => {
     {
       number: "5000",
       label: "Students Placed",
-      description: "Successfully placed in top companies",
+      description: "Successfully placed in top-tier companies across various industries with an average salary increase of 40%",
       color: "from-green-400 to-emerald-600"
     },
     {
       number: "91",
       label: "Success Rate",
-      description: "Average career improvement rate",
+      description: "Career improvement rate achieved through personalized AI coaching and targeted skill development programs",
       color: "from-blue-400 to-indigo-600"
     },
     {
       number: "50",
       label: "Partner Companies",
-      description: "Leading organizations worldwide",
+      description: "Leading organizations including Fortune 500 companies, tech giants, and innovative startups worldwide",
       color: "from-purple-400 to-pink-600"
     },
     {
       number: "24/7",
       label: "AI Support",
-      description: "Round-the-clock assistance",
+      description: "Round-the-clock AI-powered assistance ensuring students get help whenever they need it",
       color: "from-orange-400 to-red-600"
     },
     {
       number: "10000",
       label: "Active Users",
-      description: "Monthly active users",
+      description: "Monthly active users benefiting from our comprehensive career development platform",
       color: "from-cyan-400 to-blue-600"
     }
   ];
@@ -1434,15 +1425,7 @@ const Home = () => {
       cardStyle: "gradient-card-orange card-glow-orange"
     },
     {
-      title: "5. AI Resume Builder – ATS-Optimized Perfection",
-      subtitle: "Create perfectly formatted, keyword-optimized resumes that pass ATS filters and get you noticed by recruiters.",
-      icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-      competitor: "",
-      elevate: "89% callback increase, 73% faster response rate, and 4x higher interview invitation rate with AI-optimized resumes",
-      cardStyle: "gradient-card-blue card-glow-blue"
-    },
-    {
-      title: "6. Career Insights & Market Intelligence",
+      title: "5. Career Insights & Market Intelligence",
       subtitle: "Access real-time market trends, salary data, and industry insights to make informed career decisions.",
       icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
       competitor: "",
@@ -1676,8 +1659,14 @@ const Home = () => {
       >
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
           <motion.div 
-            className="flex items-center"
+            className="flex items-center relative z-[160]"
             whileHover={{ scale: 1.05 }}
+            initial={{ opacity: 1 }}
+            animate={{ 
+              opacity: showLogo ? 1 : 0,
+              pointerEvents: showLogo ? 'auto' : 'none'
+            }}
+            transition={{ duration: 0.3 }}
           >
             <button 
               onClick={() => router.push('/')} 
@@ -1687,7 +1676,7 @@ const Home = () => {
               <img 
                 src="/logo.jpg" 
                 alt="Elevate Career AI Logo" 
-                className="w-20 h-20 md:w-28 md:h-28 object-contain"
+                className="w-20 h-20 md:w-28 md:h-28 object-contain relative z-10"
               />
             </button>
           </motion.div>
@@ -1708,8 +1697,8 @@ const Home = () => {
                   openDropdown === 'ai-mock-agents' ? 'bg-orange-500/10 text-orange-400' : 'hover:bg-orange-500/10 hover:text-orange-400'
                 }`}
               >
-                AI Mock Agents
-                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'ai-mock-agents' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                AI Agent
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'ai-mock-agents' ? 'rotate-180' : ''} opacity-70`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -1730,7 +1719,7 @@ const Home = () => {
                 }`}
               >
                 Mock Prep
-                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'mock-prep' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'mock-prep' ? 'rotate-180' : ''} opacity-70`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -1754,7 +1743,7 @@ const Home = () => {
                 }`}
               >
                 Exam Prep
-                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'exam-prep' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'exam-prep' ? 'rotate-180' : ''} opacity-70`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -1776,7 +1765,7 @@ const Home = () => {
                 }`}
               >
                 Course Prep
-                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'course-prep' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`inline ml-1 w-3 h-3 transition-transform duration-300 ${openDropdown === 'course-prep' ? 'rotate-180' : ''} opacity-70`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -1825,24 +1814,65 @@ const Home = () => {
 
       {/* Hero Section - Professional Redesign */}
       {/* Hero Section - Redesigned */}
-<main ref={heroRef} className="min-h-screen flex items-center relative z-10 pt-20 bg-transparent" id="hero">
+<main ref={heroRef} className="min-h-screen flex items-center relative z-10 pt-32 md:pt-40 bg-transparent" id="hero">
   {/* Background Video (no overlays) */}
-  <div className="absolute inset-0 w-full h-full overflow-hidden z-0">
+  <div className="absolute inset-0 w-full h-full overflow-hidden z-0 bg-black">
+    {showVideoLoader && (
+      <motion.div 
+        className="absolute inset-0 bg-black flex items-center justify-center z-10"
+        initial={{ opacity: 1 }}
+        animate={{ opacity: showVideoLoader ? 1 : 0 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      </motion.div>
+    )}
     <video
       src="/vdoo.mp4"
       autoPlay
       muted
       loop
       playsInline
-      preload="metadata"
+      preload="auto"
       poster="/img.png"
-      onCanPlayThrough={() => setIsHeroVideoLoaded(true)}
-      onLoadedData={() => setIsHeroVideoLoaded(true)}
-      onError={() => setVideoLoadError(true)}
+      onCanPlay={() => {
+        setIsHeroVideoLoaded(true);
+        setShowVideoLoader(false);
+      }}
+      onCanPlayThrough={() => {
+        setIsHeroVideoLoaded(true);
+        setShowVideoLoader(false);
+      }}
+      onLoadedData={() => {
+        setIsHeroVideoLoaded(true);
+        setShowVideoLoader(false);
+      }}
+      onError={() => {
+        setVideoLoadError(true);
+        setShowVideoLoader(false);
+      }}
+      onWaiting={() => {
+        // Video is buffering - don't re-show loader if it's already been hidden
+        // The timeout will handle hiding it regardless
+      }}
       className="w-full h-full object-cover"
-      style={{ willChange: 'transform', transform: 'translateZ(0)', mixBlendMode: 'normal' }}
+      style={{ 
+        willChange: 'transform', 
+        transform: 'translateZ(0)', 
+        mixBlendMode: 'normal',
+        opacity: isHeroVideoLoaded || !showVideoLoader ? 1 : 0,
+        transition: 'opacity 0.5s ease-in'
+      }}
       aria-label="Background video"
     />
+    {videoLoadError && (
+      <div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center z-5">
+        <div className="text-center text-white/50">
+          <p>Video unavailable</p>
+        </div>
+      </div>
+    )}
   </div>
 
   {/* Hero edge sentinel for enabling header glass after scroll */}
@@ -1857,15 +1887,6 @@ const Home = () => {
             animate="visible"
             variants={staggerContainer}
           >
-            {/* Announcement Badge */}
-            <motion.div 
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all cursor-pointer group"
-              variants={fadeInUp}
-              whileHover={{ scale: 1.05 }}
-            >
-              <span className="w-2 h-2 bg-orange-500 rounded-full" />
-              <span className="text-sm text-white/80 group-hover:text-white transition-colors"></span>
-            </motion.div>
 
             {/* Main Heading */}
             <motion.div variants={fadeInUp}>
@@ -1947,22 +1968,6 @@ const Home = () => {
               </motion.div>
             </AnimatePresence>
 
-            {/* Carousel Indicators */}
-            <motion.div className="flex gap-3" variants={fadeInUp}>
-              {carouselItems.map((_, index) => (
-                <motion.button
-                  key={index}
-                  className={`h-2 rounded-full cursor-pointer transition-all duration-300 ${
-                    index === currentSlide 
-                      ? 'bg-orange-500 w-16' 
-                      : 'bg-gray-600 w-8'
-                  }`}
-                  onClick={() => setCurrentSlide(index)}
-                  whileHover={{ scale: 1.2 }}
-                />
-              ))}
-            </motion.div>
-
             {/* Bottom action buttons removed per request */}
           </motion.div>
 
@@ -1978,53 +1983,66 @@ const Home = () => {
               onLoadedData={() => setIsBrainVideoLoaded(true)}
               onError={() => setIsBrainVideoLoaded(true)}
               className="w-full h-full object-contain"
-              style={{ mixBlendMode: 'normal' }}
+              style={{ 
+                mixBlendMode: 'normal',
+                opacity: isBrainVideoLoaded ? 1 : 0,
+                transition: 'opacity 0.8s ease-in'
+              }}
               aria-hidden="true"
             />
           </div>
         </div>
 
-        {/* Scroll Indicator - Keep */}
-        <motion.div 
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20"
-          animate={{ y: [0, 10, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          <div className="w-6 h-10 border-2 border-white/30 rounded-full flex items-start justify-center p-2">
-            <motion.div 
-              className="w-1.5 h-3 bg-white/50 rounded-full"
-              animate={{ y: [0, 12, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-          </div>
-        </motion.div>
       </main>
 
       {/* Partner Companies Marquee */}
       <section className="py-12 bg-black/50 border-y border-white/5 overflow-hidden relative">
         <div className="flex animate-marquee whitespace-nowrap">
-          {/* First set of logos */}
-          {Array.from({ length: 10 }, (_, i) => {
-            const icons = [FiBriefcase, FiHome, FiZap, FiPackage, FiAward, FiTarget, FiTrendingUp, FiUsers, FiStar, FiCode];
-            const Icon = icons[i % icons.length];
+          {/* Company logos array */}
+          {(() => {
+            const companyLogos = [
+              '/Deloitte-Logo.jpg',
+              '/Tech_Mahindra-Logo.wine.png',
+              '/firstsource-logo-png_seeklogo-618219.png',
+              '/download.jpg',
+              '/download (1) (2).png',
+              '/download (1) (3).png',
+              '/download (2) (2).png',
+              '/download (3) (1).png',
+              '/college_logo.png'
+            ];
+            
+            // First set of logos
             return (
-              <div key={`first-${i}`} className="flex items-center gap-4 mx-16 flex-shrink-0 group">
-                <Icon className="text-white/30 text-2xl group-hover:text-white/50 transition-colors duration-300" />
-                <span className="text-white/30 text-3xl font-light tracking-wider group-hover:text-white/50 transition-colors duration-300">abc</span>
-              </div>
+              <>
+                {Array.from({ length: 10 }, (_, i) => {
+                  const logoPath = companyLogos[i % companyLogos.length];
+                  return (
+                    <div key={`first-${i}`} className="flex items-center justify-center mx-16 flex-shrink-0 group h-16">
+                      <img 
+                        src={logoPath} 
+                        alt={`Company logo ${i + 1}`}
+                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300 grayscale group-hover:grayscale-0"
+                      />
+                    </div>
+                  );
+                })}
+                {/* Duplicate set for seamless loop */}
+                {Array.from({ length: 10 }, (_, i) => {
+                  const logoPath = companyLogos[i % companyLogos.length];
+                  return (
+                    <div key={`second-${i}`} className="flex items-center justify-center mx-16 flex-shrink-0 group h-16">
+                      <img 
+                        src={logoPath} 
+                        alt={`Company logo ${i + 1}`}
+                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300 grayscale group-hover:grayscale-0"
+                      />
+                    </div>
+                  );
+                })}
+              </>
             );
-          })}
-          {/* Duplicate set for seamless loop */}
-          {Array.from({ length: 10 }, (_, i) => {
-            const icons = [FiBriefcase, FiHome, FiZap, FiPackage, FiAward, FiTarget, FiTrendingUp, FiUsers, FiStar, FiCode];
-            const Icon = icons[i % icons.length];
-            return (
-              <div key={`second-${i}`} className="flex items-center gap-4 mx-16 flex-shrink-0 group">
-                <Icon className="text-white/30 text-2xl group-hover:text-white/50 transition-colors duration-300" />
-                <span className="text-white/30 text-3xl font-light tracking-wider group-hover:text-white/50 transition-colors duration-300">abc</span>
-              </div>
-            );
-          })}
+          })()}
         </div>
       </section>
 
@@ -2161,22 +2179,21 @@ const Home = () => {
                   </div>
                   
                   <div className="space-y-8">
-                    {/* Inline premium mini charts (enlarged) */}
-                    <div className="grid grid-cols-3 gap-6 md:gap-8 items-center justify-items-center pt-2">
+                    {/* Interactive stat cards - more visually appealing */}
+                    <div className="grid grid-cols-3 gap-4 md:gap-6 items-stretch pt-2 mb-6">
                       {chartStats.map(({ label, value, trends = [] }, i) => (
-                        <Donut 
-                          key={i} 
+                        <InteractiveStatCard 
+                          key={i}
                           value={value} 
                           label={label} 
                           color={colorOrder[i % 3]} 
                           trendData={trends}
                           delay={i * 0.2}
-                          size={110}
                         />
                       ))}
                     </div>
                     {/* Subheader below charts */}
-                    <p className="text-sm text-gray-300 font-medium leading-relaxed max-w-prose">{item.subtitle}</p>
+                    <p className="text-sm text-gray-300 font-medium leading-relaxed max-w-prose mt-4">{item.subtitle}</p>
                   </div>
                 </div>
               </motion.div>
@@ -2329,42 +2346,190 @@ const Home = () => {
               Experience cutting-edge AI-powered tools designed to accelerate your career growth
             </motion.p>
             
-            {/* Success Rate Card - Premium */}
-            <motion.div 
-              className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-10 max-w-5xl mx-auto overflow-hidden"
-              style={{
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset',
-                transformStyle: 'preserve-3d'
-              }}
-              initial={{ opacity: 0, scale: 0.9, rotateX: -5 }}
-              animate={featuresInView ? { opacity: 1, scale: 1, rotateX: 0 } : { opacity: 0, scale: 0.9, rotateX: -5 }}
-              transition={{ duration: 0.6 }}
-              whileHover={{ 
-                y: -8,
-                scale: 1.02,
-                rotateX: 2,
-                transition: { duration: 0.3 }
-              }}
+            {/* Feature Stat Cards - Grid with Same Graph Style */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+              {[
+                { value: 91, label: 'Overall Success Rate', color: '#FF5728', description: 'Increase in job landing success' },
+                { value: 87, label: 'Career Clarity', color: '#3B82F6', description: 'Higher clarity in career path' },
+                { value: 85, label: 'Job Readiness', color: '#FFAB00', description: 'Improvement in interview skills' }
+              ].map((stat, index) => {
+                const isHovered = featureCardHovered[index] || false;
+                const getGradientColors = (baseColor) => {
+                  if (baseColor === '#FF5728') return { from: '#FF5728', to: '#FFAB00', glow: 'rgba(255, 87, 40, 0.4)', bg: 'rgba(255, 87, 40, 0.1)', light: '#FF7043' };
+                  if (baseColor === '#3B82F6') return { from: '#3B82F6', to: '#60A5FA', glow: 'rgba(59, 130, 246, 0.4)', bg: 'rgba(59, 130, 246, 0.1)', light: '#4A90E2' };
+                  if (baseColor === '#FFAB00') return { from: '#FFAB00', to: '#FFC107', glow: 'rgba(255, 171, 0, 0.4)', bg: 'rgba(255, 171, 0, 0.1)', light: '#FFB300' };
+                  return { from: baseColor, to: baseColor, glow: `${baseColor}66`, bg: `${baseColor}1A`, light: baseColor };
+                };
+                const { from, to, glow, bg, light } = getGradientColors(stat.color);
+                
+                return (
+                  <motion.div 
+                    key={index}
+                    className="group relative"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={featuresInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+                    transition={{ duration: 0.5, delay: index * 0.15 }}
+                    onHoverStart={() => setFeatureCardHovered(prev => ({ ...prev, [index]: true }))}
+                    onHoverEnd={() => setFeatureCardHovered(prev => ({ ...prev, [index]: false }))}
+                  >
+                    <motion.div
+                      className="relative bg-gradient-to-br from-black/90 via-black/80 to-black/90 rounded-2xl p-6 overflow-hidden border border-white/10 h-full"
+                      style={{
+                        boxShadow: featuresInView && isHovered
+                          ? `0 20px 60px ${glow}, 0 0 0 1px ${from}40 inset, 0 0 40px ${from}20` 
+                          : '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset',
+                      }}
+                      whileHover={{ 
+                        y: -8,
+                        scale: 1.02,
+                        transition: { duration: 0.3 }
+                      }}
+                    >
+                      {/* Animated background gradient */}
+                      <motion.div
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                        style={{
+                          background: `radial-gradient(circle at 50% 0%, ${bg}, transparent 70%)`,
+                        }}
+                      />
+                      
+                      {/* Animated corner accent */}
+                      <motion.div
+                        className="absolute top-0 right-0 w-20 h-20 opacity-30"
+                        style={{
+                          background: `radial-gradient(circle at top right, ${from}, transparent 70%)`,
+                        }}
+                        animate={isHovered ? { scale: 1.5, opacity: 0.5 } : { scale: 1, opacity: 0.3 }}
+                        transition={{ duration: 0.5 }}
+                      />
+                      
+                      {/* Content */}
+                      <div className="relative z-10">
+                        {/* Header with value - centered */}
+                        <div className="flex items-center justify-center mb-4">
+                          <motion.div
+                            className="text-center"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={featuresInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
+                            transition={{ duration: 0.5, delay: 0.2 + index * 0.1 }}
+                          >
+                            <motion.div
+                              className="text-5xl font-black mb-1"
+                              style={{ 
+                                background: `linear-gradient(135deg, ${from}, ${to})`,
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text',
+                              }}
+                              animate={isHovered ? { scale: 1.05 } : { scale: 1 }}
+                            >
+                              {stat.value}%
+                            </motion.div>
+                            <h4 className="text-base font-bold text-gray-300">{stat.label}</h4>
+                          </motion.div>
+                        </div>
+                        
+                        {/* Animated progress bar */}
+                        <div className="relative h-3 bg-white/5 rounded-full overflow-hidden mb-4 backdrop-blur-sm">
+                          <motion.div
+                            className="h-full rounded-full relative"
+                            style={{
+                              background: `linear-gradient(90deg, ${from}, ${light}, ${to})`,
+                              boxShadow: `0 0 12px ${glow}`,
+                            }}
+                            initial={{ width: 0 }}
+                            animate={featuresInView ? { width: `${stat.value}%` } : { width: 0 }}
+                            transition={{ duration: 1.8 + index * 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+                          >
+                            {/* Animated shimmer */}
+                            {isHovered && (
+                              <motion.div
+                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                                initial={{ x: '-100%' }}
+                                animate={{ x: '200%' }}
+                                transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                              />
+                            )}
+                            {/* Pulsing dot at end */}
+                            <motion.div
+                              className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full"
+                              style={{ background: to }}
+                              animate={{ 
+                                scale: [1, 1.3, 1],
+                                opacity: [0.8, 1, 0.8],
+                                boxShadow: [`0 0 0 0 ${glow}`, `0 0 8px 4px ${glow}`, `0 0 0 0 ${glow}`]
+                              }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                            />
+                          </motion.div>
+                        </div>
+                        
+                        {/* Description text */}
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={featuresInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+                          transition={{ duration: 0.5, delay: 0.4 + index * 0.1 }}
+                          className="text-center"
+                        >
+                          <p className="text-gray-300 text-sm font-medium leading-relaxed">
+                            {stat.description}
+                          </p>
+                        </motion.div>
+                      </div>
+                      
+                      {/* Bottom accent line */}
+                      <motion.div
+                        className="absolute bottom-0 left-0 h-1 rounded-full"
+                        style={{
+                          background: `linear-gradient(90deg, ${from}, ${to})`,
+                          boxShadow: `0 0 8px ${glow}`,
+                        }}
+                        initial={{ width: 0 }}
+                        animate={featuresInView ? { width: '100%' } : { width: 0 }}
+                        transition={{ duration: 1.5, delay: 0.5 + index * 0.1 }}
+                      />
+                      
+                      {/* Hover glow rings */}
+                      {isHovered && (
+                        <>
+                          <motion.div
+                            className="absolute -inset-1 rounded-2xl border-2 pointer-events-none"
+                            style={{ borderColor: from }}
+                            initial={{ opacity: 0.5, scale: 1 }}
+                            animate={{ 
+                              scale: [1, 1.05, 1],
+                              opacity: [0.5, 0.8, 0.5]
+                            }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                          />
+                          <motion.div
+                            className="absolute -inset-2 rounded-2xl border pointer-events-none"
+                            style={{ borderColor: `${from}40` }}
+                            initial={{ opacity: 0, scale: 1 }}
+                            animate={{ 
+                              scale: [1, 1.08, 1],
+                              opacity: [0, 0.4, 0]
+                            }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                          />
+                        </>
+                      )}
+                    </motion.div>
+                  </motion.div>
+                );
+              })}
+            </div>
+            
+            {/* Success Rate Description Card */}
+            <motion.div
+              className="max-w-4xl mx-auto mb-16"
+              initial={{ opacity: 0, y: 20 }}
+              animate={featuresInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              transition={{ duration: 0.5, delay: 0.6 }}
             >
-              {/* Shine effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
-              <div className="premium-card-content grid grid-cols-1 md:grid-cols-2 gap-10 items-center relative z-10">
-                <div className="w-full">
-                  <div className="flex items-baseline justify-between mb-4">
-                    <h4 className="text-xl font-bold text-gray-300">Overall Success Rate</h4>
-                    <span className="text-4xl font-black text-white">91%</span>
-                  </div>
-                  <ProgressBar value={91} height={22} colorFrom="#FF5728" colorTo="#FFAB00" />
-                </div>
-                <div className="text-left">
-                  <p className="text-gray-200 text-lg md:text-xl font-bold leading-relaxed">
-                    ElevateCareer.Cloud users experience up to a <span className="text-white font-black">91% increase</span> in their chances of landing a better job, building a stronger career path, and excelling in real-life job simulations.
-                  </p>
-                </div>
-              </div>
+              <p className="text-gray-200 text-lg md:text-xl font-medium leading-relaxed text-center">
+                ElevateCareer.Cloud users experience up to a <span className="text-white font-black" style={{ background: `linear-gradient(135deg, #FF5728, #FFAB00)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>91% increase</span> in their chances of landing a better job, building a stronger career path, and excelling in real-life job simulations.
+              </p>
             </motion.div>
           </div>
 
@@ -2372,40 +2537,49 @@ const Home = () => {
           <div className="overflow-hidden relative w-full py-4">
             {/* Controls */}
             <button 
-              className="hidden md:flex absolute -left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white/10 border border-white/20 rounded-full items-center justify-center hover:bg-white/20 transition-all"
-              onClick={() => setCurrentFeature(prev => (prev - 1 + Math.ceil(featuresData.length / 2)) % Math.ceil(featuresData.length / 2))}
+              className="flex absolute -left-4 md:-left-8 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 bg-white/10 border border-white/20 rounded-full items-center justify-center hover:bg-white/20 transition-all backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={() => {
+                const totalPages = Math.ceil(featuresData.length / 2);
+                setCurrentFeature(prev => (prev - 1 + totalPages) % totalPages);
+              }}
               aria-label="Previous feature"
+              disabled={currentFeature === 0}
             >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 md:w-6 md:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <button 
-              className="hidden md:flex absolute -right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-white/10 border border-white/20 rounded-full items-center justify-center hover:bg-white/20 transition-all"
-              onClick={() => setCurrentFeature(prev => (prev + 1) % Math.ceil(featuresData.length / 2))}
+              className="flex absolute -right-4 md:-right-8 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 bg-white/10 border border-white/20 rounded-full items-center justify-center hover:bg-white/20 transition-all backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={() => {
+                const totalPages = Math.ceil(featuresData.length / 2);
+                setCurrentFeature(prev => (prev + 1) % totalPages);
+              }}
               aria-label="Next feature"
+              disabled={currentFeature === Math.ceil(featuresData.length / 2) - 1}
             >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 md:w-6 md:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
               </svg>
             </button>
-            <motion.div 
-              className="flex transition-transform duration-700 ease-in-out gap-6 px-2"
-              style={{ 
-                transform: `translateX(calc(-${currentFeature * 100}% - 0.75rem))`,
-              }}
-            >
-              {featuresData.map((feature, index) => {
-                return (
-                  <motion.div 
-                    key={index} 
-                    className={`group relative bg-black/90 border border-[#FF5728] flex-shrink-0 min-h-[450px] flex flex-col justify-between rounded-3xl overflow-hidden ${index === 0 ? 'ml-2 md:ml-3' : ''}`}
-                    style={{ 
-                      width: 'calc(50% - 0.75rem)',
-                      padding: '2.5rem',
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-                      transformStyle: 'preserve-3d'
-                    }}
+            <div className="relative overflow-hidden">
+              <motion.div 
+                className="flex transition-transform duration-700 ease-in-out gap-6"
+                style={{ 
+                  transform: `translateX(calc(-${currentFeature * 50}% - ${currentFeature * 0.75}rem))`,
+                }}
+              >
+                {featuresData.map((feature, index) => {
+                  return (
+                    <motion.div 
+                      key={index} 
+                      className="group relative bg-black/90 border border-[#FF5728] flex-shrink-0 min-h-[450px] flex flex-col justify-between rounded-3xl overflow-hidden"
+                      style={{ 
+                        width: 'calc(50% - 0.75rem)',
+                        padding: '2.5rem',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                        transformStyle: 'preserve-3d'
+                      }}
                     initial={{ opacity: 0, y: 50, rotateX: -5 }}
                     animate={featuresInView ? { opacity: 1, y: 0, rotateX: 0 } : { opacity: 0, y: 50, rotateX: -5 }}
                     transition={{ duration: 0.5, delay: (index % 2) * 0.1 }}
@@ -2446,12 +2620,21 @@ const Home = () => {
                           // Different data patterns for different chart types
                           let data, chartId;
                           
+                          // Extract statistics from feature text to generate meaningful data
+                          const statsMatch = feature.statistics.match(/(\d+)%/g);
+                          const percentages = statsMatch ? statsMatch.map(m => parseInt(m)) : [];
+                          const avgPercent = percentages.length > 0 
+                            ? Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length)
+                            : 70;
+                          
                           if (chartType === 0) {
-                            // Bar Chart
+                            // Bar Chart - upward trend
                             data = Array.from({ length: 12 }, (_, i) => {
-                              const base = 30 + index * 10;
-                              const variation = 20 * Math.sin(i * 0.5 + index);
-                              return base + variation;
+                              const progress = i / 11;
+                              const base = avgPercent * 0.6;
+                              const trend = avgPercent * 0.4 * progress;
+                              const variation = 8 * Math.sin(i * 0.8);
+                              return Math.max(20, Math.min(100, base + trend + variation));
                             });
                             chartId = `bar-${index}`;
                             return (
@@ -2460,15 +2643,16 @@ const Home = () => {
                               </div>
                             );
                           } else if (chartType === 1) {
-                            // Line Chart with markers
+                            // Line Chart - positive growth trend
                             const pts = Array.from({ length: len }, (_, i) => {
-                              const base = 40 + index * 8;
-                              const sinWave = 35 * Math.sin(i * 0.35 + index * 0.7);
-                              const cosWave = 15 * Math.cos(i * 0.6 + index * 1.2);
-                              return base + sinWave + cosWave;
+                              const progress = i / (len - 1);
+                              const base = avgPercent * 0.5;
+                              const growth = avgPercent * 0.5 * progress;
+                              const smoothWave = 12 * Math.sin(i * 0.3);
+                              return Math.max(25, Math.min(95, base + growth + smoothWave));
                             });
                             const match = /([0-9]{1,3})%/.exec(feature.statistics || '');
-                            const percent = match ? parseInt(match[1], 10) : undefined;
+                            const percent = match ? parseInt(match[1], 10) : avgPercent;
                             chartId = `line-${index}`;
                             return (
                               <div className="w-full">
@@ -2476,12 +2660,13 @@ const Home = () => {
                               </div>
                             );
                           } else {
-                            // Area Chart with smooth curve
+                            // Area Chart - consistent upward trend
                             const pts = Array.from({ length: len }, (_, i) => {
-                              const base = 35 + index * 12;
-                              const wave1 = 30 * Math.sin(i * 0.4 + index * 0.8);
-                              const wave2 = 10 * Math.cos(i * 0.7 + index * 1.5);
-                              return base + wave1 + wave2;
+                              const progress = i / (len - 1);
+                              const base = avgPercent * 0.55;
+                              const growth = avgPercent * 0.45 * progress;
+                              const wave = 10 * Math.cos(i * 0.4);
+                              return Math.max(30, Math.min(95, base + growth + wave));
                             });
                             chartId = `area-${index}`;
                             return (
@@ -2498,7 +2683,8 @@ const Home = () => {
                   </motion.div>
                 );
               })}
-            </motion.div>
+              </motion.div>
+            </div>
           </div>
           
           {/* Navigation dots */}
@@ -2699,46 +2885,62 @@ const Home = () => {
       </section>
 
           {/* Footer */}
-          <footer className="bg-black/50 backdrop-blur-md border-t border-white/10 text-gray-300 py-12 mt-20 relative z-10">
+          <footer className="bg-black/80 backdrop-blur-md border-t border-white/10 text-gray-300 py-16 mt-20 relative z-10">
             <div className="max-w-7xl mx-auto px-6 relative z-10">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
             <div className="space-y-4">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <img 
                   src="/logo.jpg" 
                   alt="Elevate Career AI Logo" 
-                  className="w-8 h-8 object-contain"
+                  className="w-12 h-12 object-contain"
                 />
+                <span className="text-xl font-bold text-white">ElevateCareer.AI</span>
               </div>
-              <p className="text-sm text-gray-400 max-w-xs">
-                Empowering careers with AI-driven insights and personalized learning experiences.
+              <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
+                Empowering careers with AI-driven insights and personalized learning experiences. Bridge the gap between academia and industry.
               </p>
+              <div className="flex space-x-4 pt-2">
+                <a href="#" className="text-gray-400 hover:text-orange-500 transition-colors" aria-label="LinkedIn">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                  </svg>
+                </a>
+                <a href="#" className="text-gray-400 hover:text-orange-500 transition-colors" aria-label="Twitter">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                  </svg>
+                </a>
+              </div>
             </div>
 
             <div>
-              <h4 className="font-semibold text-white mb-4">Services</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="/user/ai-mock-interview" className="hover:text-orange-500 transition-colors">AI Mock Interviews</a></li>
-                <li><a href="/user/ai-career-coach" className="hover:text-orange-500 transition-colors">Career Roadmap</a></li>
-                <li><a href="/user/courses" className="hover:text-orange-500 transition-colors">Skill Assessment</a></li>
+              <h4 className="font-bold text-white mb-6 text-lg">Services</h4>
+              <ul className="space-y-3 text-sm">
+                <li><a href="/user/ai-mock-interview" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>AI Mock Interviews</a></li>
+                <li><a href="/user/ai-career-coach" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Career Roadmap</a></li>
+                <li><a href="/user/courses" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Skill Assessment</a></li>
+                <li><a href="/user/ai-communication" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Communication Coach</a></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-white mb-4">Company</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-orange-500 transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Blog</a></li>
+              <h4 className="font-bold text-white mb-6 text-lg">Company</h4>
+              <ul className="space-y-3 text-sm">
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>About Us</a></li>
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Careers</a></li>
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Blog</a></li>
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Partners</a></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-white mb-4">Support</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Contact Us</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Privacy Policy</a></li>
+              <h4 className="font-bold text-white mb-6 text-lg">Support</h4>
+              <ul className="space-y-3 text-sm">
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Help Center</a></li>
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Contact Us</a></li>
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-orange-500 transition-colors flex items-center gap-2"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>Terms of Service</a></li>
               </ul>
             </div>
           </div>

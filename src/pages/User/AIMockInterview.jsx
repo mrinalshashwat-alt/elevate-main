@@ -547,6 +547,9 @@ const AIMockInterview = () => {
             className="w-full h-full object-cover"
             autoPlay
             playsInline
+            preload="auto"
+            muted
+            loop
           >
             <source src="/ai.mp4" type="video/mp4" />
             Your browser does not support the video tag.
@@ -573,8 +576,8 @@ const AIMockInterview = () => {
             <span className="font-medium">Back to Agents</span>
           </button>
           <div className="flex items-center gap-3">
-            <img src="/logo.jpg" alt="Logo" className="w-10 h-10 object-contain" />
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">AI Mock Interview</h1>
+            <img src="/logo.jpg" alt="Logo" className="w-20 h-20 md:w-24 md:h-24 object-contain" />
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">AI Mock Interview Agent</h1>
           </div>
           <div className="w-32"></div>
         </div>
@@ -584,18 +587,37 @@ const AIMockInterview = () => {
         {!isInterviewStarted ? (
           <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[80vh]">
             {/* Enhanced Robot Section */}
-            <div className="flex items-center justify-center relative">
+            <div className="space-y-6">
+              {/* Video */}
               <div className="relative w-full aspect-video max-w-2xl">
                 <video
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-2xl"
                   autoPlay
                   muted
                   loop
                   playsInline
                 >
-                  <source src="/mock.mp4" type="video/mp4" />
+                  <source src="/ai.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
+              </div>
+              {/* Content Below Video */}
+              <div className="space-y-4">
+                <h3 className="text-2xl font-bold text-white">Ace Your Next Interview</h3>
+                <p className="text-gray-300 text-lg leading-relaxed">
+                  Practice with AI-powered mock interviews tailored to your target company and role. Get instant feedback and improve your interview skills with realistic scenarios.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <div className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                    <span className="text-sm text-orange-400 font-medium">Company-Specific</span>
+                  </div>
+                  <div className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                    <span className="text-sm text-orange-400 font-medium">Real-time Feedback</span>
+                  </div>
+                  <div className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                    <span className="text-sm text-orange-400 font-medium">Adaptive Questions</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -625,19 +647,19 @@ const AIMockInterview = () => {
               )}
 
               <div className="space-y-4">
-                <div className="relative group">
-                  <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Candidate Name</label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Candidate Name</label>
                   <input
                     type="text"
                     placeholder="Enter your name"
                     value={candidateName}
                     onChange={(e) => setCandidateName(e.target.value)}
-                    className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600"
+                    className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600 text-white"
                   />
                 </div>
 
-                <div className="relative group">
-                  <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Company</label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Company</label>
                   <GlassSelect
                     value={companyName}
                     onChange={setCompanyName}
@@ -648,8 +670,8 @@ const AIMockInterview = () => {
                   />
                 </div>
 
-                <div className="relative group">
-                  <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Role</label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Role</label>
                   <GlassSelect
                     value={role}
                     onChange={setRole}
@@ -659,8 +681,8 @@ const AIMockInterview = () => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="relative group">
-                    <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Questions</label>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Questions</label>
                     <input
                       type="number"
                       min="3"
@@ -670,12 +692,12 @@ const AIMockInterview = () => {
                         const val = Math.max(3, Math.min(20, parseInt(e.target.value) || 5));
                         setNoOfQuestions(val.toString());
                       }}
-                      className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600"
+                      className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600 text-white"
                     />
                   </div>
 
-                  <div className="relative group">
-                    <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Level</label>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Level</label>
                     <GlassSelect
                       value={level}
                       onChange={setLevel}
@@ -875,11 +897,30 @@ const AIMockInterview = () => {
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
             </div>
               <div className="premium-card-content relative z-20 w-full flex flex-col items-center">
+              {/* Candidate Info Display */}
+              <div className="w-full mb-6 space-y-3">
+                <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">Candidate</span>
+                    <span className="text-sm font-bold text-white">{candidateName || 'Not set'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">Company</span>
+                    <span className="text-sm font-bold text-white">{companyName || 'Not set'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">Role</span>
+                    <span className="text-sm font-bold text-white">{role || 'Not set'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Brain Video/Image */}
               <div className="relative w-full max-w-sm mb-6">
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/30 via-purple-500/20 to-blue-500/30 blur-3xl animate-pulse"></div>
-                <div className="relative bg-gradient-to-br from-orange-500/20 to-blue-500/20 rounded-3xl p-8 backdrop-blur-sm border border-white/10">
+                <div className="relative bg-gradient-to-br from-orange-500/20 to-blue-500/20 rounded-3xl p-4 backdrop-blur-sm border border-white/10 overflow-hidden">
                   {isSpeaking ? (
-                    <div className="flex items-center justify-center gap-2 h-32">
+                    <div className="flex items-center justify-center gap-2 h-48">
                       <div className="w-2 h-12 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0s' }}></div>
                       <div className="w-2 h-20 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
                       <div className="w-2 h-16 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
@@ -887,18 +928,24 @@ const AIMockInterview = () => {
                       <div className="w-2 h-14 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                     </div>
                   ) : isTyping ? (
-                    <div className="flex flex-col items-center justify-center h-32">
-                      <div className="w-16 h-16 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mb-4"></div>
+                    <div className="flex flex-col items-center justify-center h-48">
+                      <div className="w-20 h-20 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mb-4"></div>
                       <p className="text-gray-400 text-sm">AI is thinking...</p>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-32">
-                      <div className="w-28 h-28 bg-gradient-to-br from-orange-500 via-orange-600 to-blue-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-orange-500/30">
-                        <svg className="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-300 text-center font-medium">AI Interview Assistant</p>
+                    <div className="flex flex-col items-center justify-center h-48">
+                      <video
+                        className="w-full h-full max-w-xs max-h-48 object-contain rounded-2xl"
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        preload="auto"
+                      >
+                        <source src="/brain.mp4" type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                      <p className="text-gray-300 text-center font-medium mt-2">AI Interview Assistant</p>
                       <p className="text-gray-500 text-xs text-center mt-1">Ready to interview</p>
                     </div>
                   )}

@@ -453,7 +453,7 @@ const AICommunication = () => {
             <span className="font-medium">Back to Agents</span>
           </button>
           <div className="flex items-center gap-3">
-            <img src="/logo.jpg" alt="Logo" className="w-10 h-10 object-contain" />
+            <img src="/logo.jpg" alt="Logo" className="w-20 h-20 md:w-24 md:h-24 object-contain" />
             <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">AI Communication Coach</h1>
           </div>
           <div className="w-32"></div>
@@ -463,19 +463,38 @@ const AICommunication = () => {
       <main className="max-w-7xl mx-auto px-4 py-8 relative z-10 overflow-visible">
         {!isSessionStarted ? (
           <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[80vh]">
-            {/* Enhanced Robot Section */}
-            <div className="flex items-center justify-center relative">
+            {/* Enhanced Agent Section */}
+            <div className="space-y-6">
+              {/* Video */}
               <div className="relative w-full aspect-video max-w-2xl">
                 <video
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-2xl"
                   autoPlay
                   muted
                   loop
                   playsInline
                 >
-                  <source src="/robo.mp4" type="video/mp4" />
+                  <source src="/ai.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
+              </div>
+              {/* Content Below Video */}
+              <div className="space-y-4">
+                <h3 className="text-2xl font-bold text-white">Master Professional Communication</h3>
+                <p className="text-gray-300 text-lg leading-relaxed">
+                  Practice real-world communication scenarios with AI-powered feedback. Improve your presentation, negotiation, and interpersonal skills through interactive sessions.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <div className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                    <span className="text-sm text-orange-400 font-medium">Real-time Feedback</span>
+                  </div>
+                  <div className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                    <span className="text-sm text-orange-400 font-medium">Voice & Text Mode</span>
+                  </div>
+                  <div className="px-4 py-2 bg-orange-500/20 border border-orange-500/30 rounded-lg">
+                    <span className="text-sm text-orange-400 font-medium">Personalized Coaching</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -505,25 +524,25 @@ const AICommunication = () => {
               )}
 
               <div className="space-y-5">
-                <div className="relative group">
-                  <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Your Name</label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Your Name</label>
                   <input
                     type="text"
                     placeholder="Enter your name"
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
-                    className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600"
+                    className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600 text-white"
                   />
                 </div>
 
-                <div className="relative group">
-                  <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Communication Skill</label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Your Skill</label>
                   <GlassSelect
                     value={coachingMode}
                     onChange={(v) => { setCoachingMode(v); setSelectedSkill(''); setDifficulty(''); }}
-                    placeholder="Select Communication Skill"
+                    placeholder="Select Your Skill"
                     options={[
-                      { value: '', label: 'Select Communication Skill' },
+                      { value: '', label: 'Select Your Skill' },
                       { value: 'presentation', label: 'Presentation Skills' },
                       { value: 'negotiation', label: 'Negotiation' },
                       { value: 'public-speaking', label: 'Public Speaking' },
@@ -535,35 +554,35 @@ const AICommunication = () => {
 
                 {coachingMode && (
                   <>
-                    <div className="relative group">
-                      <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Scenario</label>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Practice Scenario</label>
                       <GlassSelect
                         value={selectedSkill}
                         onChange={setSelectedSkill}
-                        placeholder="Select Scenario"
-                        options={[{ value: '', label: 'Select Scenario' }, ...(coachingScenarios[coachingMode] || []).map((scenario, index) => ({ value: String(index), label: scenario.title }))]}
+                        placeholder="Select Practice Scenario"
+                        options={[{ value: '', label: 'Select Practice Scenario' }, ...(coachingScenarios[coachingMode] || []).map((scenario, index) => ({ value: String(index), label: scenario.title }))]}
                       />
                     </div>
 
-                    <div className="relative group">
-                      <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Level</label>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Skill Level</label>
                       <GlassSelect
                         value={difficulty}
                         onChange={setDifficulty}
-                        placeholder="Select Level"
-                        options={[{ value: '', label: 'Select Level' }, ...(skillLevels[coachingMode] || []).map((lvl) => ({ value: lvl, label: lvl }))]}
+                        placeholder="Select Skill Level"
+                        options={[{ value: '', label: 'Select Skill Level' }, ...(skillLevels[coachingMode] || []).map((lvl) => ({ value: lvl, label: lvl }))]}
                       />
                     </div>
 
-                    <div className="relative group">
-                      <label className="absolute -top-2 left-3 px-2 bg-slate-900 text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Duration (minutes)</label>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Session Duration (minutes)</label>
                       <input
                         type="number"
                         min="5"
                         max="60"
                         value={sessionDuration}
                         onChange={(e) => setSessionDuration(e.target.value)}
-                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600"
+                        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder-gray-600 text-white"
                       />
                     </div>
                   </>
@@ -676,7 +695,7 @@ const AICommunication = () => {
               {/* Enhanced Scenario */}
               <div className="mb-8">
                 <div className="bg-gradient-to-br from-orange-500/10 to-blue-500/10 border border-orange-500/20 rounded-2xl p-6 mb-6">
-                  <h3 className="text-2xl font-bold text-white mb-3 leading-relaxed">Scenario</h3>
+                  <h3 className="text-2xl font-bold text-white mb-3 leading-relaxed">Practice Scenario</h3>
                   <p className="text-gray-200 leading-relaxed text-lg">
                     {coachingScenarios[coachingMode]?.[selectedSkill]?.prompt}
                   </p>
@@ -809,7 +828,7 @@ const AICommunication = () => {
               <div className="mt-auto w-full space-y-3 text-sm z-10">
                 <div className="bg-white/5 rounded-xl p-4 border border-white/10">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400">Mode</span>
+                    <span className="text-gray-400">Communication Mode</span>
                     <span className="text-xl font-bold text-white capitalize">{coachingMode}</span>
                   </div>
                   <div className="w-full bg-white/10 rounded-full h-2 mt-3">
@@ -821,7 +840,7 @@ const AICommunication = () => {
                 </div>
                 <div className="bg-white/5 rounded-xl p-4 border border-white/10">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400">Difficulty</span>
+                    <span className="text-gray-400">Skill Level</span>
                     <span className="text-lg font-bold text-white">{difficulty}</span>
                   </div>
                 </div>
@@ -904,7 +923,7 @@ const AICommunication = () => {
               {/* Enhanced Question */}
               <div className="mb-6 flex flex-col">
                 <div className="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-blue-500/10 border border-orange-500/20 rounded-2xl p-6 mb-6">
-                  <h3 className="text-2xl font-bold mb-4 text-white leading-relaxed">Scenario</h3>
+                  <h3 className="text-2xl font-bold mb-4 text-white leading-relaxed">Practice Scenario</h3>
                   <p className="text-gray-200 leading-relaxed text-lg">
                     {coachingScenarios[coachingMode]?.[selectedSkill]?.prompt}
                   </p>

@@ -10,6 +10,7 @@ const Jobs = () => {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -83,6 +84,51 @@ const Jobs = () => {
   const handleDelete = (jobId) => {
     if (confirm('Are you sure you want to delete this job?')) {
       deleteMutation.mutate(jobId);
+    }
+  };
+
+  const generateJobDescription = async () => {
+    if (!formData.title || !formData.yearsOfExperience) {
+      alert('Please enter Job Title and Years of Experience first to generate a description.');
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    try {
+      // Mock AI generation - in production, this would call your AI API
+      const prompt = `Create a comprehensive job description for a ${formData.title} position requiring ${formData.yearsOfExperience} years of experience. Include responsibilities, requirements, and qualifications.`;
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Mock generated description
+      const generatedDescription = `We are seeking an experienced ${formData.title} with ${formData.yearsOfExperience}+ years of experience to join our team.
+
+**Key Responsibilities:**
+- Lead and manage ${formData.title.toLowerCase()} initiatives
+- Collaborate with cross-functional teams
+- Develop and implement strategic solutions
+- Ensure quality deliverables within deadlines
+
+**Required Qualifications:**
+- ${formData.yearsOfExperience}+ years of relevant experience
+- Strong problem-solving and analytical skills
+- Excellent communication and collaboration abilities
+- Proven track record of success in similar roles
+
+**Preferred Skills:**
+- Industry certifications
+- Advanced technical knowledge
+- Leadership experience
+
+Join us and be part of an innovative team driving excellence in our industry.`;
+
+      setFormData({ ...formData, description: generatedDescription });
+    } catch (error) {
+      console.error('Error generating job description:', error);
+      alert('Failed to generate job description. Please try again or paste your existing JD.');
+    } finally {
+      setIsGeneratingAI(false);
     }
   };
 
@@ -188,29 +234,21 @@ const Jobs = () => {
           <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-2xl w-full my-8">
             <h2 className="text-2xl font-bold mb-6">{editingJob ? 'Edit Job' : 'Post New Job'}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Required Fields - Priority */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-white">Job Title</label>
+                <label className="block text-sm font-medium mb-2 text-white">Job Title *</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                  placeholder="Enter job title"
+                  placeholder="e.g., Senior Software Engineer"
                   required
                 />
               </div>
+              
               <div>
-                <label className="block text-sm font-medium mb-2 text-white">Job Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 min-h-[150px] resize-y text-white placeholder-gray-500"
-                  placeholder="Enter detailed job description..."
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Years of Experience</label>
+                <label className="block text-sm font-medium mb-2 text-white">Years of Experience *</label>
                 <input
                   type="number"
                   min="0"
@@ -220,6 +258,47 @@ const Jobs = () => {
                   placeholder="e.g., 3"
                   required
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-white">Job Description *</label>
+                  <button
+                    type="button"
+                    onClick={generateJobDescription}
+                    disabled={isGeneratingAI || !formData.title || !formData.yearsOfExperience}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    {isGeneratingAI ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Generate with AI
+                      </>
+                    )}
+                  </button>
+                </div>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 min-h-[200px] resize-y text-white placeholder-gray-500"
+                  placeholder="Paste your existing job description here or click 'Generate with AI' to create one automatically..."
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-400">You can paste your existing JD or use AI to generate one</p>
+              </div>
+
+              <div className="border-t border-white/10 pt-4 mt-6">
+                <h3 className="text-sm font-semibold text-gray-400 mb-4">Additional Information</h3>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2 text-white">Company</label>

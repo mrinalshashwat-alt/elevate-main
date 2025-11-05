@@ -15,6 +15,10 @@ const AdminDashboard = () => {
   const { data: stats, isLoading } = useQuery({
     queryKey: ['adminDashboard'],
     queryFn: getAdminDashboard,
+    retry: 1,
+    retryDelay: 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
   });
 
   const handleLogout = () => {
@@ -184,14 +188,14 @@ const AdminDashboard = () => {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <button
-            onClick={() => router.push('/admin/assessment-list')}
+            onClick={() => router.push('/admin/jobs')}
             className="bg-gradient-to-br from-orange-600 to-red-800 rounded-xl p-8 text-left hover:scale-105 transition-all"
           >
             <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <h3 className="text-2xl font-bold mb-2">Manage Jobs</h3>
-            <p className="text-orange-200">Post and manage job listings</p>
+            <h3 className="text-2xl font-bold mb-2">Create & Manage Jobs</h3>
+            <p className="text-orange-200">Post jobs with AI-powered descriptions</p>
           </button>
 
           <button
