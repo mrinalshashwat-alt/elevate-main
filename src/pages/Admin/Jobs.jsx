@@ -12,6 +12,8 @@ const Jobs = () => {
   const [editingJob, setEditingJob] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
+    description: '',
+    yearsOfExperience: '',
     company: '',
     location: '',
     type: 'full-time',
@@ -50,7 +52,7 @@ const Jobs = () => {
   });
 
   const resetForm = () => {
-    setFormData({ title: '', company: '', location: '', type: 'full-time', salary: '', status: 'active' });
+    setFormData({ title: '', description: '', yearsOfExperience: '', company: '', location: '', type: 'full-time', salary: '', status: 'active' });
     setEditingJob(null);
   };
 
@@ -66,12 +68,14 @@ const Jobs = () => {
   const handleEdit = (job) => {
     setEditingJob(job);
     setFormData({
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      type: job.type,
-      salary: job.salary,
-      status: job.status,
+      title: job.title || '',
+      description: job.description || '',
+      yearsOfExperience: job.yearsOfExperience || '',
+      company: job.company || '',
+      location: job.location || '',
+      type: job.type || 'full-time',
+      salary: job.salary || '',
+      status: job.status || 'active',
     });
     setShowModal(true);
   };
@@ -124,7 +128,19 @@ const Jobs = () => {
                   </span>
                 </div>
                 
+                {job.description && (
+                  <p className="text-sm text-gray-300 mb-4 line-clamp-2">{job.description}</p>
+                )}
+                
                 <div className="space-y-2 mb-4">
+                  {job.yearsOfExperience && (
+                    <div className="flex items-center text-sm text-gray-400">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      {job.yearsOfExperience} years experience
+                    </div>
+                  )}
                   <div className="flex items-center text-sm text-gray-400">
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -168,46 +184,71 @@ const Jobs = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-md w-full">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-2xl w-full my-8">
             <h2 className="text-2xl font-bold mb-6">{editingJob ? 'Edit Job' : 'Post New Job'}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Job Title</label>
+                <label className="block text-sm font-medium mb-2 text-white">Job Title</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                  placeholder="Enter job title"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Company</label>
+                <label className="block text-sm font-medium mb-2 text-white">Job Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 min-h-[150px] resize-y text-white placeholder-gray-500"
+                  placeholder="Enter detailed job description..."
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-white">Years of Experience</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.yearsOfExperience}
+                  onChange={(e) => setFormData({ ...formData, yearsOfExperience: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                  placeholder="e.g., 3"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-white">Company</label>
                 <input
                   type="text"
                   value={formData.company}
                   onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                  placeholder="Enter company name"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Location</label>
+                <label className="block text-sm font-medium mb-2 text-white">Location</label>
                 <input
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                  placeholder="Enter job location"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Job Type</label>
+                <label className="block text-sm font-medium mb-2 text-white">Job Type</label>
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
                 >
                   <option value="full-time">Full-time</option>
                   <option value="part-time">Part-time</option>
@@ -215,22 +256,22 @@ const Jobs = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Salary</label>
+                <label className="block text-sm font-medium mb-2 text-white">Salary</label>
                 <input
                   type="text"
                   value={formData.salary}
                   onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
                   placeholder="e.g., $100k - $120k"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Status</label>
+                <label className="block text-sm font-medium mb-2 text-white">Status</label>
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
                 >
                   <option value="active">Active</option>
                   <option value="closed">Closed</option>

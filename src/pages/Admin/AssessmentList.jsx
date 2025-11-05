@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAssessments, deleteAssessment, getJobs, createJob } from '../../api/admin';
 
@@ -48,12 +48,26 @@ const GlassSelect = ({ value, onChange, options, placeholder = 'Select', classNa
 
 const AssessmentList = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [activeMainTab, setActiveMainTab] = useState('jobs'); // 'jobs' or 'assessments'
   const [showNewAssessment, setShowNewAssessment] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [activeSection, setActiveSection] = useState('active'); // 'active' or 'completed'
+
+  // Read URL parameters to set initial state
+  useEffect(() => {
+    const section = searchParams.get('section');
+    const tab = searchParams.get('tab');
+    if (section === 'completed') {
+      setActiveSection('completed');
+      setActiveMainTab('assessments');
+    } else if (tab === 'candidates') {
+      // Navigate to candidates page if that's what's requested
+      router.push('/admin/candidates');
+    }
+  }, [searchParams, router]);
   const [assessmentType, setAssessmentType] = useState('coding');
   const [numQuestions, setNumQuestions] = useState(2);
   const [totalTime, setTotalTime] = useState(1);
@@ -63,13 +77,13 @@ const AssessmentList = () => {
   const [showJobModal, setShowJobModal] = useState(false);
   const [newJob, setNewJob] = useState({
     title: '',
+    description: '',
+    yearsOfExperience: '',
     company: '',
     location: '',
     type: 'full-time',
     salary: '',
-    competencies: [],
   });
-  const [newCompetency, setNewCompetency] = useState('');
   const [selectedAssessmentFilter, setSelectedAssessmentFilter] = useState('');
   const [createdJobId, setCreatedJobId] = useState(null); // Track newly created job for "Go to Assessment" button
 
@@ -129,30 +143,14 @@ const AssessmentList = () => {
   const handleCreateJob = () => {
     createJobMutation.mutate({
       title: newJob.title,
-      company: 'Company',
-      location: 'Location',
-      type: 'full-time',
-      salary: '',
-      competencies: newJob.competencies,
+      description: newJob.description,
+      yearsOfExperience: newJob.yearsOfExperience,
+      company: newJob.company || 'Company',
+      location: newJob.location || 'Location',
+      type: newJob.type || 'full-time',
+      salary: newJob.salary || '',
       status: 'active',
       postedAt: new Date().toISOString().split('T')[0],
-    });
-  };
-
-  const addCompetency = () => {
-    if (newCompetency.trim() && !newJob.competencies.includes(newCompetency.trim())) {
-      setNewJob({
-        ...newJob,
-        competencies: [...newJob.competencies, newCompetency.trim()],
-      });
-      setNewCompetency('');
-    }
-  };
-
-  const removeCompetency = (comp) => {
-    setNewJob({
-      ...newJob,
-      competencies: newJob.competencies.filter(c => c !== comp),
     });
   };
 
@@ -161,11 +159,12 @@ const AssessmentList = () => {
     setCreatedJobId(null);
     setNewJob({
       title: '',
+      description: '',
+      yearsOfExperience: '',
       company: '',
       location: '',
       type: 'full-time',
       salary: '',
-      competencies: [],
     });
     router.push(`/admin/create-assessment?jobId=${createdJobId}`);
   };
@@ -560,7 +559,7 @@ const AssessmentList = () => {
            <>
              <div className="mb-8">
                <h2 className="text-4xl font-bold mb-2 text-white">Jobs</h2>
-               <p className="text-gray-400">Create jobs and add competencies for assessment creation.</p>
+               <p className="text-gray-400">Create jobs for assessment creation.</p>
              </div>
              <div className="flex justify-end mb-6">
                <button
@@ -569,11 +568,12 @@ const AssessmentList = () => {
                    setCreatedJobId(null);
                    setNewJob({
                      title: '',
+                     description: '',
+                     yearsOfExperience: '',
                      company: '',
                      location: '',
                      type: 'full-time',
                      salary: '',
-                     competencies: [],
                    });
                  }}
                  className="px-6 py-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-105 active:scale-95 flex items-center gap-2"
@@ -654,11 +654,12 @@ const AssessmentList = () => {
                        setShowJobModal(true);
                        setNewJob({
                          title: '',
+                         description: '',
+                         yearsOfExperience: '',
                          company: '',
                          location: '',
                          type: 'full-time',
                          salary: '',
-                         competencies: [],
                        });
                      }}
                      className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
@@ -1142,11 +1143,12 @@ const AssessmentList = () => {
                       setCreatedJobId(null);
                       setNewJob({
                         title: '',
+                        description: '',
+                        yearsOfExperience: '',
                         company: '',
                         location: '',
                         type: 'full-time',
                         salary: '',
-                        competencies: [],
                       });
                     }}
                     className="text-gray-400 hover:text-white transition-colors"
@@ -1159,7 +1161,7 @@ const AssessmentList = () => {
 
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Job Name *</label>
+                    <label className="block text-sm font-semibold text-gray-400 mb-3">Job Title *</label>
                     <input
                       type="text"
                       value={newJob.title}
@@ -1170,50 +1172,26 @@ const AssessmentList = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Add Competencies</label>
-                    <div className="flex flex-wrap items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl min-h-[60px]">
-                      {newJob.competencies.length > 0 ? (
-                        newJob.competencies.map((comp, index) => (
-                          <span key={index} className="px-3 py-1.5 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm font-semibold flex items-center gap-2">
-                            {comp}
-                            <button
-                              type="button"
-                              onClick={() => removeCompetency(comp)}
-                              className="text-red-400 hover:text-red-300 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-gray-500 text-sm">No competencies added yet</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <input
-                        type="text"
-                        value={newCompetency}
-                        onChange={(e) => setNewCompetency(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            addCompetency();
-                          }
-                        }}
-                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
-                        placeholder="Type competency and press Enter to add"
-                      />
-                      <button
-                        type="button"
-                        onClick={addCompetency}
-                        disabled={!newCompetency.trim()}
-                        className="px-6 py-3 bg-orange-500/20 border border-orange-500/50 text-orange-400 rounded-xl font-semibold hover:bg-orange-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Add
-                      </button>
-                    </div>
+                    <label className="block text-sm font-semibold text-gray-400 mb-3">Job Description *</label>
+                    <textarea
+                      value={newJob.description}
+                      onChange={(e) => setNewJob({ ...newJob, description: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 min-h-[120px] resize-y"
+                      placeholder="Enter detailed job description..."
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-400 mb-3">Years of Experience *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newJob.yearsOfExperience}
+                      onChange={(e) => setNewJob({ ...newJob, yearsOfExperience: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                      placeholder="e.g., 3"
+                      required
+                    />
                   </div>
                   {createdJobId ? (
                     <div className="space-y-4">
@@ -1235,11 +1213,12 @@ const AssessmentList = () => {
                           setCreatedJobId(null);
                           setNewJob({
                             title: '',
+                            description: '',
+                            yearsOfExperience: '',
                             company: '',
                             location: '',
                             type: 'full-time',
                             salary: '',
-                            competencies: [],
                           });
                         }}
                         className="w-full px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"

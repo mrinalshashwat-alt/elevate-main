@@ -76,6 +76,8 @@ const CandidatesList = () => {
   const [competency, setCompetency] = useState('');
   const [scoreRange, setScoreRange] = useState('70% - 100%');
   const [location, setLocation] = useState('All locations');
+  const [showCompetencyModal, setShowCompetencyModal] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(null);
 
   const competencyOptions = ['All Competencies', 'Frontend Development', 'Backend Development', 'Full Stack', 'Data Analysis', 'Product Management'];
   const scoreRangeOptions = ['All Scores', '0% - 25%', '25% - 50%', '50% - 70%', '70% - 80%', '80% - 90%', '90% - 100%'];
@@ -214,6 +216,59 @@ const CandidatesList = () => {
     ? Math.round((candidates.filter(c => c.score >= 70).length / candidates.length) * 100)
     : 0;
   const totalCandidates = candidates.length;
+
+  // Mock competency breakdown data for different roles
+  const getCompetencyBreakdown = (role) => {
+    const breakdowns = {
+      'Product Management': [
+        { name: 'Strategic Thinking', score: 85 },
+        { name: 'Product Vision', score: 88 },
+        { name: 'Stakeholder Management', score: 82 },
+        { name: 'Data Analysis', score: 79 },
+        { name: 'User Research', score: 80 },
+      ],
+      'Frontend Development': [
+        { name: 'React/JavaScript', score: 92 },
+        { name: 'CSS/Design Systems', score: 88 },
+        { name: 'Performance Optimization', score: 85 },
+        { name: 'Testing', score: 90 },
+        { name: 'API Integration', score: 87 },
+      ],
+      'Backend Development': [
+        { name: 'API Design', score: 74 },
+        { name: 'Database Management', score: 71 },
+        { name: 'System Architecture', score: 68 },
+        { name: 'Security', score: 72 },
+        { name: 'Scalability', score: 69 },
+      ],
+      'Full Stack': [
+        { name: 'Frontend Skills', score: 74 },
+        { name: 'Backend Skills', score: 75 },
+        { name: 'Full Stack Integration', score: 76 },
+        { name: 'DevOps', score: 73 },
+        { name: 'Problem Solving', score: 77 },
+      ],
+      'Data Analysis': [
+        { name: 'SQL', score: 88 },
+        { name: 'Data Visualization', score: 85 },
+        { name: 'Statistical Analysis', score: 90 },
+        { name: 'Python/R', score: 87 },
+        { name: 'Business Intelligence', score: 89 },
+      ],
+    };
+    return breakdowns[role] || [
+      { name: 'Technical Skills', score: 75 },
+      { name: 'Communication', score: 78 },
+      { name: 'Problem Solving', score: 80 },
+      { name: 'Team Collaboration', score: 76 },
+      { name: 'Leadership', score: 72 },
+    ];
+  };
+
+  const handleCompetencyClick = (role) => {
+    setSelectedRole(role);
+    setShowCompetencyModal(true);
+  };
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
@@ -374,7 +429,10 @@ const CandidatesList = () => {
                         <p className="text-gray-400">{candidate.email}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleCompetencyClick(candidate.competency)}
+                          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity w-full"
+                        >
                           <span className="text-white font-semibold min-w-[50px]">{candidate.competencyMatch}%</span>
                           <div className="flex-1 bg-white/10 rounded-full h-3 overflow-hidden max-w-[150px]">
                             <motion.div
@@ -384,7 +442,7 @@ const CandidatesList = () => {
                               transition={{ duration: 1, delay: index * 0.2 }}
                             ></motion.div>
                           </div>
-                        </div>
+                        </button>
                       </td>
                       <td className="px-6 py-4">
                         <button
@@ -402,6 +460,67 @@ const CandidatesList = () => {
           </motion.div>
         )}
       </main>
+
+      {/* Competency Breakdown Modal */}
+      <AnimatePresence>
+        {showCompetencyModal && selectedRole && (
+          <motion.div
+            className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowCompetencyModal(false)}
+          >
+            <motion.div
+              className="bg-black/95 border border-orange-500/50 rounded-3xl p-8 max-w-2xl w-full"
+              initial={{ scale: 0.9, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 50 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-white">Competency Breakdown: {selectedRole}</h3>
+                <button
+                  onClick={() => setShowCompetencyModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="space-y-6">
+                {getCompetencyBreakdown(selectedRole).map((item, idx) => (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white font-semibold">{item.name}</span>
+                      <span className="text-orange-400 font-bold">{item.score}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+                      <motion.div
+                        className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${item.score}%` }}
+                        transition={{ duration: 1, delay: idx * 0.1 }}
+                      ></motion.div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Overall Match Score</span>
+                  <span className="text-3xl font-black text-orange-400">
+                    {Math.round(getCompetencyBreakdown(selectedRole).reduce((sum, item) => sum + item.score, 0) / getCompetencyBreakdown(selectedRole).length)}%
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
