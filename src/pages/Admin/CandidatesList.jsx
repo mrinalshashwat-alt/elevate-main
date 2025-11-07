@@ -78,100 +78,101 @@ const CandidatesList = () => {
   const [location, setLocation] = useState('All locations');
   const [showCompetencyModal, setShowCompetencyModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
+  const [copiedEmailId, setCopiedEmailId] = useState(null);
 
   const competencyOptions = ['All Competencies', 'Frontend Development', 'Backend Development', 'Full Stack', 'Data Analysis', 'Product Management'];
   const scoreRangeOptions = ['All Scores', '0% - 25%', '25% - 50%', '50% - 70%', '70% - 80%', '80% - 90%', '90% - 100%'];
-  const locationOptions = ['All locations', 'San Francisco, CA', 'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Remote'];
+  const locationOptions = ['All locations', 'Mumbai, Maharashtra', 'Bangalore, Karnataka', 'Hyderabad, Telangana', 'Delhi, NCR', 'Chennai, Tamil Nadu', 'Pune, Maharashtra', 'Ahmedabad, Gujarat', 'Kochi, Kerala', 'Indore, Madhya Pradesh', 'Remote'];
 
   const allCandidates = [
     {
       id: 1,
-      name: 'Ava Thompson',
-      email: 'ava.thompson@example.com',
+      name: 'Priya Sharma',
+      email: 'priya.sharma@gmail.com',
       score: 88,
       competencyMatch: 82,
-      location: 'San Francisco, CA',
+      location: 'Mumbai, Maharashtra',
       competency: 'Product Management'
     },
     {
       id: 2,
-      name: 'Liam Patel',
-      email: 'liam.patel@example.com',
+      name: 'Arjun Patel',
+      email: 'arjun.patel@outlook.com',
       score: 74,
       competencyMatch: 68,
-      location: 'New York, NY',
+      location: 'Bangalore, Karnataka',
       competency: 'Backend Development'
     },
     {
       id: 3,
-      name: 'Sophia Nguyen',
-      email: 'sophia.nguyen@example.com',
+      name: 'Ananya Reddy',
+      email: 'ananya.reddy@yahoo.com',
       score: 92,
       competencyMatch: 90,
-      location: 'Los Angeles, CA',
+      location: 'Hyderabad, Telangana',
       competency: 'Frontend Development'
     },
     {
       id: 4,
-      name: 'Ethan Garcia',
-      email: 'ethan.garcia@example.com',
+      name: 'Rohan Kumar',
+      email: 'rohan.kumar@gmail.com',
       score: 61,
       competencyMatch: 74,
-      location: 'Remote',
+      location: 'Delhi, NCR',
       competency: 'Full Stack'
     },
     {
       id: 5,
-      name: 'Emma Wilson',
-      email: 'emma.wilson@example.com',
+      name: 'Kavya Nair',
+      email: 'kavya.nair@outlook.com',
       score: 85,
       competencyMatch: 88,
-      location: 'Chicago, IL',
+      location: 'Chennai, Tamil Nadu',
       competency: 'Data Analysis'
     },
     {
       id: 6,
-      name: 'Noah Martinez',
-      email: 'noah.martinez@example.com',
+      name: 'Vikram Singh',
+      email: 'vikram.singh@gmail.com',
       score: 79,
       competencyMatch: 75,
-      location: 'San Francisco, CA',
+      location: 'Pune, Maharashtra',
       competency: 'Full Stack'
     },
     {
       id: 7,
-      name: 'Olivia Brown',
-      email: 'olivia.brown@example.com',
+      name: 'Meera Iyer',
+      email: 'meera.iyer@yahoo.com',
       score: 95,
       competencyMatch: 92,
-      location: 'New York, NY',
+      location: 'Bangalore, Karnataka',
       competency: 'Frontend Development'
     },
     {
       id: 8,
-      name: 'James Anderson',
-      email: 'james.anderson@example.com',
+      name: 'Aditya Desai',
+      email: 'aditya.desai@gmail.com',
       score: 67,
       competencyMatch: 71,
-      location: 'Remote',
+      location: 'Ahmedabad, Gujarat',
       competency: 'Backend Development'
     },
     {
       id: 9,
-      name: 'Isabella Lee',
-      email: 'isabella.lee@example.com',
+      name: 'Sneha Menon',
+      email: 'sneha.menon@outlook.com',
       score: 83,
       competencyMatch: 79,
-      location: 'Los Angeles, CA',
+      location: 'Kochi, Kerala',
       competency: 'Product Management'
     },
     {
       id: 10,
-      name: 'Mason Taylor',
-      email: 'mason.taylor@example.com',
+      name: 'Rahul Joshi',
+      email: 'rahul.joshi@gmail.com',
       score: 72,
       competencyMatch: 69,
-      location: 'Chicago, IL',
+      location: 'Indore, Madhya Pradesh',
       competency: 'Data Analysis'
     }
   ];
@@ -268,6 +269,18 @@ const CandidatesList = () => {
   const handleCompetencyClick = (role) => {
     setSelectedRole(role);
     setShowCompetencyModal(true);
+  };
+
+  const handleCopyEmail = async (email, candidateId) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      setCopiedEmailId(candidateId);
+      setTimeout(() => {
+        setCopiedEmailId(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy email:', err);
+    }
   };
 
   return (
@@ -426,7 +439,24 @@ const CandidatesList = () => {
                         </button>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-gray-400">{candidate.email}</p>
+                        <div className="flex items-center gap-3">
+                          <p className="text-gray-400">{candidate.email}</p>
+                          <button
+                            onClick={() => handleCopyEmail(candidate.email, candidate.id)}
+                            className="relative p-1.5 rounded-lg hover:bg-white/10 transition-all group"
+                            title="Copy email"
+                          >
+                            {copiedEmailId === candidate.id ? (
+                              <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-gray-400 group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <button

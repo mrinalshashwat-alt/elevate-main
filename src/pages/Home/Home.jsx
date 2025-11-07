@@ -1815,7 +1815,7 @@ const Home = () => {
       {/* Hero Section - Professional Redesign */}
       {/* Hero Section - Redesigned */}
 <main ref={heroRef} className="min-h-screen flex items-center relative z-10 pt-32 md:pt-40 bg-transparent" id="hero">
-  {/* Background Video (no overlays) */}
+  {/* Background Video with blending overlay */}
   <div className="absolute inset-0 w-full h-full overflow-hidden z-0 bg-black">
     {showVideoLoader && (
       <motion.div 
@@ -1866,6 +1866,8 @@ const Home = () => {
       }}
       aria-label="Background video"
     />
+    {/* Gradient overlay for better blending */}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70 pointer-events-none z-[1]"></div>
     {videoLoadError && (
       <div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center z-5">
         <div className="text-center text-white/50">
@@ -2016,26 +2018,30 @@ const Home = () => {
             return (
               <>
                 {Array.from({ length: 10 }, (_, i) => {
+                  // Skip the 6th logo (i === 5)
+                  if (i === 5) return null;
                   const logoPath = companyLogos[i % companyLogos.length];
                   return (
                     <div key={`first-${i}`} className="flex items-center justify-center mx-16 flex-shrink-0 group h-16">
                       <img 
                         src={logoPath} 
                         alt={`Company logo ${i + 1}`}
-                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300 grayscale group-hover:grayscale-0"
+                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300"
                       />
                     </div>
                   );
                 })}
                 {/* Duplicate set for seamless loop */}
                 {Array.from({ length: 10 }, (_, i) => {
+                  // Skip the 6th logo (i === 5)
+                  if (i === 5) return null;
                   const logoPath = companyLogos[i % companyLogos.length];
                   return (
                     <div key={`second-${i}`} className="flex items-center justify-center mx-16 flex-shrink-0 group h-16">
                       <img 
                         src={logoPath} 
                         alt={`Company logo ${i + 1}`}
-                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300 grayscale group-hover:grayscale-0"
+                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300"
                       />
                     </div>
                   );

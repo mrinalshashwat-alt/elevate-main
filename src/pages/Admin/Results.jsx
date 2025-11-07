@@ -453,6 +453,33 @@ const ReportTab = ({ setShowCompetencyModal, setSelectedCompetency }) => {
         </ul>
       </motion.div>
 
+      {/* Scope of Improvement */}
+      <motion.div 
+        className="bg-black/90 border border-orange-500/30 rounded-3xl p-8"
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.2 }}
+      >
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-1 h-8 bg-orange-500 rounded-full"></div>
+          <h3 className="text-2xl font-bold text-white">Scope of Improvement</h3>
+        </div>
+        <ul className="space-y-3">
+          {[
+            'Enhance experimentation framework knowledge and A/B testing methodologies.',
+            'Develop deeper expertise in statistical analysis and hypothesis testing.',
+            'Improve presentation skills for executive-level stakeholders.',
+            'Strengthen knowledge of advanced data visualization techniques.',
+            'Expand understanding of machine learning applications in product analytics.',
+            'Build proficiency in cloud-based analytics platforms and tools.'
+          ].map((improvement, idx) => (
+            <li key={idx} className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-orange-500/60 rounded-full mt-2"></div>
+              <span className="text-gray-300">{improvement}</span>
+            </li>
+          ))}
+        </ul>
+      </motion.div>
+
       {/* Detailed Summary */}
       <motion.div 
         className="bg-black/90 border border-white/10 rounded-3xl p-8"

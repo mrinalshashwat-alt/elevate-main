@@ -55,7 +55,7 @@ const Agents = () => {
     canvas.height = window.innerHeight;
 
     const particles = [];
-    const particleCount = 80;
+    const particleCount = 30;
     const connectionDistance = 150;
 
     // Create particles
@@ -86,7 +86,7 @@ const Agents = () => {
         // Draw particle
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
         ctx.fill();
 
         // Draw connections
@@ -99,7 +99,7 @@ const Agents = () => {
             ctx.beginPath();
             ctx.moveTo(particle.x, particle.y);
             ctx.lineTo(otherParticle.x, otherParticle.y);
-            const opacity = (1 - distance / connectionDistance) * 0.1;
+            const opacity = (1 - distance / connectionDistance) * 0.03;
             ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
@@ -127,10 +127,10 @@ const Agents = () => {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      {/* Neural network canvas - subtle white */}
+      {/* Neural network canvas - minimal */}
       <canvas
         ref={canvasRef}
-        className="fixed inset-0 pointer-events-none z-0 opacity-30"
+        className="fixed inset-0 pointer-events-none z-0 opacity-10"
       />
 
       {/* Subtle Ambient background effects */}
@@ -169,17 +169,30 @@ const Agents = () => {
 
       {/* Main Content */}
       <main className="relative z-10 max-w-7xl mx-auto px-6 py-16">
-        {/* Premium Hero Section */}
-        <div className="text-center mb-20">
-          <div className="inline-block mb-6 px-6 py-2 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg">
+        {/* Premium Hero Section with Robot Video */}
+        <div className="text-center mb-20 relative">
+          {/* Robot Video Background - Seamless */}
+          <div className="absolute inset-0 -z-10 flex items-center justify-center opacity-20">
+            <video
+              src="/robo.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              className="w-full max-w-4xl h-auto object-contain"
+              style={{ mixBlendMode: 'screen' }}
+            />
+          </div>
+          <div className="inline-block mb-6 px-6 py-2 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg relative z-10">
             <span className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
               Powered by Advanced AI
             </span>
           </div>
-          <h2 className="text-6xl font-bold mb-6 bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent leading-tight">
+          <h2 className="text-6xl font-bold mb-6 bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent leading-tight relative z-10">
             AI-Powered Career Tools
           </h2>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light">
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed font-light relative z-10">
             Transform your career with intelligent agents designed to elevate your professional journey
           </p>
         </div>
