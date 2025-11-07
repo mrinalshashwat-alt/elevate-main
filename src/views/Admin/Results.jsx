@@ -1,12 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Results = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('profile');
+  const [showCompetencyModal, setShowCompetencyModal] = useState(false);
+  const [selectedCompetency, setSelectedCompetency] = useState(null);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const tabs = [
     { id: 'profile', label: 'Profile' },
@@ -74,9 +84,69 @@ const Results = () => {
           transition={{ duration: 0.3 }}
         >
           {activeTab === 'profile' && <ProfileTab />}
-          {activeTab === 'report' && <ReportTab />}
+          {activeTab === 'report' && <ReportTab setShowCompetencyModal={setShowCompetencyModal} setSelectedCompetency={setSelectedCompetency} />}
           {activeTab === 'proctoring' && <ProctoringTab />}
         </motion.div>
+
+        {/* Competency Breakdown Modal */}
+        <AnimatePresence>
+          {showCompetencyModal && selectedCompetency && (
+            <motion.div
+              className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCompetencyModal(false)}
+            >
+              <motion.div
+                className="bg-black/95 border border-orange-500/50 rounded-3xl p-8 max-w-2xl w-full"
+                initial={{ scale: 0.9, y: 50 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 50 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-bold text-white">Competency Breakdown: {selectedCompetency.name}</h3>
+                  <button
+                    onClick={() => setShowCompetencyModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white font-semibold">Overall Score</span>
+                      <span className="text-orange-400 font-bold text-2xl">{selectedCompetency.score}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden">
+                      <motion.div
+                        className="bg-gradient-to-r from-orange-500 to-orange-600 h-4 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${selectedCompetency.score}%` }}
+                        transition={{ duration: 1 }}
+                      ></motion.div>
+                    </div>
+                  </div>
+                  <div className="mt-6">
+                    <h4 className="text-lg font-semibold text-white mb-4">Key Strengths:</h4>
+                    <ul className="space-y-2">
+                      {selectedCompetency.details.map((detail, idx) => (
+                        <li key={idx} className="flex items-start gap-3 text-gray-300">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
+                          <span>{detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
@@ -235,134 +305,180 @@ const ProfileTab = () => {
 };
 
 // Report Tab Component
-const ReportTab = () => {
-  const skills = ['abc...', 'abc...', 'abc...', 'abc...', 'abc...', 'abc...'];
+const ReportTab = ({ setShowCompetencyModal, setSelectedCompetency }) => {
+  const skills = ['Problem Solving', 'Communication', 'Technical Skills', 'Leadership', 'Analytical Thinking', 'Collaboration'];
   const percentages = [82, 74, 69, 88, 76, 71];
   const overallScore = 78;
+  const competencies = [
+    { name: 'Technical Proficiency', score: 85, details: ['Strong coding abilities', 'Deep understanding of system architecture', 'Proficient in multiple programming languages'] },
+    { name: 'Problem Solving', score: 82, details: ['Excellent analytical thinking', 'Creative solution approaches', 'Systematic debugging skills'] },
+    { name: 'Communication', score: 74, details: ['Clear technical writing', 'Effective team collaboration', 'Good presentation skills'] },
+    { name: 'Leadership', score: 88, details: ['Strong mentorship abilities', 'Effective project management', 'Inspires team members'] },
+  ];
+
+  const handleCompetencyClick = (competency) => {
+    setSelectedCompetency(competency);
+    setShowCompetencyModal(true);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Main Report Layout - 2 columns */}
+      {/* Top Row - Score and Competency */}
       <div className="grid grid-cols-2 gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
-          {/* Skill Overview */}
-          <motion.div 
-            className="bg-black/90 border border-white/10 rounded-3xl p-8"
-            whileHover={{ y: -4 }}
-            transition={{ duration: 0.2 }}
-          >
-            <h3 className="text-2xl font-bold text-white mb-6">Skill Overview</h3>
-            <div className="space-y-4">
-              {skills.map((skill, idx) => (
-                <div key={idx}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white">{skill}</span>
-                    <span className="text-white font-bold">{percentages[idx]}%</span>
-                  </div>
-                  <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
-                    <motion.div
-                      className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${percentages[idx]}%` }}
-                      transition={{ duration: 1, delay: idx * 0.1 }}
-                    ></motion.div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Overall Score */}
-          <motion.div 
-            className="bg-black/90 border border-white/10 rounded-3xl p-8 flex flex-col items-center justify-center"
-            whileHover={{ y: -4 }}
-            transition={{ duration: 0.2 }}
-          >
-            <h3 className="text-2xl font-bold text-white mb-6">Overall Score</h3>
-            <div className="relative w-64 h-64">
-              <svg className="transform -rotate-90" width="256" height="256">
-                <circle
-                  cx="128"
-                  cy="128"
-                  r="112"
-                  stroke="rgba(255,255,255,0.1)"
-                  strokeWidth="16"
-                  fill="none"
-                />
-                <motion.circle
-                  cx="128"
-                  cy="128"
-                  r="112"
-                  stroke="url(#orangeGradient)"
-                  strokeWidth="16"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 112}`}
-                  initial={{ strokeDashoffset: 2 * Math.PI * 112 }}
-                  animate={{ strokeDashoffset: 2 * Math.PI * 112 * (1 - overallScore / 100) }}
-                  transition={{ duration: 1.5 }}
-                />
-                <defs>
-                  <linearGradient id="orangeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#ff7849" />
-                    <stop offset="100%" stopColor="#ff9500" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-5xl font-black text-white">{overallScore}%</div>
-                  <div className="text-sm text-gray-400">Overall Score</div>
-                </div>
+        {/* Overall Score */}
+        <motion.div 
+          className="bg-black/90 border border-white/10 rounded-3xl p-8 flex flex-col items-center justify-center"
+          whileHover={{ y: -4 }}
+          transition={{ duration: 0.2 }}
+        >
+          <h3 className="text-2xl font-bold text-white mb-6">Overall Score</h3>
+          <div className="relative w-64 h-64">
+            <svg className="transform -rotate-90" width="256" height="256">
+              <circle
+                cx="128"
+                cy="128"
+                r="112"
+                stroke="rgba(255,255,255,0.1)"
+                strokeWidth="16"
+                fill="none"
+              />
+              <motion.circle
+                cx="128"
+                cy="128"
+                r="112"
+                stroke="url(#orangeGradient)"
+                strokeWidth="16"
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 112}`}
+                initial={{ strokeDashoffset: 2 * Math.PI * 112 }}
+                animate={{ strokeDashoffset: 2 * Math.PI * 112 * (1 - overallScore / 100) }}
+                transition={{ duration: 1.5 }}
+              />
+              <defs>
+                <linearGradient id="orangeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#ff7849" />
+                  <stop offset="100%" stopColor="#ff9500" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-5xl font-black text-white">{overallScore}%</div>
+                <div className="text-sm text-gray-400">Overall Score</div>
               </div>
             </div>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
 
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Competency Overview */}
-          <motion.div 
-            className="bg-black/90 border border-white/10 rounded-3xl p-8"
-            whileHover={{ y: -4 }}
-            transition={{ duration: 0.2 }}
-          >
-            <h3 className="text-2xl font-bold text-white mb-6">Competency Overview</h3>
-            <div className="flex items-center justify-center min-h-[300px]">
-              <div className="text-center text-gray-500">
-                <svg className="w-48 h-48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+        {/* Competency Overview */}
+        <motion.div 
+          className="bg-black/90 border border-white/10 rounded-3xl p-8"
+          whileHover={{ y: -4 }}
+          transition={{ duration: 0.2 }}
+        >
+          <h3 className="text-2xl font-bold text-white mb-6">Competency Overview</h3>
+          <div className="space-y-4">
+            {competencies.map((competency, idx) => (
+              <div key={idx}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white">{competency.name}</span>
+                  <span className="text-white font-bold">{competency.score}%</span>
+                </div>
+                <button
+                  onClick={() => handleCompetencyClick(competency)}
+                  className="w-full bg-white/10 rounded-full h-3 overflow-hidden cursor-pointer hover:bg-white/15 transition-colors"
+                >
+                  <motion.div
+                    className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${competency.score}%` }}
+                    transition={{ duration: 1, delay: idx * 0.1 }}
+                  ></motion.div>
+                </button>
               </div>
-            </div>
-          </motion.div>
-
-          {/* Strengths */}
-          <motion.div 
-            className="bg-black/90 border border-white/10 rounded-3xl p-8"
-            whileHover={{ y: -4 }}
-            transition={{ duration: 0.2 }}
-          >
-            <h3 className="text-2xl font-bold text-white mb-6">Strengths</h3>
-            <ul className="space-y-3">
-              {[
-                'Breaks complex problems into measurable hypotheses with clear success metrics.',
-                'Strong SQL proficiency and efficient data wrangling.',
-                'Excellent analytical thinking and pattern recognition.',
-                'Communicates insights concisely with relevant visuals.',
-                'Proven ability to translate data into actionable recommendations.',
-                'Strong collaboration skills across technical and non-technical teams.'
-              ].map((strength, idx) => (
-                <li key={idx} className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
-                  <span className="text-white">{strength}</span>
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
+
+      {/* Skills Section */}
+      <motion.div 
+        className="bg-black/90 border border-white/10 rounded-3xl p-8"
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.2 }}
+      >
+        <h3 className="text-2xl font-bold text-white mb-6">Skill Overview</h3>
+        <div className="space-y-4">
+          {skills.map((skill, idx) => (
+            <div key={idx}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-white">{skill}</span>
+                <span className="text-white font-bold">{percentages[idx]}%</span>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+                <motion.div
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percentages[idx]}%` }}
+                  transition={{ duration: 1, delay: idx * 0.1 }}
+                ></motion.div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Strengths */}
+      <motion.div 
+        className="bg-black/90 border border-white/10 rounded-3xl p-8"
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.2 }}
+      >
+        <h3 className="text-2xl font-bold text-white mb-6">Strengths</h3>
+        <ul className="space-y-3">
+          {[
+            'Breaks complex problems into measurable hypotheses with clear success metrics.',
+            'Strong SQL proficiency and efficient data wrangling.',
+            'Excellent analytical thinking and pattern recognition.',
+            'Communicates insights concisely with relevant visuals.',
+            'Proven ability to translate data into actionable recommendations.',
+            'Strong collaboration skills across technical and non-technical teams.'
+          ].map((strength, idx) => (
+            <li key={idx} className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
+              <span className="text-white">{strength}</span>
+            </li>
+          ))}
+        </ul>
+      </motion.div>
+
+      {/* Scope of Improvement */}
+      <motion.div 
+        className="bg-black/90 border border-orange-500/30 rounded-3xl p-8"
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.2 }}
+      >
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-1 h-8 bg-orange-500 rounded-full"></div>
+          <h3 className="text-2xl font-bold text-white">Scope of Improvement</h3>
+        </div>
+        <ul className="space-y-3">
+          {[
+            'Enhance experimentation framework knowledge and A/B testing methodologies.',
+            'Develop deeper expertise in statistical analysis and hypothesis testing.',
+            'Improve presentation skills for executive-level stakeholders.',
+            'Strengthen knowledge of advanced data visualization techniques.',
+            'Expand understanding of machine learning applications in product analytics.',
+            'Build proficiency in cloud-based analytics platforms and tools.'
+          ].map((improvement, idx) => (
+            <li key={idx} className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-orange-500/60 rounded-full mt-2"></div>
+              <span className="text-gray-300">{improvement}</span>
+            </li>
+          ))}
+        </ul>
+      </motion.div>
 
       {/* Detailed Summary */}
       <motion.div 

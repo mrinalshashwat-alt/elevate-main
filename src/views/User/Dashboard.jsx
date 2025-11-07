@@ -39,6 +39,10 @@ const UserDashboard = () => {
     queryKey: ['userDashboard'],
     queryFn: getUserDashboard,
     enabled: mounted,
+    retry: 1,
+    retryDelay: 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
   });
 
   const handleLogout = () => {

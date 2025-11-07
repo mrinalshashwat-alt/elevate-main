@@ -5,6 +5,46 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiRotateCw } from 'react-icons/fi';
 
+// Custom glass popover select component matching AIMockInterview style
+const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const selected = options.find((o) => o.value === value);
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full px-4 py-3.5 bg-white/5 border border-white/15 rounded-xl focus:outline-none focus:border-orange-500/60 focus:bg-white/10 focus:ring-2 focus:ring-orange-500/20 transition-all text-gray-300 flex items-center justify-between"
+      >
+        <span className={`${selected ? 'text-gray-200' : 'text-gray-500'}`}>{selected ? selected.label : placeholder}</span>
+        <svg className={`w-4 h-4 text-orange-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-2 w-full rounded-xl overflow-hidden border border-orange-500/30 backdrop-blur-md" style={{ background: 'linear-gradient(180deg, rgba(33,20,14,0.9) 0%, rgba(191,54,12,0.6) 100%)', boxShadow: '0 12px 32px rgba(255,87,34,0.25)' }}>
+          <div className="max-h-60 overflow-y-auto">
+            {options.map((opt) => (
+              <button
+                key={opt.value || 'empty'}
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === opt.value ? 'bg-white/10 text-white' : 'text-gray-200 hover:bg-white/10'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Assessment = () => {
   const router = useRouter();
   const videoRef = useRef(null);
@@ -866,22 +906,16 @@ func main() {
                     <div className="flex items-center space-x-4">
                       {/* Language Dropdown */}
                       <div className="relative">
-                        <select
+                        <GlassSelect
                           value={selectedLanguage}
-                          onChange={(e) => handleLanguageChange(e.target.value)}
-                          className="bg-gray-800 border border-gray-700 text-white text-sm px-4 py-2 rounded-lg focus:border-orange-500 focus:outline-none cursor-pointer appearance-none pr-8"
-                        >
-                          {languages.map((lang) => (
-                            <option key={lang.value} value={lang.value}>
-                              {lang.label}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
+                          onChange={(value) => handleLanguageChange(value)}
+                          placeholder="Select language"
+                          options={languages.map((lang) => ({
+                            value: lang.value,
+                            label: lang.label
+                          }))}
+                          className="text-sm"
+                        />
                       </div>
                       <span className="text-sm text-gray-400">Default Template</span>
                     </div>
