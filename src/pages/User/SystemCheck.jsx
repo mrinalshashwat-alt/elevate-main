@@ -110,6 +110,8 @@ const SystemCheck = () => {
 
   const handleStartTest = () => {
     if (cameraStatus === 'passed' && micStatus === 'passed') {
+      // Mark flow as completed before navigating to assessment
+      localStorage.setItem('assessment_flow_completed', 'true');
       router.push('/user/assessment');
     }
   };
@@ -247,7 +249,11 @@ const SystemCheck = () => {
             {/* Demo Start Button */}
             <div className="max-w-[700px] flex-shrink-0">
               <button
-                onClick={() => router.push('/user/assessment')}
+                onClick={() => {
+                  // Mark flow as completed for demo
+                  localStorage.setItem('assessment_flow_completed', 'true');
+                  router.push('/user/assessment');
+                }}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors w-full"
               >
                 Demo Start (Skip Checks)

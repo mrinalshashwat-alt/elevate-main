@@ -19,12 +19,10 @@ const UserDashboard = () => {
   useEffect(() => {
     setMounted(true);
     
-    // Update time every second
     const timeInterval = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
 
-    // Auto-rotate cards
     const cardInterval = setInterval(() => {
       setActiveCard((prev) => (prev + 1) % 3);
     }, 5000);
@@ -41,8 +39,8 @@ const UserDashboard = () => {
     enabled: mounted,
     retry: 1,
     retryDelay: 1000,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const handleLogout = () => {
@@ -200,18 +198,15 @@ const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
-      {/* Subtle Ambient background effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-[120px] animate-pulse"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-[120px] animate-pulse [animation-delay:2s]"></div>
       </div>
 
       <div className="relative z-10">
-        {/* Clean Professional Header */}
         <header className="bg-black border-b border-gray-800 sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex justify-between items-center">
-              {/* Left Section */}
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-3">
                   <img src="/logo.jpg" alt="Logo" className="w-10 h-10 object-contain" />
@@ -223,15 +218,12 @@ const UserDashboard = () => {
                 </div>
               </div>
 
-              {/* Right Section */}
               <div className="flex items-center space-x-3">
-                {/* Time Display */}
                 <div className="hidden lg:flex items-center space-x-2 px-4 py-2 bg-black/90 border border-[#FF5728] rounded-lg">
                   <FiClock className="text-orange-500" />
                   <span className="text-orange-500 font-semibold">{formatTime(currentTime)}</span>
                 </div>
 
-                {/* Notifications */}
                 <div className="relative">
                   <button
                     onClick={() => setShowNotifications(!showNotifications)}
@@ -276,7 +268,6 @@ const UserDashboard = () => {
                   )}
                 </div>
 
-                {/* User Profile */}
                 <div className="flex items-center space-x-3 px-4 py-2 bg-black/90 border border-[#FF5728] rounded-lg">
                   <div className="relative">
                     <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center border-2 border-orange-400">
@@ -301,9 +292,7 @@ const UserDashboard = () => {
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-          {/* Welcome Section */}
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white">
               Welcome back, {user?.name?.split(' ')[0] || 'User'}!
@@ -313,25 +302,20 @@ const UserDashboard = () => {
             </p>
           </div>
 
-          {/* Premium Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <motion.div 
-              className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden"
+              className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-6 overflow-hidden"
               style={{
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                 transformStyle: 'preserve-3d'
               }}
-              whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
+              whileHover={{ y: -4, scale: 1.01 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
               <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Total Courses</h3>
-                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <div className="p-3 bg-blue-500/10 rounded-xl">
                     <FiBook className="w-6 h-6 text-blue-400" />
                   </div>
                 </div>
@@ -347,22 +331,18 @@ const UserDashboard = () => {
             </motion.div>
 
             <motion.div 
-              className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden"
+              className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-6 overflow-hidden"
               style={{
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                 transformStyle: 'preserve-3d'
               }}
-              whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
+              whileHover={{ y: -4, scale: 1.01 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
               <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Completed</h3>
-                  <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+                  <div className="p-3 bg-green-500/10 rounded-xl">
                     <FiCheckCircle className="w-6 h-6 text-green-400" />
                   </div>
                 </div>
@@ -378,22 +358,18 @@ const UserDashboard = () => {
             </motion.div>
 
             <motion.div 
-              className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden"
+              className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-6 overflow-hidden"
               style={{
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                 transformStyle: 'preserve-3d'
               }}
-              whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
+              whileHover={{ y: -4, scale: 1.01 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
               <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Interviews</h3>
-                  <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+                  <div className="p-3 bg-orange-500/10 rounded-xl">
                     <FiVideo className="w-6 h-6 text-orange-400" />
                   </div>
                 </div>
@@ -409,22 +385,18 @@ const UserDashboard = () => {
             </motion.div>
 
             <motion.div 
-              className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 overflow-hidden"
+              className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-6 overflow-hidden"
               style={{
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                 transformStyle: 'preserve-3d'
               }}
-              whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
+              whileHover={{ y: -4, scale: 1.01 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
               <div className="premium-card-content relative z-20">
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="text-gray-400 text-sm font-semibold uppercase tracking-wide">Skill Score</h3>
-                  <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                  <div className="p-3 bg-purple-500/10 rounded-xl">
                     <FiTrendingUp className="w-6 h-6 text-purple-400" />
                   </div>
                 </div>
@@ -440,9 +412,7 @@ const UserDashboard = () => {
             </motion.div>
           </div>
 
-          {/* Main Dashboard Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Premium Quick Actions */}
             <div className="lg:col-span-2">
               <div className="mb-8">
                 <h2 className="text-3xl font-bold mb-2 text-white">Quick Actions</h2>
@@ -455,18 +425,14 @@ const UserDashboard = () => {
                     key={idx}
                     onClick={action.action}
                     onMouseEnter={() => setActiveCard(idx)}
-                    className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-7 text-left overflow-hidden"
+                    className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-7 text-left overflow-hidden"
                     style={{
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                       transformStyle: 'preserve-3d'
                     }}
-                    whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
+                    whileHover={{ y: -4, scale: 1.01 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                    </div>
                     <div className="premium-card-content relative z-20">
                       <div className="mb-5 transform group-hover:scale-110 transition-transform duration-500 text-gray-300 group-hover:text-white">
                         {action.icon}
@@ -488,7 +454,6 @@ const UserDashboard = () => {
               </div>
             </div>
 
-            {/* Premium Upcoming Events */}
             <div className="lg:col-span-1">
               <div className="mb-8">
                 <h2 className="text-3xl font-bold mb-2 text-white">Upcoming Events</h2>
@@ -499,18 +464,14 @@ const UserDashboard = () => {
                 {upcomingEvents.map((event) => (
                   <motion.div 
                     key={event.id} 
-                    className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-5 overflow-hidden"
+                    className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-5 overflow-hidden"
                     style={{
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                       transformStyle: 'preserve-3d'
                     }}
                     whileHover={{ y: -4, scale: 1.01 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                    </div>
                     <div className="premium-card-content relative z-20">
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="font-bold text-sm text-white leading-tight">{event.title}</h3>
@@ -538,9 +499,7 @@ const UserDashboard = () => {
             </div>
           </div>
 
-          {/* Premium Recent Activities & Skill Progress */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Premium Recent Activities */}
             <div>
               <div className="mb-8">
                 <h2 className="text-3xl font-bold mb-2 text-white">Recent Activities</h2>
@@ -551,18 +510,14 @@ const UserDashboard = () => {
                 {recentActivities.map((activity) => (
                   <motion.div 
                     key={activity.id} 
-                    className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-5 overflow-hidden"
+                    className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-5 overflow-hidden"
                     style={{
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                       transformStyle: 'preserve-3d'
                     }}
                     whileHover={{ y: -4, scale: 1.01 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                    </div>
                     <div className="premium-card-content relative z-20 flex items-start space-x-4">
                       <div className="text-3xl filter drop-shadow-lg">{activity.icon}</div>
                       <div className="flex-1">
@@ -585,7 +540,6 @@ const UserDashboard = () => {
               </div>
             </div>
 
-            {/* Premium Skill Progress */}
             <div>
               <div className="mb-8">
                 <h2 className="text-3xl font-bold mb-2 text-white">Skill Progress</h2>
@@ -596,18 +550,14 @@ const UserDashboard = () => {
                 {skillProgress.map((skill, index) => (
                   <motion.div 
                     key={index} 
-                    className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-5 overflow-hidden"
+                    className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 rounded-2xl p-5 overflow-hidden"
                     style={{
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
+                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05) inset',
                       transformStyle: 'preserve-3d'
                     }}
                     whileHover={{ y: -4, scale: 1.01 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                    </div>
                     <div className="premium-card-content relative z-20">
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-bold text-sm text-white">{skill.name}</span>
@@ -638,7 +588,6 @@ const UserDashboard = () => {
         </main>
       </div>
 
-      {/* Premium 3D Glass Effects Styles */}
       <style jsx>{`
         @keyframes float {
           0%, 100% { transform: translateY(0px) rotateX(0deg); }

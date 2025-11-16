@@ -1,7 +1,6 @@
 import axiosInstance from './axiosInstance';
 import { DashboardStats, Course, MockInterview, ApiResponse } from '../types';
 
-// Mock data for development
 const mockDashboardStats: DashboardStats = {
   totalCourses: 12,
   completedCourses: 5,
@@ -54,22 +53,18 @@ const mockInterviews: MockInterview[] = [
   },
 ];
 
-// User Dashboard API
 export const getUserDashboard = async (): Promise<DashboardStats> => {
   try {
     const response = await axiosInstance.get<ApiResponse<DashboardStats>>('/user/dashboard', {
-      timeout: 5000, // 5 second timeout
+      timeout: 5000,
     });
     return response.data.data;
   } catch (error: any) {
-    // Return mock data for development
     console.log('Using mock dashboard data', error?.message || error);
-    // Ensure we always return data, even if there's an error
     return Promise.resolve(mockDashboardStats);
   }
 };
 
-// User Courses API
 export const getUserCourses = async (): Promise<Course[]> => {
   try {
     const response = await axiosInstance.get<ApiResponse<Course[]>>('/user/courses');
@@ -98,7 +93,6 @@ export const getCourseContent = async (courseId: string): Promise<any> => {
   }
 };
 
-// Mock Prep API
 export const getMockInterviews = async (): Promise<MockInterview[]> => {
   try {
     const response = await axiosInstance.get<ApiResponse<MockInterview[]>>('/user/mock-interviews');
@@ -119,7 +113,6 @@ export const scheduleMockInterview = async (data: Partial<MockInterview>): Promi
   }
 };
 
-// AI Agents API
 export const getAIAgents = async (): Promise<any[]> => {
   try {
     const response = await axiosInstance.get('/user/ai-agents');
@@ -152,7 +145,6 @@ export const getAIAgents = async (): Promise<any[]> => {
   }
 };
 
-// Test API
 export const submitTest = async (testId: string, answers: any): Promise<any> => {
   try {
     const response = await axiosInstance.post(`/user/tests/${testId}/submit`, { answers });

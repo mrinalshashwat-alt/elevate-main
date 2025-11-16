@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiStop, FiRotateCw } from 'react-icons/fi';
+import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiStop, FiRotateCw, FiX, FiCheck } from 'react-icons/fi';
+import { executeCode, runTestCases, formatOutput, validateCode } from '../../lib/codeSandbox';
 
 // Custom glass popover select component matching AIMockInterview style
 const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
@@ -48,6 +49,16 @@ const GlassSelect = ({ value, onChange, options, placeholder = 'Select', classNa
 const Assessment = () => {
   const router = useRouter();
   const videoRef = useRef(null);
+  
+  // Check if user has completed the pre-assessment flow
+  useEffect(() => {
+    const hasCompletedFlow = localStorage.getItem('assessment_flow_completed');
+    if (!hasCompletedFlow) {
+      // Redirect to assessment start page if flow not completed
+      router.push('/user/assessment-start');
+    }
+  }, [router]);
+  
   const [timeLeft, setTimeLeft] = useState(34 * 60 + 18); // 34:18 in seconds
   const [currentQuestion, setCurrentQuestion] = useState(5);
   const [totalQuestions] = useState(20);
@@ -64,10 +75,14 @@ const Assessment = () => {
   const [currentSection, setCurrentSection] = useState('mcq');
   const [stream, setStream] = useState(null);
   
-  // Coding section state
-  const [currentCodingProblem, setCurrentCodingProblem] = useState(1);
-  const [totalCodingProblems] = useState(2);
-  const [code, setCode] = useState(`def two_sum(nums, target):
+  // Coding section state - support multiple problems
+  const [currentCodingProblem, setCurrentCodingProblem] = useState(0);
+  const [totalCodingProblems] = useState(3);
+  const [codingProblems, setCodingProblems] = useState([
+    {
+      id: 1,
+      title: 'Two Sum',
+      code: `def two_sum(nums, target):
     seen = {}
     for i, n in enumerate(nums):
         complement = target - n
@@ -83,13 +98,83 @@ if __name__ == "__main__":
     target = int(sys.stdin.readline().strip())
     result = two_sum(nums, target)
     print(f"{result[0]} {result[1]}")
-`);
-  const [customInput, setCustomInput] = useState('4\n2 7 11 15\n9');
-  const [selectedLanguage, setSelectedLanguage] = useState('python');
+`,
+      customInput: '4\n2 7 11 15\n9',
+      selectedLanguage: 'python',
+      testResults: [],
+      executionResult: null,
+    },
+    {
+      id: 2,
+      title: 'Reverse Linked List',
+      code: `class ListNode:
+    def __init__(self, val=0, next=None):
+        self.val = val
+        self.next = next
+
+def reverse_list(head):
+    prev = None
+    current = head
+    while current:
+        next_node = current.next
+        current.next = prev
+        prev = current
+        current = next_node
+    return prev
+`,
+      customInput: '',
+      selectedLanguage: 'python',
+      testResults: [],
+      executionResult: null,
+    },
+    {
+      id: 3,
+      title: 'Binary Search',
+      code: `def binary_search(arr, target):
+    left, right = 0, len(arr) - 1
+    while left <= right:
+        mid = (left + right) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            left = mid + 1
+        else:
+            right = mid - 1
+    return -1
+`,
+      customInput: '',
+      selectedLanguage: 'python',
+      testResults: [],
+      executionResult: null,
+    },
+  ]);
+  
+  // Current problem state (derived from codingProblems array)
+  const currentProblem = codingProblems[currentCodingProblem] || codingProblems[0];
+  const code = currentProblem?.code || '';
+  const customInput = currentProblem?.customInput || '';
+  const selectedLanguage = currentProblem?.selectedLanguage || 'python';
+  const testResults = currentProblem?.testResults || [];
+  const executionResult = currentProblem?.executionResult || null;
+  
+  // Autosave state
+  const [lastSaved, setLastSaved] = useState(null);
+  const autosaveIntervalRef = useRef(null);
   const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const floatingCameraRef = useRef(null);
+  
+  // Sandbox execution state
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [showOutput, setShowOutput] = useState(false);
+  
+  // Test cases for the current problem
+  const [problemTestCases] = useState([
+    { input: '4\n2 7 11 15\n9', expectedOutput: '0 1' },
+    { input: '5\n3 2 4 8 1\n6', expectedOutput: '1 2' },
+    { input: '3\n1 2 3\n4', expectedOutput: '0 2' },
+  ]);
   
   const languages = [
     { value: 'python', label: 'Python 3.10', template: `def two_sum(nums, target):
@@ -278,6 +363,11 @@ func main() {
   const videoPreviewRef = useRef(null);
 
   useEffect(() => {
+    // Save start time
+    if (!localStorage.getItem('assessment_start_time')) {
+      localStorage.setItem('assessment_start_time', Date.now().toString());
+    }
+    
     // Start camera for proctoring
     startProctoring();
     // Start timer
@@ -292,8 +382,19 @@ func main() {
       });
     }, 1000);
 
+    // Autosave interval for coding section
+    const autosaveTimer = setInterval(() => {
+      if (currentSection === 'coding') {
+        saveCodingState();
+      }
+    }, 30000); // Autosave every 30 seconds
+    autosaveIntervalRef.current = autosaveTimer;
+
     return () => {
       clearInterval(timer);
+      if (autosaveIntervalRef.current) {
+        clearInterval(autosaveIntervalRef.current);
+      }
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -302,6 +403,54 @@ func main() {
       }
     };
   }, []);
+
+  // Autosave function
+  const saveCodingState = () => {
+    const stateToSave = {
+      codingProblems,
+      currentCodingProblem,
+      timestamp: new Date().toISOString(),
+    };
+    localStorage.setItem('assessment_coding_state', JSON.stringify(stateToSave));
+    setLastSaved(new Date());
+    // In production, this would call the backend API
+    // await saveAssessmentState(stateToSave);
+  };
+
+  // Load saved state on mount
+  useEffect(() => {
+    if (currentSection === 'coding') {
+      const saved = localStorage.getItem('assessment_coding_state');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.codingProblems) {
+            setCodingProblems(parsed.codingProblems);
+            setCurrentCodingProblem(parsed.currentCodingProblem || 0);
+            setLastSaved(new Date(parsed.timestamp));
+          }
+        } catch (e) {
+          console.error('Error loading saved state:', e);
+        }
+      }
+    }
+    
+    // Load saved MCQ answers when question changes
+    if (currentSection === 'mcq') {
+      const savedAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+      const answerKey = currentQuestion.toString();
+      if (savedAnswers[answerKey] || savedAnswers[currentQuestion]) {
+        const savedAnswer = savedAnswers[answerKey] || savedAnswers[currentQuestion];
+        setSelectedAnswer(savedAnswer);
+        // Mark question as attempted
+        setQuestions(prev => prev.map(q => 
+          q.id === currentQuestion ? { ...q, attempted: true } : q
+        ));
+      } else {
+        setSelectedAnswer('');
+      }
+    }
+  }, [currentSection, currentQuestion]);
 
   const startProctoring = async () => {
     try {
@@ -324,42 +473,199 @@ func main() {
   const handlePrevious = () => {
     if (currentQuestion > 1) {
       setCurrentQuestion(currentQuestion - 1);
+      // Update question state
+      setQuestions(prev => prev.map(q => ({
+        ...q,
+        current: q.id === currentQuestion - 1
+      })));
     }
   };
 
   const handleNext = () => {
     if (currentQuestion < totalQuestions) {
       setCurrentQuestion(currentQuestion + 1);
+      // Update question state
+      setQuestions(prev => prev.map(q => ({
+        ...q,
+        current: q.id === currentQuestion + 1,
+        attempted: q.id === currentQuestion ? selectedAnswer !== '' : q.attempted
+      })));
+      // Save MCQ answer
+      if (selectedAnswer) {
+        const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+        mcqAnswers[currentQuestion.toString()] = selectedAnswer;
+        localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+      }
     }
   };
 
   const handleClearResponse = () => {
     setSelectedAnswer('');
+    // Update question state
+    setQuestions(prev => prev.map(q => 
+      q.id === currentQuestion ? { ...q, attempted: false } : q
+    ));
+    // Remove from saved answers
+    const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+    delete mcqAnswers[currentQuestion.toString()];
+    delete mcqAnswers[currentQuestion];
+    localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
   };
 
   const handleSubmitSection = () => {
-    router.push('/user/dashboard');
+    // Save final state before submission
+    if (currentSection === 'coding') {
+      saveCodingState();
+    }
+    // Clear flow completion flag
+    localStorage.removeItem('assessment_flow_completed');
+    // Navigate to assessment end page
+    router.push('/user/assessment-end');
   };
 
   const handleSaveAndExit = () => {
-    router.push('/user/dashboard');
+    // Save current state before navigating to summary
+    if (currentSection === 'coding') {
+      saveCodingState();
+    }
+    
+    // Save current MCQ answer if selected
+    if (currentSection === 'mcq' && selectedAnswer) {
+      const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+      mcqAnswers[currentQuestion.toString()] = selectedAnswer;
+      localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+    }
+    
+    // Navigate to summary page
+    router.push('/user/assessment-summary');
   };
 
   // Coding section handlers
-  const handleRunTestCases = () => {
-    console.log('Running test cases...');
-    // Implement test case execution
+  const handleRunTestCases = async () => {
+    setIsExecuting(true);
+    setShowOutput(true);
+    
+    const currentCode = codingProblems[currentCodingProblem].code;
+    const currentLang = codingProblems[currentCodingProblem].selectedLanguage;
+    
+    try {
+      // Validate code first
+      const validation = validateCode(currentLang, currentCode);
+      if (!validation.valid) {
+        const updatedProblems = [...codingProblems];
+        updatedProblems[currentCodingProblem] = {
+          ...updatedProblems[currentCodingProblem],
+          executionResult: {
+            success: false,
+            output: '',
+            error: validation.error,
+            executionTime: 0,
+          },
+          testResults: [],
+        };
+        setCodingProblems(updatedProblems);
+        setIsExecuting(false);
+        return;
+      }
+      
+      // Run test cases
+      const results = await runTestCases(currentLang, currentCode, problemTestCases);
+      
+      // Calculate summary
+      const passed = results.filter(r => r.passed).length;
+      const total = results.length;
+      
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        testResults: results,
+        executionResult: {
+          success: true,
+          output: `Test Results: ${passed}/${total} passed`,
+          error: null,
+          executionTime: 0,
+          testSummary: { passed, total },
+        },
+      };
+      setCodingProblems(updatedProblems);
+      saveCodingState();
+    } catch (error) {
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        executionResult: {
+          success: false,
+          output: '',
+          error: error.toString(),
+          executionTime: 0,
+        },
+      };
+      setCodingProblems(updatedProblems);
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const handleReset = () => {
     const lang = languages.find(l => l.value === selectedLanguage);
-    setCode(lang ? lang.template : '');
+    const resetCode = lang ? lang.template : '';
+    
+    // Update current problem's code
+    const updatedProblems = [...codingProblems];
+    updatedProblems[currentCodingProblem] = {
+      ...updatedProblems[currentCodingProblem],
+      code: resetCode,
+      executionResult: null,
+      testResults: [],
+    };
+    setCodingProblems(updatedProblems);
+    setShowOutput(false);
+    saveCodingState();
   };
 
   const handleLanguageChange = (langValue) => {
-    setSelectedLanguage(langValue);
     const lang = languages.find(l => l.value === langValue);
-    setCode(lang ? lang.template : '');
+    const updatedProblems = [...codingProblems];
+    updatedProblems[currentCodingProblem] = {
+      ...updatedProblems[currentCodingProblem],
+      selectedLanguage: langValue,
+      code: lang ? lang.template : updatedProblems[currentCodingProblem].code,
+      executionResult: null,
+      testResults: [],
+    };
+    setCodingProblems(updatedProblems);
+    setShowOutput(false);
+    saveCodingState();
+  };
+
+  const codeChangeTimeoutRef = useRef(null);
+  
+  const handleCodeChange = (newCode) => {
+    const updatedProblems = [...codingProblems];
+    updatedProblems[currentCodingProblem] = {
+      ...updatedProblems[currentCodingProblem],
+      code: newCode,
+    };
+    setCodingProblems(updatedProblems);
+    // Debounced autosave
+    if (codeChangeTimeoutRef.current) {
+      clearTimeout(codeChangeTimeoutRef.current);
+    }
+    codeChangeTimeoutRef.current = setTimeout(() => saveCodingState(), 2000);
+  };
+
+  const handleCustomInputChange = (newInput) => {
+    const updatedProblems = [...codingProblems];
+    updatedProblems[currentCodingProblem] = {
+      ...updatedProblems[currentCodingProblem],
+      customInput: newInput,
+    };
+    setCodingProblems(updatedProblems);
+  };
+
+  const handleProblemChange = (index) => {
+    setCurrentCodingProblem(index);
+    setShowOutput(false);
   };
   
   // Draggable camera handlers
@@ -401,14 +707,84 @@ func main() {
     }
   }, [isDragging, dragOffset]);
 
-  const handleCompile = () => {
-    console.log('Compiling...');
-    // Implement compilation
+  const handleCompile = async () => {
+    setIsExecuting(true);
+    setShowOutput(true);
+    setExecutionResult(null);
+    
+    try {
+      const validation = validateCode(selectedLanguage, code);
+      if (!validation.valid) {
+        setExecutionResult({
+          success: false,
+          output: '',
+          error: validation.error,
+          executionTime: 0,
+        });
+        setIsExecuting(false);
+        return;
+      }
+      
+      setExecutionResult({
+        success: true,
+        output: 'Compilation successful!',
+        error: null,
+        executionTime: 0,
+      });
+    } catch (error) {
+      setExecutionResult({
+        success: false,
+        output: '',
+        error: error.toString(),
+        executionTime: 0,
+      });
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
-  const handleRunCustomInput = () => {
-    console.log('Running custom input...');
-    // Implement custom input execution
+  const handleRunCustomInput = async () => {
+    if (!customInput.trim()) {
+      setExecutionResult({
+        success: false,
+        output: '',
+        error: 'Please provide custom input',
+        executionTime: 0,
+      });
+      setShowOutput(true);
+      return;
+    }
+    
+    setIsExecuting(true);
+    setShowOutput(true);
+    setExecutionResult(null);
+    setTestResults([]);
+    
+    try {
+      const validation = validateCode(selectedLanguage, code);
+      if (!validation.valid) {
+        setExecutionResult({
+          success: false,
+          output: '',
+          error: validation.error,
+          executionTime: 0,
+        });
+        setIsExecuting(false);
+        return;
+      }
+      
+      const result = await executeCode(selectedLanguage, code, customInput);
+      setExecutionResult(result);
+    } catch (error) {
+      setExecutionResult({
+        success: false,
+        output: '',
+        error: error.toString(),
+        executionTime: 0,
+      });
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const handleSubmitCoding = () => {
@@ -480,6 +856,12 @@ func main() {
 
   const handleSubmitVideo = () => {
     console.log('Submitting video answer...');
+    // Save video answer
+    const videoAnswers = JSON.parse(localStorage.getItem('assessment_video_answers') || '[]');
+    if (!videoAnswers.includes(currentVideoQuestion)) {
+      videoAnswers.push(currentVideoQuestion);
+      localStorage.setItem('assessment_video_answers', JSON.stringify(videoAnswers));
+    }
     // Implement video submission
     if (currentVideoQuestion < totalVideoQuestions) {
       setCurrentVideoQuestion(currentVideoQuestion + 1);
@@ -747,7 +1129,17 @@ func main() {
                             name="answer"
                             value={option.id}
                             checked={selectedAnswer === option.id}
-                            onChange={() => setSelectedAnswer(option.id)}
+                            onChange={() => {
+                              setSelectedAnswer(option.id);
+                              // Mark question as attempted
+                              setQuestions(prev => prev.map(q => 
+                                q.id === currentQuestion ? { ...q, attempted: true } : q
+                              ));
+                              // Save answer immediately
+                              const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+                              mcqAnswers[currentQuestion.toString()] = option.id;
+                              localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+                            }}
                             className="w-5 h-5 text-orange-500 focus:ring-orange-500 focus:ring-2"
                           />
                           <span className="text-lg">{option.label}</span>
@@ -800,12 +1192,44 @@ func main() {
             )}
 
             {currentSection === 'coding' && (
-              <div className="flex-1 flex overflow-hidden">
-                {/* Left Panel - Problem Description */}
-                <div className="w-1/2 border-r border-gray-800 overflow-y-auto p-6">
-                  <div className="mb-4 flex items-center justify-between">
-                    <span className="text-sm text-gray-400">Coding — Problem {currentCodingProblem} of {totalCodingProblems}</span>
-                  </div>
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Problem Tabs */}
+                <div className="border-b border-gray-800 px-6 py-3 flex items-center space-x-2 bg-gray-900/50">
+                  {codingProblems.map((problem, index) => (
+                    <button
+                      key={problem.id}
+                      onClick={() => handleProblemChange(index)}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                        currentCodingProblem === index
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      }`}
+                    >
+                      {problem.title}
+                      {problem.testResults && problem.testResults.length > 0 && (
+                        <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                          problem.testResults.every(r => r.passed)
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {problem.testResults.filter(r => r.passed).length}/{problem.testResults.length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  {lastSaved && (
+                    <span className="ml-auto text-xs text-gray-500">
+                      Last saved: {lastSaved.toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 flex overflow-hidden">
+                  {/* Left Panel - Problem Description */}
+                  <div className="w-1/2 border-r border-gray-800 overflow-y-auto p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="text-sm text-gray-400">Coding — Problem {currentCodingProblem + 1} of {totalCodingProblems}</span>
+                    </div>
                   
                   <motion.div 
                     className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 mb-6"
@@ -822,7 +1246,7 @@ func main() {
                       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
                     </div>
                     <div className="premium-card-content relative z-20">
-                    <h1 className="text-2xl font-bold mb-4">Two Sum</h1>
+                    <h1 className="text-2xl font-bold mb-4">{currentProblem?.title || 'Coding Problem'}</h1>
                     <div className="flex items-center space-x-4 text-sm text-gray-400 mb-6">
                       <span>Difficulty: Easy</span>
                       <span>Language: Python</span>
@@ -917,6 +1341,16 @@ func main() {
                           className="text-sm"
                         />
                       </div>
+                      {/* Reset Button - Moved to top right */}
+                      <button
+                        onClick={handleReset}
+                        disabled={isExecuting}
+                        className="flex items-center space-x-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm disabled:opacity-50"
+                        title="Reset code to template"
+                      >
+                        <FiRefreshCw />
+                        <span>Reset</span>
+                      </button>
                       <span className="text-sm text-gray-400">Default Template</span>
                     </div>
                   </div>
@@ -925,7 +1359,7 @@ func main() {
                   <div className="flex-1 p-4">
                     <textarea
                       value={code}
-                      onChange={(e) => setCode(e.target.value)}
+                      onChange={(e) => handleCodeChange(e.target.value)}
                       className="w-full h-full bg-black text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-700 focus:border-orange-500 focus:outline-none resize-none"
                       spellCheck={false}
                       placeholder="Write your code here..."
@@ -942,7 +1376,7 @@ func main() {
                     <div className="text-sm font-semibold mb-2">Custom Input</div>
                     <textarea
                       value={customInput}
-                      onChange={(e) => setCustomInput(e.target.value)}
+                      onChange={(e) => handleCustomInputChange(e.target.value)}
                       className="w-full h-24 bg-gray-800 text-gray-300 font-mono text-sm p-3 rounded-lg border border-gray-700 focus:border-orange-500 focus:outline-none resize-none"
                       placeholder="Enter custom input here..."
                     />
@@ -952,34 +1386,154 @@ func main() {
                   <div className="border-t border-gray-800 p-4 flex items-center space-x-2">
                     <button
                       onClick={handleRunTestCases}
-                      className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                      disabled={isExecuting}
+                      className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <FiGrid />
+                      {isExecuting ? (
+                        <FiRefreshCw className="animate-spin" />
+                      ) : (
+                        <FiGrid />
+                      )}
                       <span>Run Test Cases</span>
                     </button>
                     <button
-                      onClick={handleReset}
-                      className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-                    >
-                      <FiRefreshCw />
-                      <span>Reset</span>
-                    </button>
-                    <button
                       onClick={handleCompile}
-                      className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+                      disabled={isExecuting}
+                      className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm disabled:opacity-50"
                     >
                       <FiPlay />
                       <span>Compile</span>
                     </button>
                     <button
                       onClick={handleRunCustomInput}
-                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-sm font-semibold"
+                      disabled={isExecuting}
+                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50"
                     >
                       <span>Run Custom Input</span>
                       <FiArrowRight />
                     </button>
                   </div>
+
+                  {/* Output Panel */}
+                  {showOutput && (
+                    <div className="border-t border-gray-800 flex flex-col" style={{ maxHeight: '300px' }}>
+                      <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-semibold text-gray-300">Output</span>
+                          {executionResult && (
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              executionResult.success 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-red-500/20 text-red-400'
+                            }`}>
+                              {executionResult.success ? 'Success' : 'Error'}
+                            </span>
+                          )}
+                          {executionResult?.executionTime > 0 && (
+                            <span className="text-xs text-gray-500">
+                              ({executionResult.executionTime}ms)
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setShowOutput(false)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          <FiX className="w-4 h-4" />
+                        </button>
+                      </div>
+                      
+                      <div className="flex-1 overflow-y-auto p-4">
+                        {isExecuting ? (
+                          <div className="flex items-center space-x-2 text-gray-400">
+                            <FiRefreshCw className="animate-spin" />
+                            <span>Executing...</span>
+                          </div>
+                        ) : executionResult ? (
+                          <div className="space-y-4">
+                            {/* Main Output */}
+                            {executionResult.error ? (
+                              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                                <div className="text-red-400 font-mono text-sm whitespace-pre-wrap">
+                                  {executionResult.error}
+                                </div>
+                              </div>
+                            ) : executionResult.output && (
+                              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                                <div className="text-green-400 font-mono text-sm whitespace-pre-wrap">
+                                  {executionResult.output}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Test Results */}
+                            {testResults.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="text-sm font-semibold text-gray-300 mb-2">
+                                  Test Cases ({executionResult.testSummary?.passed || 0}/{executionResult.testSummary?.total || testResults.length} passed)
+                                </div>
+                                {testResults.map((test, index) => (
+                                  <div
+                                    key={index}
+                                    className={`border rounded-lg p-3 ${
+                                      test.passed
+                                        ? 'bg-green-500/10 border-green-500/30'
+                                        : 'bg-red-500/10 border-red-500/30'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center space-x-2">
+                                        {test.passed ? (
+                                          <FiCheckCircle className="text-green-400 w-5 h-5" />
+                                        ) : (
+                                          <FiX className="text-red-400 w-5 h-5" />
+                                        )}
+                                        <span className="text-sm font-semibold text-gray-300">
+                                          Test Case {index + 1}
+                                        </span>
+                                      </div>
+                                      <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                                        test.passed
+                                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                      }`}>
+                                        {test.passed ? '✓ Passed' : '✗ Failed'}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs space-y-1">
+                                      <div>
+                                        <span className="text-gray-500">Input: </span>
+                                        <span className="text-gray-300 font-mono">{test.input}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-500">Expected: </span>
+                                        <span className="text-green-400 font-mono">{test.expectedOutput}</span>
+                                      </div>
+                                      {!test.passed && (
+                                        <div>
+                                          <span className="text-gray-500">Got: </span>
+                                          <span className="text-red-400 font-mono">{test.actualOutput || 'No output'}</span>
+                                        </div>
+                                      )}
+                                      {test.error && (
+                                        <div className="text-red-400 font-mono text-xs mt-1">
+                                          {test.error}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 text-sm">No output yet. Run your code to see results.</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </div>
               </div>
             )}
 

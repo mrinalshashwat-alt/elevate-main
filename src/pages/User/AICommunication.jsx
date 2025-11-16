@@ -6,17 +6,15 @@ import { motion } from 'framer-motion';
 
 const AICommunication = () => {
   const router = useRouter();
-  const [coachingMode, setCoachingMode] = useState(''); // '', 'presentation', 'negotiation', 'public-speaking', 'interview', 'meeting'
+  const [coachingMode, setCoachingMode] = useState('');
   const [isSessionStarted, setIsSessionStarted] = useState(false);
-  const [sessionType, setSessionType] = useState('text'); // 'text', 'voice'
+  const [sessionType, setSessionType] = useState('text');
   const [currentScenario, setCurrentScenario] = useState(0);
   const [userName, setUserName] = useState('');
   const [selectedSkill, setSelectedSkill] = useState('');
   const [difficulty, setDifficulty] = useState('');
   const [sessionDuration, setSessionDuration] = useState('15');
   const [enableVoice, setEnableVoice] = useState(true);
-  
-  // Session state
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [sessionTime, setSessionTime] = useState(0);
@@ -29,13 +27,11 @@ const AICommunication = () => {
   const [showLoader, setShowLoader] = useState(true);
   const [loaderFade, setLoaderFade] = useState(false);
   
-  // Refs
   const recognitionRef = useRef(null);
   const synthRef = useRef(null);
   const durationTimerRef = useRef(null);
   const loaderVideoRef = useRef(null);
 
-  // Custom glass popover select (dark orange glass menu)
   const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '' }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);

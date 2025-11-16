@@ -4,7 +4,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAssessments, deleteAssessment, getJobs, createJob } from '../../api/admin';
+import { getAssessments, deleteAssessment, getJobs, createJob, updateJob, deleteJob, createAssessment } from '../../api/admin';
+import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
 
 // Custom glass popover select component matching AIMockInterview style
 const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
@@ -55,6 +56,9 @@ const AssessmentList = () => {
   const [showAIModal, setShowAIModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [activeSection, setActiveSection] = useState('active'); // 'active' or 'completed'
+  const [activeJobsTab, setActiveJobsTab] = useState('active'); // 'active' or 'past'
+  const [selectedJobForView, setSelectedJobForView] = useState(null);
+  const [showJobAssessmentModal, setShowJobAssessmentModal] = useState(false);
 
   // Read URL parameters to set initial state
   useEffect(() => {
@@ -72,9 +76,12 @@ const AssessmentList = () => {
   const [numQuestions, setNumQuestions] = useState(2);
   const [totalTime, setTotalTime] = useState(1);
   const [makePublic, setMakePublic] = useState(true);
+  const [assessmentInstructions, setAssessmentInstructions] = useState('');
   
   // Job creation states
   const [showJobModal, setShowJobModal] = useState(false);
+  const [editingJob, setEditingJob] = useState(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [newJob, setNewJob] = useState({
     title: '',
     description: '',
@@ -83,9 +90,15 @@ const AssessmentList = () => {
     location: '',
     type: 'full-time',
     salary: '',
+    status: 'active',
   });
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [pendingClose, setPendingClose] = useState(false);
   const [selectedAssessmentFilter, setSelectedAssessmentFilter] = useState('');
   const [createdJobId, setCreatedJobId] = useState(null); // Track newly created job for "Go to Assessment" button
+  const [createdAssessmentId, setCreatedAssessmentId] = useState(null); // Track newly created assessment for link generation
+  const [selectedJobId, setSelectedJobId] = useState(''); // Track selected job in assessment modal
 
   // AI Generation states
   const [aiPrompt, setAiPrompt] = useState('');
@@ -106,31 +119,196 @@ const AssessmentList = () => {
 
   const { data: assessmentsData, isLoading } = useQuery({
     queryKey: ['adminAssessments'],
-    queryFn: () => getAssessments(),
-    retry: false, // Don't retry failed requests since we use mock data
-    refetchOnWindowFocus: false, // Don't refetch on window focus for mock data
+    queryFn: async () => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const apiData = await getAssessments();
+        // Merge with localStorage data
+        const localAssessments = assessmentsStorage.getAll();
+        const apiAssessmentIds = new Set(apiData.data.map(a => a.id));
+        const uniqueLocalAssessments = localAssessments.filter(a => !apiAssessmentIds.has(a.id));
+        
+        return {
+          ...apiData,
+          data: [...apiData.data, ...uniqueLocalAssessments],
+          total: apiData.total + uniqueLocalAssessments.length,
+        };
+      } catch (error) {
+        // If API fails, use localStorage only
+        console.log('API call failed, using localStorage:', error);
+        const localAssessments = assessmentsStorage.getAll();
+        return {
+          data: localAssessments,
+          total: localAssessments.length,
+          page: 1,
+          pageSize: 10,
+        };
+      }
+    },
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['adminJobs'],
-    queryFn: () => getJobs(),
-    retry: false, // Don't retry failed requests since we use mock data
-    refetchOnWindowFocus: false, // Don't refetch on window focus for mock data
+    queryFn: async () => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const apiData = await getJobs();
+        // Merge with localStorage data
+        const localJobs = jobsStorage.getAll();
+        const apiJobIds = new Set(apiData.data.map(j => j.id));
+        const uniqueLocalJobs = localJobs.filter(j => !apiJobIds.has(j.id));
+        
+        return {
+          ...apiData,
+          data: [...apiData.data, ...uniqueLocalJobs],
+          total: apiData.total + uniqueLocalJobs.length,
+        };
+      } catch (error) {
+        // If API fails, use localStorage only
+        console.log('API call failed, using localStorage:', error);
+        const localJobs = jobsStorage.getAll();
+        return {
+          data: localJobs,
+          total: localJobs.length,
+          page: 1,
+          pageSize: 10,
+        };
+      }
+    },
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteAssessment,
+    mutationFn: async (assessmentId) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        await deleteAssessment(assessmentId);
+      } catch (error) {
+        console.log('API call failed, using localStorage:', error);
+      }
+      // Always delete from localStorage
+      assessmentsStorage.delete(assessmentId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
     },
   });
 
   const createJobMutation = useMutation({
-    mutationFn: createJob,
+    mutationFn: async (jobData) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const result = await createJob(jobData);
+        // Also save to localStorage
+        jobsStorage.save({
+          ...jobData,
+          id: result.id || `job_${Date.now()}`,
+          postedAt: new Date().toISOString(),
+        });
+        return result;
+      } catch (error) {
+        // If API fails, use localStorage
+        console.log('API call failed, using localStorage:', error);
+        const savedJob = jobsStorage.save({
+          ...jobData,
+          id: `job_${Date.now()}`,
+          postedAt: new Date().toISOString(),
+        });
+        return savedJob;
+      }
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       setCreatedJobId(data.id);
       // Keep modal open to show "Go to Assessment" button
+    },
+  });
+
+  const updateJobMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const result = await updateJob(id, data);
+        // Also update localStorage
+        jobsStorage.save({ ...data, id });
+        return result;
+      } catch (error) {
+        // If API fails, use localStorage
+        console.log('API call failed, using localStorage:', error);
+        jobsStorage.save({ ...data, id });
+        return { ...data, id };
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+      setShowJobModal(false);
+      resetJobForm();
+    },
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: async (jobId) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        await deleteJob(jobId);
+      } catch (error) {
+        console.log('API call failed, using localStorage:', error);
+      }
+      // Always delete from localStorage
+      jobsStorage.delete(jobId);
+      // Delete associated assessments
+      const assessments = assessmentsStorage.getByJobId(jobId);
+      assessments.forEach(assessment => {
+        assessmentsStorage.delete(assessment.id);
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+      queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
+    },
+  });
+
+  const createAssessmentMutation = useMutation({
+    mutationFn: async (assessmentData) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const result = await createAssessment(assessmentData);
+        // Also save to localStorage as backup
+        const saved = assessmentsStorage.save({
+          ...assessmentData,
+          id: result.id || `assessment_${Date.now()}`,
+        });
+        return { ...result, id: result.id || saved.id };
+      } catch (error) {
+        // If API fails, use localStorage
+        console.log('API call failed, using localStorage:', error);
+        const assessmentId = `assessment_${Date.now()}`;
+        const savedAssessment = assessmentsStorage.save({
+          ...assessmentData,
+          id: assessmentId,
+        });
+        return { ...savedAssessment, id: savedAssessment.id || assessmentId };
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
+      queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+      // Store created assessment ID to show link
+      const assessmentId = data.id;
+      console.log('Assessment created with ID:', assessmentId);
+      setCreatedAssessmentId(assessmentId);
+      // Don't close modal yet - show success with link
+      // Reset form
+      setAssessmentType('coding');
+      setNumQuestions(2);
+      setTotalTime(1);
+      setMakePublic(true);
+      setManualQuestions([]);
+      setAssessmentInstructions('');
+      // Keep selectedJobId for link generation
     },
   });
 
@@ -140,23 +318,20 @@ const AssessmentList = () => {
     }
   };
 
-  const handleCreateJob = () => {
-    createJobMutation.mutate({
-      title: newJob.title,
-      description: newJob.description,
-      yearsOfExperience: newJob.yearsOfExperience,
-      company: newJob.company || 'Company',
-      location: newJob.location || 'Location',
-      type: newJob.type || 'full-time',
-      salary: newJob.salary || '',
-      status: 'active',
-      postedAt: new Date().toISOString().split('T')[0],
-    });
-  };
 
   const handleGoToAssessment = () => {
+    const jobId = createdJobId;
     setShowJobModal(false);
-    setCreatedJobId(null);
+    resetJobForm();
+    router.push(`/admin/create-assessment?jobId=${jobId}`);
+  };
+
+  const handleViewJob = (job) => {
+    setSelectedJobForView(job);
+    setShowJobAssessmentModal(true);
+  };
+
+  const resetJobForm = () => {
     setNewJob({
       title: '',
       description: '',
@@ -165,12 +340,175 @@ const AssessmentList = () => {
       location: '',
       type: 'full-time',
       salary: '',
+      status: 'active',
     });
-    router.push(`/admin/create-assessment?jobId=${createdJobId}`);
+    setEditingJob(null);
+    setHasUnsavedChanges(false);
+    setCreatedJobId(null);
+  };
+
+  // Track form changes
+  useEffect(() => {
+    if (showJobModal) {
+      const hasChanges = newJob.title || newJob.description || newJob.yearsOfExperience;
+      setHasUnsavedChanges(hasChanges);
+    }
+  }, [newJob, showJobModal]);
+
+  // Handle window close/tab switch
+  useEffect(() => {
+    if (!showJobModal || !hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (e) => {
+      // Auto-save as draft when user navigates away
+      if (hasUnsavedChanges) {
+        const draftData = {
+          ...newJob,
+          status: 'draft',
+          id: editingJob?.id || `job_${Date.now()}`,
+          postedAt: new Date().toISOString(),
+        };
+        jobsStorage.save(draftData);
+        queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [showJobModal, hasUnsavedChanges, newJob, editingJob, queryClient]);
+
+  const handleCloseJobModal = () => {
+    if (hasUnsavedChanges) {
+      setPendingClose(true);
+      setShowDiscardModal(true);
+    } else {
+      setShowJobModal(false);
+      resetJobForm();
+    }
+  };
+
+  const handleSaveDraft = () => {
+    const draftData = {
+      ...newJob,
+      status: 'draft',
+      id: editingJob?.id || `job_${Date.now()}`,
+      postedAt: new Date().toISOString(),
+    };
+    jobsStorage.save(draftData);
+    queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+    setShowJobModal(false);
+    setShowDiscardModal(false);
+    resetJobForm();
+  };
+
+  const handleDiscard = () => {
+    // Auto-save as draft when discarding if there are changes
+    if (hasUnsavedChanges) {
+      const draftData = {
+        ...newJob,
+        status: 'draft',
+        id: editingJob?.id || `job_${Date.now()}`,
+        postedAt: new Date().toISOString(),
+      };
+      jobsStorage.save(draftData);
+      queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+    }
+    setShowJobModal(false);
+    setShowDiscardModal(false);
+    resetJobForm();
+  };
+
+  const handleEditJob = (job) => {
+    setEditingJob(job);
+    setNewJob({
+      title: job.title || '',
+      description: job.description || '',
+      yearsOfExperience: job.yearsOfExperience || '',
+      company: job.company || '',
+      location: job.location || '',
+      type: job.type || 'full-time',
+      salary: job.salary || '',
+      status: job.status || 'active',
+    });
+    setShowJobModal(true);
+  };
+
+  const generateJobDescription = async () => {
+    if (!newJob.title || !newJob.yearsOfExperience) {
+      alert('Please enter Job Title and Years of Experience first to generate a description.');
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    try {
+      // Mock AI generation - in production, this would call your AI API
+      const prompt = `Create a comprehensive job description for a ${newJob.title} position requiring ${newJob.yearsOfExperience} years of experience. Include responsibilities, requirements, and qualifications.`;
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Mock generated description
+      const generatedDescription = `We are seeking an experienced ${newJob.title} with ${newJob.yearsOfExperience}+ years of experience to join our team.
+
+**Key Responsibilities:**
+- Lead and manage ${newJob.title.toLowerCase()} initiatives
+- Collaborate with cross-functional teams
+- Develop and implement strategic solutions
+- Ensure quality deliverables within deadlines
+
+**Required Qualifications:**
+- ${newJob.yearsOfExperience}+ years of relevant experience
+- Strong problem-solving and analytical skills
+- Excellent communication and collaboration abilities
+- Proven track record of success in similar roles
+
+**Preferred Skills:**
+- Industry certifications
+- Advanced technical knowledge
+- Leadership experience
+
+Join us and be part of an innovative team driving excellence in our industry.`;
+
+      setNewJob({ ...newJob, description: generatedDescription });
+    } catch (error) {
+      console.error('Error generating job description:', error);
+      alert('Failed to generate job description. Please try again or paste your existing JD.');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const handleDeleteJob = (jobId) => {
+    if (confirm('Are you sure you want to delete this job? This will also delete associated assessments.')) {
+      deleteJobMutation.mutate(jobId);
+    }
+  };
+
+  const handleJobSubmit = (e) => {
+    e?.preventDefault();
+    if (editingJob) {
+      updateJobMutation.mutate({ id: editingJob.id, data: newJob });
+    } else {
+      createJobMutation.mutate(newJob);
+    }
+  };
+
+  const getJobAssessments = (jobId) => {
+    return assessmentsStorage.getByJobId(jobId);
+  };
+
+  // Filter jobs by status
+  const getActiveJobs = () => {
+    return (jobsData?.data || []).filter(job => job.status === 'active' || job.status === 'draft' || !job.status);
+  };
+
+  const getPastJobs = () => {
+    return (jobsData?.data || []).filter(job => job.status === 'closed');
   };
 
   const addManualQuestion = () => {
-    setManualQuestions([...manualQuestions, { ...newQuestion }]);
+    const questionToAdd = { ...newQuestion, id: Date.now() };
+    setManualQuestions([...manualQuestions, questionToAdd]);
     setNewQuestion({
       type: 'coding',
       question: '',
@@ -181,78 +519,87 @@ const AssessmentList = () => {
     });
   };
 
-  const activeAssessments = [
-    {
-      id: 1,
-      title: 'Java Developer Entry Level',
-      jobTitle: 'Senior Java Developer',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-      ),
-      description: 'We are seeking a skilled Java developer to join our entry-level cohort.',
-      details: 'Automated technical screening with coding prompts and behavioral Q&A.',
-      completed: 12,
-      invitations: 45
-    },
-    {
-      id: 2,
-      title: 'Data Analyst - SQL & BI',
-      jobTitle: 'Data Analyst',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      ),
-      description: 'Evaluate SQL fluency, dashboard literacy, and stakeholder communication.',
-      details: 'Adaptive question routing using knowledge graph alignment.',
-      completed: 7,
-      invitations: 28
-    },
-    {
-      id: 3,
-      title: 'Frontend Engineer - React',
-      jobTitle: 'Frontend Developer',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-      ),
-      description: 'Assess React patterns, accessibility, and UI problem solving.',
-      details: 'Includes live UI critique and code reading tasks.',
-      completed: 19,
-      invitations: 60
-    },
-    {
-      id: 4,
-      title: 'DevOps Engineer - Entry',
-      jobTitle: 'DevOps Engineer',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      ),
-      description: 'Scenario-based on-call drills and IaC comprehension.',
-      details: 'Agent-led incident walkthrough with scoring rubric.',
-      completed: 4,
-      invitations: 22
-    },
-    {
-      id: 5,
-      title: 'Associate, ML Data Operations',
-      jobTitle: 'ML Data Associate',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      ),
-      description: 'Evaluate labeling quality, ambiguity handling, and escalation judgment.',
-      details: 'Rubric-aligned scoring with explanation traces.',
-      completed: 9,
-      invitations: 34
+  const handleAIGenerate = () => {
+    // Simulate AI question generation
+    const generatedQuestions = Array.from({ length: parseInt(aiQuestionCount) || 5 }, (_, i) => ({
+      id: `ai-${Date.now()}-${i}`,
+      type: 'mcq',
+      question: `${aiPrompt || 'AI Generated Question'} ${i + 1}`,
+      options: ['Option A', 'Option B', 'Option C', 'Option D'],
+      correctAnswer: 'Option A',
+      difficulty: aiDifficulty,
+    }));
+    setManualQuestions([...manualQuestions, ...generatedQuestions]);
+    setShowAIModal(false);
+    setAiPrompt('');
+  };
+
+  const handleSaveAssessment = () => {
+    if (!selectedJobId) {
+      alert('Please select a job first');
+      return;
     }
-  ];
+    
+    // Get selected job from jobsData or localStorage
+    const selectedJob = jobsData?.data?.find(j => j.id === selectedJobId) || jobsStorage.getById(selectedJobId);
+    
+    if (!selectedJob) {
+      alert('Selected job not found. Please select a valid job.');
+      return;
+    }
+    
+    const assessmentData = {
+      title: `${selectedJob.title} Assessment`,
+      description: `Assessment for ${selectedJob.title}`,
+      duration: parseInt(totalTime) || 60,
+      questions: manualQuestions.length || parseInt(numQuestions) || 0,
+      status: makePublic ? 'published' : 'draft',
+      jobId: selectedJob.id,
+      jobTitle: selectedJob.title,
+      instructions: assessmentInstructions || '',
+      questionTypes: [
+        { type: assessmentType, count: manualQuestions.length || parseInt(numQuestions) || 0 }
+      ],
+      questionData: manualQuestions,
+    };
+
+    createAssessmentMutation.mutate(assessmentData);
+  };
+
+  // Get active assessments from localStorage and API data
+  const getActiveAssessments = () => {
+    const allAssessments = assessmentsData?.data || [];
+    const localAssessments = assessmentsStorage.getAll();
+    
+    // Merge and deduplicate
+    const merged = [...allAssessments];
+    localAssessments.forEach(local => {
+      if (!merged.find(a => a.id === local.id)) {
+        merged.push(local);
+      }
+    });
+    
+    // Filter for active assessments (published, draft, active, or no status - everything except archived)
+    return merged
+      .filter(a => a.status !== 'archived' && a.status !== 'completed')
+      .map((assessment, index) => ({
+        id: assessment.id || `assessment-${index}`,
+        title: assessment.title || 'Untitled Assessment',
+        jobTitle: assessment.jobTitle || assessment.title || 'No Job',
+        icon: (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        ),
+        description: assessment.description || 'No description available',
+        details: `${assessment.questions || 0} questions • ${assessment.duration || 60} minutes`,
+        completed: 0, // TODO: Get from actual data
+        invitations: 0, // TODO: Get from actual data
+        assessment: assessment, // Store full assessment object
+      }));
+  };
+
+  const activeAssessments = getActiveAssessments();
 
   const completedAssessments = [
     {
@@ -403,46 +750,87 @@ const AssessmentList = () => {
               </button>
             </div>
             <div className="space-y-4">
-              {activeAssessments.map((assessment, index) => (
-                <motion.div
-                  key={assessment.id}
-                  className="group relative bg-black/90 border border-white/10 rounded-3xl p-6 overflow-hidden hover:border-orange-500/50 transition-all"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                  whileHover={{ y: -4 }}
-                >
-                  <div className="flex items-start gap-6">
-                    <div className="text-orange-400">{assessment.icon}</div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-2xl font-bold text-white">{assessment.title}</h3>
-                            {assessment.jobTitle && (
-                              <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-semibold">
-                                {assessment.jobTitle}
+              {activeAssessments.length > 0 ? (
+                activeAssessments.map((assessment, index) => (
+                  <motion.div
+                    key={assessment.id}
+                    className="group relative bg-black/90 border border-white/10 rounded-3xl p-6 overflow-hidden hover:border-orange-500/50 transition-all"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                    whileHover={{ y: -4 }}
+                  >
+                    <div className="flex items-start gap-6">
+                      <div className="text-orange-400">{assessment.icon}</div>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-2xl font-bold text-white">{assessment.title}</h3>
+                              {assessment.jobTitle && (
+                                <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-semibold">
+                                  {assessment.jobTitle}
+                                </span>
+                              )}
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                assessment.assessment?.status === 'published' ? 'bg-green-500/20 text-green-400' :
+                                assessment.assessment?.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {assessment.assessment?.status || 'active'}
                               </span>
-                            )}
+                            </div>
+                            <p className="text-gray-400 mb-2">{assessment.description}</p>
+                            <p className="text-sm text-gray-500">{assessment.details}</p>
                           </div>
-                          <p className="text-gray-400 mb-2">{assessment.description}</p>
-                          <p className="text-sm text-gray-500">{assessment.details}</p>
+                          <div className="flex gap-2 ml-4">
+                            <button
+                              onClick={() => router.push(`/admin/create-assessment?assessmentId=${assessment.id}`)}
+                              className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg transition-all text-sm font-medium"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(assessment.id)}
+                              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-sm font-medium"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-6 mt-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400">Completed</span>
-                          <span className="font-bold text-white">{assessment.completed}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400">Invitations</span>
-                          <span className="font-bold text-white">{assessment.invitations}</span>
+                        <div className="flex items-center gap-6 mt-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-400">Questions</span>
+                            <span className="font-bold text-white">{assessment.assessment?.questions || 0}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-400">Duration</span>
+                            <span className="font-bold text-white">{assessment.assessment?.duration || 60} min</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
+                ))
+              ) : (
+                <motion.div
+                  className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <svg className="w-24 h-24 mx-auto mb-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h3 className="text-2xl font-bold mb-3 text-white">No active assessments yet</h3>
+                  <p className="text-gray-400 mb-6">Create your first assessment to get started</p>
+                  <button
+                    onClick={() => router.push('/admin/create-assessment')}
+                    className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
+                  >
+                    Create Assessment
+                  </button>
                 </motion.div>
-              ))}
+              )}
             </div>
           </>
         )}
@@ -561,20 +949,36 @@ const AssessmentList = () => {
                <h2 className="text-4xl font-bold mb-2 text-white">Jobs</h2>
                <p className="text-gray-400">Create jobs for assessment creation.</p>
              </div>
+
+             {/* Jobs Subtabs */}
+             <div className="flex gap-4 mb-6">
+               <button
+                 onClick={() => setActiveJobsTab('active')}
+                 className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                   activeJobsTab === 'active'
+                     ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-xl shadow-orange-500/40'
+                     : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                 }`}
+               >
+                 Active Jobs ({getActiveJobs().length})
+               </button>
+               <button
+                 onClick={() => setActiveJobsTab('past')}
+                 className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                   activeJobsTab === 'past'
+                     ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-xl shadow-orange-500/40'
+                     : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                 }`}
+               >
+                 Past Jobs ({getPastJobs().length})
+               </button>
+             </div>
+
              <div className="flex justify-end mb-6">
                <button
                  onClick={() => {
+                   resetJobForm();
                    setShowJobModal(true);
-                   setCreatedJobId(null);
-                   setNewJob({
-                     title: '',
-                     description: '',
-                     yearsOfExperience: '',
-                     company: '',
-                     location: '',
-                     type: 'full-time',
-                     salary: '',
-                   });
                  }}
                  className="px-6 py-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-105 active:scale-95 flex items-center gap-2"
                >
@@ -584,91 +988,180 @@ const AssessmentList = () => {
                  Create New Job
                </button>
              </div>
-             <div className="space-y-4">
-               {jobsLoading ? (
-                 <motion.div
-                   className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
-                   initial={{ opacity: 0 }}
-                   animate={{ opacity: 1 }}
-                 >
-                   <div className="flex items-center justify-center">
-                     <svg className="w-8 h-8 animate-spin text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                     </svg>
-                     <span className="ml-3 text-gray-400">Loading jobs...</span>
-                   </div>
-                 </motion.div>
-               ) : (jobsData?.data && Array.isArray(jobsData.data) && jobsData.data.length > 0) ? (
-                 jobsData.data.map((job, index) => (
+
+             {/* Active Jobs Tab */}
+             {activeJobsTab === 'active' && (
+               <div className="space-y-4">
+                 {jobsLoading ? (
                    <motion.div
-                     key={job.id || index}
-                     className="group relative bg-black/90 border border-white/10 rounded-3xl p-6 overflow-hidden hover:border-orange-500/50 transition-all"
-                     initial={{ opacity: 0, y: 20 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     transition={{ duration: 0.3, delay: index * 0.1 }}
-                     whileHover={{ y: -4 }}
+                     className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
+                     initial={{ opacity: 0 }}
+                     animate={{ opacity: 1 }}
                    >
-                     <div className="flex items-start gap-6">
-                       <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
-                         <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                         </svg>
-                       </div>
-                       <div className="flex-1 min-w-0">
-                         <div className="flex items-start justify-between mb-3">
-                           <div className="flex-1 min-w-0">
-                             <h3 className="text-2xl font-bold text-white mb-3">{job.title || 'Untitled Job'}</h3>
-                             {job.competencies && Array.isArray(job.competencies) && job.competencies.length > 0 ? (
-                               <div>
-                                 <p className="text-sm text-gray-400 mb-2">Competencies:</p>
-                                 <div className="flex flex-wrap gap-2">
-                                   {job.competencies.map((comp, idx) => (
-                                     <span key={idx} className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm font-semibold">
-                                       {comp}
-                                     </span>
-                                   ))}
-                                 </div>
+                     <div className="flex items-center justify-center">
+                       <svg className="w-8 h-8 animate-spin text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                       </svg>
+                       <span className="ml-3 text-gray-400">Loading jobs...</span>
+                     </div>
+                   </motion.div>
+                 ) : getActiveJobs().length > 0 ? (
+                   getActiveJobs().map((job, index) => (
+                     <motion.div
+                       key={job.id || index}
+                       className="group relative bg-black/90 border border-white/10 rounded-3xl p-6 overflow-hidden hover:border-orange-500/50 transition-all"
+                       initial={{ opacity: 0, y: 20 }}
+                       animate={{ opacity: 1, y: 0 }}
+                       transition={{ duration: 0.3, delay: index * 0.1 }}
+                       whileHover={{ y: -4 }}
+                     >
+                       <div className="flex items-start gap-6">
+                         <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                           <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                           </svg>
+                         </div>
+                         <div className="flex-1 min-w-0">
+                           <div className="flex items-start justify-between mb-3">
+                             <div className="flex-1 min-w-0">
+                               <div className="flex items-center gap-3 mb-2">
+                                 <h3 className="text-2xl font-bold text-white">{job.title || 'Untitled Job'}</h3>
+                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                   job.status === 'active' ? 'bg-green-500/20 text-green-400' : 
+                                   job.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
+                                   'bg-red-500/20 text-red-400'
+                                 }`}>
+                                   {job.status || 'active'}
+                                 </span>
                                </div>
-                             ) : (
-                               <p className="text-gray-500 text-sm">No competencies added yet</p>
-                             )}
+                               {job.company && (
+                                 <p className="text-gray-400 mb-2">{job.company} • {job.location || 'Location not specified'}</p>
+                               )}
+                               {job.description && (
+                                 <p className="text-sm text-gray-300 mb-4 line-clamp-2">{job.description}</p>
+                               )}
+                               {job.competencies && Array.isArray(job.competencies) && job.competencies.length > 0 ? (
+                                 <div>
+                                   <p className="text-sm text-gray-400 mb-2">Competencies:</p>
+                                   <div className="flex flex-wrap gap-2">
+                                     {job.competencies.map((comp, idx) => (
+                                       <span key={idx} className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm font-semibold">
+                                         {comp}
+                                       </span>
+                                     ))}
+                                   </div>
+                                 </div>
+                               ) : null}
+                               <div className="mt-3 flex items-center gap-4">
+                                 <span className="text-sm text-gray-400">
+                                   Assessments: <span className="font-bold text-white">{getJobAssessments(job.id).length}</span>
+                                 </span>
+                                 {job.yearsOfExperience && (
+                                   <span className="text-sm text-gray-400">
+                                     Experience: <span className="font-bold text-white">{job.yearsOfExperience} years</span>
+                                   </span>
+                                 )}
+                               </div>
+                             </div>
+                             <div className="flex gap-2 ml-4">
+                               <button
+                                 onClick={() => handleViewJob(job)}
+                                 className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 rounded-lg transition-all text-sm font-medium"
+                               >
+                                 View
+                               </button>
+                               <button
+                                 onClick={() => handleEditJob(job)}
+                                 className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg transition-all text-sm font-medium"
+                               >
+                                 Edit
+                               </button>
+                               <button
+                                 onClick={() => handleDeleteJob(job.id)}
+                                 className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-sm font-medium"
+                               >
+                                 Delete
+                               </button>
+                             </div>
                            </div>
                          </div>
                        </div>
-                     </div>
-                   </motion.div>
-                 ))
-               ) : (
-                 <motion.div
-                   className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
-                   initial={{ opacity: 0, y: 20 }}
-                   animate={{ opacity: 1, y: 0 }}
-                 >
-                   <svg className="w-24 h-24 mx-auto mb-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                   </svg>
-                   <h3 className="text-2xl font-bold mb-3 text-white">No jobs created yet</h3>
-                   <p className="text-gray-400 mb-6">Create your first job to get started</p>
-                   <button
-                     onClick={() => {
-                       setShowJobModal(true);
-                       setNewJob({
-                         title: '',
-                         description: '',
-                         yearsOfExperience: '',
-                         company: '',
-                         location: '',
-                         type: 'full-time',
-                         salary: '',
-                       });
-                     }}
-                     className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
+                     </motion.div>
+                   ))
+                 ) : (
+                   <motion.div
+                     className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
+                     initial={{ opacity: 0, y: 20 }}
+                     animate={{ opacity: 1, y: 0 }}
                    >
-                     Create Job
-                   </button>
-                 </motion.div>
-               )}
-             </div>
+                     <svg className="w-24 h-24 mx-auto mb-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                     </svg>
+                     <h3 className="text-2xl font-bold mb-3 text-white">No active jobs yet</h3>
+                     <p className="text-gray-400 mb-6">Create your first job to get started</p>
+                     <button
+                       onClick={() => {
+                         resetJobForm();
+                         setShowJobModal(true);
+                       }}
+                       className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
+                     >
+                       Create Job
+                     </button>
+                   </motion.div>
+                 )}
+               </div>
+             )}
+
+             {/* Past Jobs Tab */}
+             {activeJobsTab === 'past' && (
+               <div className="space-y-4">
+                 {getPastJobs().length > 0 ? (
+                   getPastJobs().map((job, index) => (
+                     <motion.div
+                       key={job.id || index}
+                       className="group relative bg-black/90 border border-white/10 rounded-3xl p-6 overflow-hidden hover:border-gray-500/50 transition-all opacity-75"
+                       initial={{ opacity: 0, y: 20 }}
+                       animate={{ opacity: 0.75, y: 0 }}
+                       transition={{ duration: 0.3, delay: index * 0.1 }}
+                     >
+                       <div className="flex items-start gap-6">
+                         <div className="w-12 h-12 bg-gradient-to-br from-gray-500/20 to-gray-600/20 border border-gray-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                           <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                           </svg>
+                         </div>
+                         <div className="flex-1 min-w-0">
+                           <div className="flex items-start justify-between mb-3">
+                             <div className="flex-1 min-w-0">
+                               <h3 className="text-2xl font-bold text-white mb-2">{job.title || 'Untitled Job'}</h3>
+                               {job.company && (
+                                 <p className="text-gray-400 mb-2">{job.company} • {job.location || 'Location not specified'}</p>
+                               )}
+                               <span className="px-3 py-1 bg-gray-500/20 text-gray-400 border border-gray-500/30 rounded-full text-xs font-semibold">
+                                 Closed
+                               </span>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+                     </motion.div>
+                   ))
+                 ) : (
+                   <motion.div
+                     className="bg-black/90 border border-white/10 rounded-3xl p-16 text-center"
+                     initial={{ opacity: 0, y: 20 }}
+                     animate={{ opacity: 1, y: 0 }}
+                   >
+                     <svg className="w-24 h-24 mx-auto mb-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                     </svg>
+                     <h3 className="text-2xl font-bold mb-3 text-white">No past jobs</h3>
+                     <p className="text-gray-400">Closed jobs will appear here</p>
+                   </motion.div>
+                 )}
+               </div>
+             )}
            </>
          )}
       </main>
@@ -681,13 +1174,16 @@ const AssessmentList = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setShowNewAssessment(false)}
+            onClick={() => {
+              setShowNewAssessment(false);
+              setCreatedAssessmentId(null);
+              setSelectedJobId('');
+              setManualQuestions([]);
+              setAssessmentInstructions('');
+            }}
           >
             <motion.div
-              className="group relative bg-black/95 border border-orange-500/50 rounded-3xl p-8 max-w-6xl w-full max-h-[90vh] overflow-y-auto"
-              style={{
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-              }}
+              className="group relative bg-black/90 border border-white/10 rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
               initial={{ scale: 0.9, y: 50 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 50 }}
@@ -697,7 +1193,13 @@ const AssessmentList = () => {
                 <div className="flex justify-between items-center mb-8">
                   <h2 className="text-3xl font-bold text-white">New Assessment</h2>
                   <button
-                    onClick={() => setShowNewAssessment(false)}
+                    onClick={() => {
+                      setShowNewAssessment(false);
+                      setCreatedAssessmentId(null);
+                      setSelectedJobId('');
+                      setManualQuestions([]);
+                      setAssessmentInstructions('');
+                    }}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -706,27 +1208,42 @@ const AssessmentList = () => {
                   </button>
                 </div>
 
-                <div className="space-y-6">
-                  {/* Job Details */}
+                <form onSubmit={(e) => { e.preventDefault(); handleSaveAssessment(); }} className="space-y-6">
+                  {/* Job Selection */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Job</label>
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <input
-                        type="text"
-                        defaultValue="Batch 3 Python Developer [Entry Level]"
-                        className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
-                      />
-                    </div>
+                    <label className="block text-sm mb-3 text-gray-300">Job *</label>
+                    <GlassSelect
+                      value={selectedJobId}
+                      onChange={(value) => setSelectedJobId(value)}
+                      placeholder="Select a job"
+                      options={[
+                        { value: '', label: 'Select a job' },
+                        ...(jobsData?.data?.map((job) => ({ 
+                          value: job.id, 
+                          label: `${job.title}${job.company ? ` - ${job.company}` : ''}` 
+                        })) || [])
+                      ]}
+                      required
+                    />
+                    {!selectedJobId && jobsData?.data?.length === 0 && (
+                      <p className="mt-2 text-sm text-orange-400">
+                        No jobs available. <button 
+                          type="button"
+                          onClick={() => {
+                            setShowNewAssessment(false);
+                            setShowJobModal(true);
+                          }}
+                          className="underline hover:text-orange-300"
+                        >
+                          Create a job first
+                        </button>
+                      </p>
+                    )}
                   </div>
 
-                  {/* Assessment Type Dropdown */}
+                  {/* Assessment Type */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Select Assessment Type</label>
+                    <label className="block text-sm mb-3 text-gray-300">Assessment Type</label>
                     <GlassSelect
                       value={assessmentType}
                       onChange={(value) => setAssessmentType(value)}
@@ -742,101 +1259,160 @@ const AssessmentList = () => {
                   {/* Assessment Metrics */}
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-400 mb-3">Number of Questions</label>
+                      <label className="block text-sm mb-3 text-gray-300">Number of Questions</label>
                       <input
                         type="number"
                         value={numQuestions}
                         onChange={(e) => setNumQuestions(e.target.value)}
-                        className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                        placeholder="e.g., 10"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-400 mb-3">Total Time</label>
+                      <label className="block text-sm mb-3 text-gray-300">Total Time (minutes)</label>
                       <input
                         type="number"
                         value={totalTime}
                         onChange={(e) => setTotalTime(e.target.value)}
-                        className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                        placeholder="e.g., 60"
                       />
                     </div>
+                  </div>
+
+                  {/* Instructions Field */}
+                  <div>
+                    <label className="block text-sm mb-3 text-gray-300">Assessment Instructions</label>
+                    <textarea
+                      value={assessmentInstructions}
+                      onChange={(e) => setAssessmentInstructions(e.target.value)}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 min-h-[120px] resize-y text-white placeholder-gray-500"
+                      placeholder="Enter instructions for candidates..."
+                    />
                   </div>
 
                   {/* Questions Section */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-4">Questions</label>
-                    <div className="grid grid-cols-3 gap-6">
-                      {/* CSV Upload */}
-                      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                        <h3 className="font-semibold text-white mb-4">Drop CSV file</h3>
-                        <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-orange-500/50 transition-colors cursor-pointer">
-                          <svg className="w-12 h-12 mx-auto mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                          </svg>
-                          <p className="text-gray-400 mb-2">Drag &amp; drop CSV here</p>
-                          <p className="text-xs text-gray-500">Upload a .csv with columns: question, choices, answer</p>
+                    <label className="block text-sm mb-3 text-gray-300">Add Questions</label>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {}}
+                        className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-sm text-gray-300"
+                      >
+                        Upload CSV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAIModal(true)}
+                        className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-sm text-gray-300"
+                      >
+                        Generate with AI
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowManualModal(true)}
+                        className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-sm text-gray-300"
+                      >
+                        Write Manually
+                      </button>
+                    </div>
+                    {manualQuestions.length > 0 && (
+                      <p className="mt-2 text-sm text-green-400">✓ {manualQuestions.length} question(s) added</p>
+                    )}
+                  </div>
+
+                  {/* Success Message with Link */}
+                  {createdAssessmentId ? (
+                    <div className="space-y-4 pt-4 border-t border-white/10">
+                      <div>
+                        <label className="block text-sm mb-3 text-gray-300">Assessment Link</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/user/assessment?assessmentId=${createdAssessmentId}`}
+                            className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                            onClick={(e) => e.target.select()}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/user/assessment?assessmentId=${createdAssessmentId}`;
+                              navigator.clipboard.writeText(link);
+                              alert('Link copied to clipboard!');
+                            }}
+                            className="px-4 py-3 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all text-sm text-orange-300"
+                          >
+                            Copy
+                          </button>
                         </div>
                       </div>
-
-                      {/* AI Generate */}
-                      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                        <h3 className="font-semibold text-white mb-4">Generate Using AI</h3>
+                      <div className="flex gap-3">
                         <button
-                          onClick={() => setShowAIModal(true)}
-                          className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                          type="button"
+                          onClick={() => {
+                            setShowNewAssessment(false);
+                            setCreatedAssessmentId(null);
+                            setSelectedJobId('');
+                            setManualQuestions([]);
+                            setAssessmentInstructions('');
+                          }}
+                          className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all text-sm text-white"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                          </svg>
-                          Generate Now
+                          Done
                         </button>
-                      </div>
-
-                      {/* Manual Write */}
-                      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                        <h3 className="font-semibold text-white mb-4">Write Manually</h3>
                         <button
-                          onClick={() => setShowManualModal(true)}
-                          className="w-full py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
+                          type="button"
+                          onClick={() => {
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/user/assessment?assessmentId=${createdAssessmentId}`;
+                            window.open(link, '_blank');
+                          }}
+                          className="flex-1 px-4 py-3 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all text-sm text-orange-300"
                         >
-                          Start Writing
+                          Open Assessment
                         </button>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Footer Actions */}
-                  <div className="flex items-center justify-between pt-6 border-t border-white/10">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={makePublic}
-                        onChange={(e) => setMakePublic(e.target.checked)}
-                        className="sr-only"
-                      />
-                      <div className={`w-14 h-8 rounded-full transition-all relative ${makePublic ? 'bg-orange-500' : 'bg-white/10'}`}>
-                        <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all ${makePublic ? 'translate-x-6' : ''}`}></div>
+                  ) : (
+                    <>
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between pt-4">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={makePublic}
+                            onChange={(e) => setMakePublic(e.target.checked)}
+                            className="w-5 h-5 text-orange-500 rounded focus:ring-orange-500 focus:ring-2"
+                          />
+                          <span className="text-white text-sm">Make it Public</span>
+                        </label>
+                        <div className="flex space-x-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowNewAssessment(false);
+                              setSelectedJobId('');
+                              setManualQuestions([]);
+                              setCreatedAssessmentId(null);
+                              setAssessmentInstructions('');
+                            }}
+                            className="flex-1 py-3 bg-white/10 rounded-lg hover:bg-white/20 transition-all font-semibold"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={createAssessmentMutation.isPending || manualQuestions.length === 0 || !selectedJobId}
+                            className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50"
+                          >
+                            {createAssessmentMutation.isPending ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-white font-semibold">Make it Public</span>
-                    </label>
-                    <div className="flex gap-4">
-                      <button
-                        onClick={() => setShowNewAssessment(false)}
-                        className="px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          // Handle save
-                          setShowNewAssessment(false);
-                        }}
-                        className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                    </>
+                  )}
+                </form>
               </div>
             </motion.div>
           </motion.div>
@@ -924,11 +1500,7 @@ const AssessmentList = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={() => {
-                      // Handle AI generation
-                      console.log('Generating AI questions...', { aiPrompt, aiDifficulty, aiQuestionCount });
-                      setShowAIModal(false);
-                    }}
+                    onClick={handleAIGenerate}
                     className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
                   >
                     Generate Questions
@@ -1103,12 +1675,11 @@ const AssessmentList = () => {
                   </button>
             <button
                     onClick={() => {
-                      console.log('Saving questions...', manualQuestions);
                       setShowManualModal(false);
                     }}
                     className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
                   >
-                    Save Questions
+                    Done Adding Questions
             </button>
           </div>
               </div>
@@ -1125,10 +1696,10 @@ const AssessmentList = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setShowJobModal(false)}
+            onClick={handleCloseJobModal}
           >
             <motion.div
-              className="group relative bg-black/95 border border-orange-500/50 rounded-3xl p-8 max-w-2xl w-full"
+              className="group relative bg-black/90 border border-white/10 rounded-3xl p-8 max-w-2xl w-full"
               initial={{ scale: 0.9, y: 50 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 50 }}
@@ -1136,21 +1707,9 @@ const AssessmentList = () => {
             >
               <div className="relative z-20">
                 <div className="flex justify-between items-center mb-8">
-                  <h2 className="text-3xl font-bold text-white">Create New Job</h2>
+                  <h2 className="text-3xl font-bold text-white">{editingJob ? 'Edit Job' : 'Create New Job'}</h2>
                   <button
-                    onClick={() => {
-                      setShowJobModal(false);
-                      setCreatedJobId(null);
-                      setNewJob({
-                        title: '',
-                        description: '',
-                        yearsOfExperience: '',
-                        company: '',
-                        location: '',
-                        type: 'full-time',
-                        salary: '',
-                      });
-                    }}
+                    onClick={handleCloseJobModal}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1159,46 +1718,141 @@ const AssessmentList = () => {
                   </button>
                 </div>
 
-                <div className="space-y-6">
+                <form onSubmit={handleJobSubmit} className="space-y-6">
+                  {/* Required Fields - Priority */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Job Title *</label>
+                    <label className="block text-sm font-medium mb-2 text-white">Job Title *</label>
                     <input
                       type="text"
                       value={newJob.title}
                       onChange={(e) => setNewJob({ ...newJob, title: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
                       placeholder="e.g., Senior Software Engineer"
                       required
                     />
                   </div>
+                  
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Job Description *</label>
-                    <textarea
-                      value={newJob.description}
-                      onChange={(e) => setNewJob({ ...newJob, description: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 min-h-[120px] resize-y"
-                      placeholder="Enter detailed job description..."
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Years of Experience *</label>
+                    <label className="block text-sm font-medium mb-2 text-white">Years of Experience *</label>
                     <input
                       type="number"
                       min="0"
                       value={newJob.yearsOfExperience}
                       onChange={(e) => setNewJob({ ...newJob, yearsOfExperience: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
                       placeholder="e.g., 3"
                       required
                     />
                   </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-white">Job Description *</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={generateJobDescription}
+                          disabled={isGeneratingAI || !newJob.title || !newJob.yearsOfExperience}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          {isGeneratingAI ? (
+                            <>
+                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              Generate with AI
+                            </>
+                          )}
+                        </button>
+                        {newJob.description && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Improvement button - could enhance description with AI
+                              generateJobDescription();
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-all text-sm"
+                            title="Improve description"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Improve
+                          </button>
+                        )}
+                        {newJob.description && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Export to PDF functionality
+                              const printWindow = window.open('', '_blank');
+                              printWindow.document.write(`
+                                <html>
+                                  <head>
+                                    <title>${newJob.title} - Job Description</title>
+                                    <style>
+                                      body { font-family: Arial, sans-serif; padding: 40px; }
+                                      h1 { color: #333; }
+                                      .meta { color: #666; margin-bottom: 20px; }
+                                      .description { line-height: 1.6; }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <h1>${newJob.title}</h1>
+                                    <div class="meta">
+                                      <p><strong>Company:</strong> ${newJob.company || 'N/A'}</p>
+                                      <p><strong>Location:</strong> ${newJob.location || 'N/A'}</p>
+                                      <p><strong>Experience:</strong> ${newJob.yearsOfExperience || 'N/A'} years</p>
+                                      <p><strong>Type:</strong> ${newJob.type || 'N/A'}</p>
+                                      <p><strong>Salary:</strong> ${newJob.salary || 'N/A'}</p>
+                                    </div>
+                                    <div class="description">
+                                      ${newJob.description.replace(/\n/g, '<br>')}
+                                    </div>
+                                  </body>
+                                </html>
+                              `);
+                              printWindow.document.close();
+                              setTimeout(() => {
+                                printWindow.print();
+                              }, 250);
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-all text-sm"
+                            title="Export to PDF"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            Export PDF
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <textarea
+                      value={newJob.description}
+                      onChange={(e) => setNewJob({ ...newJob, description: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 min-h-[200px] resize-y text-white placeholder-gray-500"
+                      placeholder="Paste your existing job description here or click 'Generate with AI' to create one automatically..."
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-400">You can paste your existing JD or use AI to generate one</p>
+                  </div>
+
                   {createdJobId ? (
                     <div className="space-y-4">
                       <div className="bg-green-500/20 border border-green-500/50 rounded-xl p-4 text-center">
                         <p className="text-green-400 font-semibold">Job created successfully!</p>
                       </div>
                       <button
+                        type="button"
                         onClick={handleGoToAssessment}
                         className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all flex items-center justify-center gap-2"
                       >
@@ -1208,18 +1862,10 @@ const AssessmentList = () => {
                         Go to Assessment
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           setShowJobModal(false);
-                          setCreatedJobId(null);
-                          setNewJob({
-                            title: '',
-                            description: '',
-                            yearsOfExperience: '',
-                            company: '',
-                            location: '',
-                            type: 'full-time',
-                            salary: '',
-                          });
+                          resetJobForm();
                         }}
                         className="w-full px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
                       >
@@ -1227,22 +1873,212 @@ const AssessmentList = () => {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex gap-4">
+                    <div className="flex space-x-3 pt-4">
                       <button
-                        onClick={() => setShowJobModal(false)}
-                        className="px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
+                        type="button"
+                        onClick={handleCloseJobModal}
+                        className="flex-1 py-3 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={handleCreateJob}
-                        disabled={createJobMutation.isPending || !newJob.title.trim()}
-                        className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        type="button"
+                        onClick={handleSaveDraft}
+                        className="px-4 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-all text-sm"
                       >
-                        {createJobMutation.isPending ? 'Creating...' : 'Create Job'}
+                        Save as Draft
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={createJobMutation.isPending || updateJobMutation.isPending}
+                        className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50"
+                      >
+                        {createJobMutation.isPending || updateJobMutation.isPending ? 'Saving...' : editingJob ? 'Update' : 'Save'}
                       </button>
                     </div>
                   )}
+                </form>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Job Details View Modal */}
+      <AnimatePresence>
+        {showJobAssessmentModal && selectedJobForView && (
+          <motion.div
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[1000] p-4 overflow-y-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              setShowJobAssessmentModal(false);
+              setSelectedJobForView(null);
+            }}
+          >
+            <motion.div
+              className="relative bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-4xl w-full my-8 max-h-[90vh] overflow-y-auto"
+              initial={{ scale: 0.9, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 50 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">{selectedJobForView.title || 'Untitled Job'}</h2>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      selectedJobForView.status === 'active' ? 'bg-green-500/20 text-green-400' : 
+                      selectedJobForView.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {selectedJobForView.status || 'active'}
+                    </span>
+                    {selectedJobForView.yearsOfExperience && (
+                      <span className="text-gray-400 text-sm">
+                        {selectedJobForView.yearsOfExperience} years experience
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowJobAssessmentModal(false);
+                    setSelectedJobForView(null);
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Job Description */}
+                {selectedJobForView.description && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-3">Job Description</h3>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                      <p className="text-gray-300 whitespace-pre-wrap">{selectedJobForView.description}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Job Details */}
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-3">Job Details</h3>
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-3">
+                    {selectedJobForView.company && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-400 w-32">Company:</span>
+                        <span className="text-white">{selectedJobForView.company}</span>
+                      </div>
+                    )}
+                    {selectedJobForView.location && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-400 w-32">Location:</span>
+                        <span className="text-white">{selectedJobForView.location}</span>
+                      </div>
+                    )}
+                    {selectedJobForView.type && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-400 w-32">Job Type:</span>
+                        <span className="text-white capitalize">{selectedJobForView.type}</span>
+                      </div>
+                    )}
+                    {selectedJobForView.salary && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-400 w-32">Salary:</span>
+                        <span className="text-white">{selectedJobForView.salary}</span>
+                      </div>
+                    )}
+                    {selectedJobForView.yearsOfExperience && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-400 w-32">Experience:</span>
+                        <span className="text-white">{selectedJobForView.yearsOfExperience} years</span>
+                      </div>
+                    )}
+                    {selectedJobForView.postedAt && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-400 w-32">Posted:</span>
+                        <span className="text-white">{new Date(selectedJobForView.postedAt).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Associated Assessments */}
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-3">
+                    Associated Assessments ({getJobAssessments(selectedJobForView.id).length})
+                  </h3>
+                  {getJobAssessments(selectedJobForView.id).length > 0 ? (
+                    <div className="space-y-3">
+                      {getJobAssessments(selectedJobForView.id).map((assessment) => (
+                        <div
+                          key={assessment.id}
+                          className="bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-all"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="text-white font-semibold mb-1">{assessment.title}</h4>
+                              <p className="text-gray-400 text-sm">{assessment.description}</p>
+                              <div className="flex gap-3 mt-2 text-sm text-gray-400">
+                                <span>Duration: {assessment.duration} min</span>
+                                <span>Questions: {assessment.questions || assessment.questionData?.length || 0}</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setShowJobAssessmentModal(false);
+                                router.push(`/admin/create-assessment?jobId=${selectedJobForView.id}&assessmentId=${assessment.id}`);
+                              }}
+                              className="ml-4 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all text-sm font-medium"
+                            >
+                              View
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center text-gray-400">
+                      <p className="mb-4">No assessments created for this job yet</p>
+                      <button
+                        onClick={() => {
+                          setShowJobAssessmentModal(false);
+                          router.push(`/admin/create-assessment?jobId=${selectedJobForView.id}`);
+                        }}
+                        className="px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-semibold text-white hover:shadow-lg transition-all"
+                      >
+                        Create Assessment
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-white/10">
+                  <button
+                    onClick={() => {
+                      setShowJobAssessmentModal(false);
+                      handleEditJob(selectedJobForView);
+                    }}
+                    className="flex-1 px-6 py-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg transition-all font-semibold text-white"
+                  >
+                    Edit Job
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowJobAssessmentModal(false);
+                      router.push(`/admin/create-assessment?jobId=${selectedJobForView.id}`);
+                    }}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-semibold text-white hover:shadow-lg transition-all"
+                  >
+                    Create Assessment
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -1250,6 +2086,31 @@ const AssessmentList = () => {
         )}
       </AnimatePresence>
 
+      {/* Discard Confirmation Modal */}
+      {showDiscardModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1100] p-4">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-md w-full">
+            <h3 className="text-2xl font-bold mb-4 text-white">Unsaved Changes</h3>
+            <p className="text-gray-400 mb-6">
+              You have unsaved changes. Would you like to save as draft or discard?
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleDiscard}
+                className="flex-1 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-red-400 font-semibold"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleSaveDraft}
+                className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-semibold text-white hover:shadow-lg transition-all"
+              >
+                Save as Draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

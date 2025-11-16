@@ -13,8 +13,6 @@ const AIMockInterview = () => {
   const [noOfQuestions, setNoOfQuestions] = useState('5');
   const [level, setLevel] = useState('');
   const [enableVoice, setEnableVoice] = useState(true);
-  
-  // Interview state
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [interviewDuration, setInterviewDuration] = useState(0);
@@ -30,7 +28,6 @@ const AIMockInterview = () => {
   const [showLoader, setShowLoader] = useState(true);
   const [loaderFade, setLoaderFade] = useState(false);
   
-  // Refs
   const recognitionRef = useRef(null);
   const synthRef = useRef(null);
   const questionTimerRef = useRef(null);
@@ -38,7 +35,6 @@ const AIMockInterview = () => {
   const typingTimeoutRef = useRef(null);
   const loaderVideoRef = useRef(null);
 
-  // Custom glass popover select
   const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '' }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);

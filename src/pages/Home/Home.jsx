@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { FirebaseError } from 'firebase/app';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence, useScroll, useSpring, useInView, useReducedMotion } from 'framer-motion';
 import CountUp from 'react-countup';
@@ -1057,7 +1058,8 @@ const Sparkline = ({
 
 const Home = () => {
   const router = useRouter();
-  const { login, isAuthenticated } = useAuth();
+  const searchParams = useSearchParams();
+  const { login, register, logout, isAuthenticated } = useAuth();
   const prefersReducedMotion = useReducedMotion();
   
   // State management
@@ -1070,6 +1072,7 @@ const Home = () => {
   const [isTestimonialVideoPlaying, setIsTestimonialVideoPlaying] = useState({});
   const testimonialVideoRefs = useRef({});
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [showLogo, setShowLogo] = useState(true);
   const dropdownRef = useRef(null);
   const [currentWhyIndex, setCurrentWhyIndex] = useState(0);
   
@@ -1102,6 +1105,32 @@ const Home = () => {
   const [isSignupLoading, setIsSignupLoading] = useState(false);
   const [signupError, setSignupError] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
+
+  const getAuthErrorMessage = (error) => {
+    if (!error) return 'Something went wrong. Please try again.';
+
+    const code = error.code || '';
+
+    switch (code) {
+      case 'auth/invalid-email':
+        return 'Please enter a valid email address.';
+      case 'auth/user-disabled':
+        return 'This account has been disabled. Contact support for help.';
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+        return 'Incorrect email or password. Please try again.';
+      case 'auth/email-already-in-use':
+        return 'An account with this email already exists. Try logging in instead.';
+      case 'auth/weak-password':
+        return 'Choose a stronger password (at least 6 characters).';
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Please wait a moment before trying again.';
+      case 'auth/network-request-failed':
+        return 'Network error. Check your connection and try again.';
+      default:
+        return error.message || 'An unexpected authentication error occurred.';
+    }
+  };
 
   // Scroll progress
   const { scrollYProgress } = useScroll();
@@ -1140,6 +1169,19 @@ const Home = () => {
     }
   }, [mounted, isHeroVideoLoaded, videoLoadError]);
 
+  useEffect(() => {
+    if (!mounted) return;
+
+    const handleScroll = () => {
+      if (typeof window === 'undefined') return;
+      setShowLogo(window.scrollY <= 0);
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [mounted]);
+
   // Refs for animations
   const heroRef = useRef(null);
   const heroEdgeRef = useRef(null);
@@ -1152,8 +1194,6 @@ const Home = () => {
   const heroInView = useInView(heroRef, { once: true, amount: 0.3 });
   const isHeroEdgeInView = useInView(heroEdgeRef, { margin: '-72px 0px 0px 0px' });
   const enableHeaderGlass = !isHeroEdgeInView; // glass after we pass hero edge
-  // Show logo when hero section is in view (not past the edge)
-  const showLogo = useInView(heroRef, { amount: 0.1 }); // logo stays visible while any part of hero is visible
   const featuresInView = useInView(featuresRef, { once: true, amount: 0.2 });
   const testimonialsInView = useInView(testimonialsRef, { once: true, amount: 0.2 });
   const achievementsInView = useInView(achievementsRef, { once: true, amount: 0.2 });
@@ -1523,23 +1563,36 @@ const Home = () => {
   // Login handler
   const handleLogin = async (e) => {
     e.preventDefault();
+
+    if (!email || !password) {
+      setLoginError('Please enter both email and password.');
+      return;
+    }
+
+    if (loginRole !== 'user') {
+      setLoginError('Admin login will be available soon. Please use user login for now.');
+      return;
+    }
+
     setIsLoading(true);
     setLoginError('');
+    setLoginSuccess(false);
     
     try {
-      await login(email, password, loginRole);
+      await login(email.trim(), password, loginRole);
       setLoginSuccess(true);
       
       setTimeout(() => {
-        if (loginRole === 'user') {
-          router.push('/user/dashboard');
-        } else {
-          router.push('/admin/dashboard');
-        }
-      }, 1000);
+        closeLoginModal();
+        // Stay on home page after login
+      }, 900);
     } catch (error) {
       console.error('Login failed:', error);
-      setLoginError('Invalid credentials. Please try again.');
+      const friendlyMessage =
+        error instanceof FirebaseError
+          ? getAuthErrorMessage(error)
+          : 'Unable to sign in right now. Please try again.';
+      setLoginError(friendlyMessage);
     } finally {
       setIsLoading(false);
     }
@@ -1579,10 +1632,38 @@ const Home = () => {
     setSignupSuccess(false);
   };
 
+  useEffect(() => {
+    if (!searchParams) return;
+
+    if (searchParams.get('auth') === 'required') {
+      setShowLoginModal(true);
+      setLoginRole('user');
+      setLoginError('Please log in to continue.');
+      setLoginSuccess(false);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setShowLoginModal(false);
+      setShowSignupModal(false);
+    }
+  }, [isAuthenticated]);
+
   const handleSignup = async (e) => {
     e.preventDefault();
     setSignupError('');
     setSignupSuccess(false);
+
+    if (!signupName.trim()) {
+      setSignupError('Please enter your name so we can personalize your experience.');
+      return;
+    }
+
+    if (!signupEmail.trim()) {
+      setSignupError('Email is required to create your account.');
+      return;
+    }
 
     if (signupPassword !== confirmPassword) {
       setSignupError('Passwords do not match');
@@ -1596,20 +1677,20 @@ const Home = () => {
 
     setIsSignupLoading(true);
     try {
-      // Mock signup - simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Simulate successful signup
+      await register(signupName.trim(), signupEmail.trim(), signupPassword);
       setSignupSuccess(true);
       
-      // Close signup modal and open login modal after a short delay
       setTimeout(() => {
         closeSignupModal();
-        setEmail(signupEmail); // Pre-fill email in login
-        openLoginModal('user');
-      }, 1500);
+        // Stay on home page after signup
+      }, 1200);
     } catch (error) {
-      setSignupError('Signup failed. Please try again.');
+      console.error('Signup failed:', error);
+      const friendlyMessage =
+        error instanceof FirebaseError
+          ? getAuthErrorMessage(error)
+          : 'Signup failed. Please try again.';
+      setSignupError(friendlyMessage);
     } finally {
       setIsSignupLoading(false);
     }
@@ -1781,33 +1862,67 @@ const Home = () => {
           </nav>
 
           <div className="flex space-x-2 md:space-x-3">
-            <motion.button 
-              onClick={() => router.push('/user/system-check')}
-              className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-orange-400/40 focus:outline-none focus:ring-2 focus:ring-orange-400"
-              whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
-              whileTap={{ scale: 0.95 }}
-              aria-label="Assessment"
-            >
-              Assessment
-            </motion.button>
-            <motion.button 
-              onClick={() => openLoginModal('user')}
-              className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-orange-400/40 focus:outline-none focus:ring-2 focus:ring-orange-400"
-              whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
-              whileTap={{ scale: 0.95 }}
-              aria-label="User login"
-            >
-              User Login
-            </motion.button>
-            <motion.button 
-              onClick={openSignupModal}
-              className="px-4 md:px-5 py-2 md:py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-full font-semibold text-xs md:text-sm shadow-lg shadow-orange-500/30 focus:outline-none focus:ring-2 focus:ring-orange-400"
-              whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
-              whileTap={{ scale: 0.95 }}
-              aria-label="Sign up"
-            >
-              Sign Up
-            </motion.button>
+            {isAuthenticated ? (
+              <>
+                <motion.button 
+                  onClick={() => router.push('/user/dashboard')}
+                  className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-orange-400/40 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Dashboard"
+                >
+                  Dashboard
+                </motion.button>
+                <motion.button 
+                  onClick={() => router.push('/user/assessment-start')}
+                  className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-orange-400/40 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Assessment"
+                >
+                  Assessment
+                </motion.button>
+                <motion.button 
+                  onClick={logout}
+                  className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-red-400/40 focus:outline-none focus:ring-2 focus:ring-red-400"
+                  whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Logout"
+                >
+                  Logout
+                </motion.button>
+              </>
+            ) : (
+              <>
+                <motion.button 
+                  onClick={() => router.push('/admin/dashboard')}
+                  className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-blue-400/40 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Admin Demo"
+                >
+                  Admin Demo
+                </motion.button>
+                <motion.button 
+                  onClick={() => openLoginModal('user')}
+                  className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-orange-400/40 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="User login"
+                >
+                  User Login
+                </motion.button>
+                <motion.button 
+                  onClick={openSignupModal}
+                  className="px-4 md:px-5 py-2 md:py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-full font-semibold text-xs md:text-sm shadow-lg shadow-orange-500/30 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
+                  whileTap={{ scale: 0.95 }}
+                  aria-label="Sign up"
+                >
+                  Sign Up
+                </motion.button>
+              </>
+            )}
           </div>
         </div>
       </motion.header>
@@ -1866,8 +1981,8 @@ const Home = () => {
       }}
       aria-label="Background video"
     />
-    {/* Gradient overlay for better blending */}
-    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70 pointer-events-none z-[1]"></div>
+    {/* Soft gradient overlay for readability without dimming too much */}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/50 pointer-events-none z-[1]"></div>
     {videoLoadError && (
       <div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center z-5">
         <div className="text-center text-white/50">
@@ -1998,7 +2113,7 @@ const Home = () => {
       </main>
 
       {/* Partner Companies Marquee */}
-      <section className="py-12 bg-black/50 border-y border-white/5 overflow-hidden relative">
+      <section className="py-12 bg-black/20 border-y border-white/10 overflow-hidden relative">
         <div className="flex animate-marquee whitespace-nowrap">
           {/* Company logos array */}
           {(() => {
@@ -2026,7 +2141,7 @@ const Home = () => {
                       <img 
                         src={logoPath} 
                         alt={`Company logo ${i + 1}`}
-                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300"
+                        className="h-12 md:h-16 w-auto object-contain opacity-85 group-hover:opacity-100 transition-opacity duration-300"
                       />
                     </div>
                   );
@@ -2041,7 +2156,7 @@ const Home = () => {
                       <img 
                         src={logoPath} 
                         alt={`Company logo ${i + 1}`}
-                        className="h-12 md:h-16 w-auto object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300"
+                        className="h-12 md:h-16 w-auto object-contain opacity-85 group-hover:opacity-100 transition-opacity duration-300"
                       />
                     </div>
                   );
@@ -2758,7 +2873,6 @@ const Home = () => {
                       style={{ width: 520, height: 360, padding: '2.0rem', boxShadow: '0 16px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255, 87, 40, 0.25) inset' }}
                     >
                       <div className="premium-card-content text-center flex flex-col items-center">
-                        {/* Icon badge (replaces numbers) */}
                         <div className="w-16 h-16 bg-[#FF5728] rounded-3xl flex items-center justify-center mb-6 border border-[#FF5728]">
                           <Icon className="w-9 h-9 text-white" />
                         </div>
@@ -3027,7 +3141,7 @@ const Home = () => {
                   animate={{ opacity: 1, y: 0 }}
                 >
                   <FiCheck className="w-5 h-5 mr-2" />
-                  Login successful! Redirecting...
+                  Login successful!
                 </motion.div>
               )}
 

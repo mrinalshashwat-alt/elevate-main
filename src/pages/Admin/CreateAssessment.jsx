@@ -5,6 +5,7 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createAssessment, getJobs } from '../../api/admin';
+import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
 
 // Custom glass popover select component matching AIMockInterview style
 const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
@@ -54,7 +55,32 @@ const CreateAssessment = () => {
   // Fetch jobs for dropdown
   const { data: jobsData } = useQuery({
     queryKey: ['adminJobs'],
-    queryFn: () => getJobs(),
+    queryFn: async () => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const apiData = await getJobs();
+        // Merge with localStorage data
+        const localJobs = jobsStorage.getAll();
+        const apiJobIds = new Set(apiData.data.map(j => j.id));
+        const uniqueLocalJobs = localJobs.filter(j => !apiJobIds.has(j.id));
+        
+        return {
+          ...apiData,
+          data: [...apiData.data, ...uniqueLocalJobs],
+          total: apiData.total + uniqueLocalJobs.length,
+        };
+      } catch (error) {
+        // If API fails, use localStorage only
+        console.log('API call failed, using localStorage:', error);
+        const localJobs = jobsStorage.getAll();
+        return {
+          data: localJobs,
+          total: localJobs.length,
+          page: 1,
+          pageSize: 10,
+        };
+      }
+    },
   });
 
   const [formData, setFormData] = useState({
@@ -183,9 +209,31 @@ const CreateAssessment = () => {
   };
 
   const createMutation = useMutation({
-    mutationFn: createAssessment,
+    mutationFn: async (assessmentData) => {
+      // TODO: Replace with actual API call when backend is ready
+      // For now, save to localStorage
+      try {
+        // Try API first
+        const result = await createAssessment(assessmentData);
+        // Also save to localStorage as backup
+        assessmentsStorage.save({
+          ...assessmentData,
+          id: result.id || `assessment_${Date.now()}`,
+        });
+        return result;
+      } catch (error) {
+        // If API fails, use localStorage
+        console.log('API call failed, using localStorage:', error);
+        const savedAssessment = assessmentsStorage.save({
+          ...assessmentData,
+          id: `assessment_${Date.now()}`,
+        });
+        return savedAssessment;
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
+      queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       router.push('/admin/assessment-list');
     },
   });
@@ -193,12 +241,39 @@ const CreateAssessment = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     const selectedJob = jobsData?.data?.find(j => j.id === formData.jobId);
+    
+    // If job doesn't exist in API data, check localStorage
+    let job = selectedJob;
+    if (!job && formData.jobId) {
+      job = jobsStorage.getById(formData.jobId);
+    }
+    
+    // If job still doesn't exist but we have jobId, create a basic job entry
+    // This handles cases where job was created elsewhere or needs to be saved
+    if (!job && formData.jobId) {
+      // Try to extract job info from form or create a placeholder
+      const newJob = {
+        id: formData.jobId,
+        title: formData.title || 'Untitled Job',
+        company: 'Company',
+        location: 'Location',
+        type: 'full-time',
+        salary: 'Not specified',
+        status: 'active',
+        postedAt: new Date().toISOString(),
+      };
+      jobsStorage.save(newJob);
+      job = newJob;
+    }
+    
     const assessmentData = {
       ...formData,
       questions: allQuestions.length > 0 ? allQuestions.length : totalQuestions,
-      jobTitle: selectedJob?.title || '',
+      jobTitle: job?.title || formData.title,
       questionData: allQuestions, // Include all questions data
+      jobId: formData.jobId, // Ensure jobId is included
     };
+    
     createMutation.mutate(assessmentData);
   };
 
@@ -236,30 +311,18 @@ const CreateAssessment = () => {
 
       <main className="max-w-4xl mx-auto px-4 py-12 relative z-10">
         <motion.div 
-          className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-8 overflow-hidden"
+          className="relative bg-black/90 border border-[#FF5728] rounded-3xl p-8"
           style={{
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-            transformStyle: 'preserve-3d'
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset'
           }}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          whileHover={{ 
-            y: -8,
-            scale: 1.01,
-            transition: { duration: 0.3 }
-          }}
         >
-          {/* Shine effect */}
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-            <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-          </div>
-          
-          <div className="relative z-20">
+          <div>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="relative group">
-                <label className="absolute -top-2 left-3 px-2 bg-black text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Assessment Title</label>
+              <div>
+                <label className="block text-sm mb-3 text-gray-300">Assessment Title</label>
                 <input
                   type="text"
                   value={formData.title}
@@ -270,8 +333,8 @@ const CreateAssessment = () => {
                 />
               </div>
 
-              <div className="relative group">
-                <label className="absolute -top-2 left-3 px-2 bg-black text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Job *</label>
+              <div>
+                <label className="block text-sm mb-3 text-gray-300">Job *</label>
                 <GlassSelect
                   value={formData.jobId}
                   onChange={(value) => setFormData({ ...formData, jobId: value })}
@@ -284,8 +347,8 @@ const CreateAssessment = () => {
                 />
               </div>
 
-              <div className="relative group">
-                <label className="absolute -top-2 left-3 px-2 bg-black text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Description</label>
+              <div>
+                <label className="block text-sm mb-3 text-gray-300">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -295,8 +358,8 @@ const CreateAssessment = () => {
                 />
               </div>
 
-              <div className="relative group">
-                <label className="absolute -top-2 left-3 px-2 bg-black text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Duration (minutes)</label>
+              <div>
+                <label className="block text-sm mb-3 text-gray-300">Duration (minutes)</label>
                 <input
                   type="number"
                   value={formData.duration}
@@ -308,13 +371,13 @@ const CreateAssessment = () => {
               </div>
 
               {/* Question Types Section */}
-              <div className="relative group">
+              <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="absolute -top-2 left-3 px-2 bg-black text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Question Types *</label>
+                  <label className="block text-sm text-gray-300">Question Types *</label>
                   <button
                     type="button"
                     onClick={addQuestionType}
-                    className="ml-auto px-3 py-1.5 text-xs bg-orange-500/20 border border-orange-500/50 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-all"
+                    className="px-3 py-1.5 text-xs bg-orange-500/20 border border-orange-500/50 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-all"
                   >
                     + Add Type
                   </button>
@@ -365,9 +428,9 @@ const CreateAssessment = () => {
 
               {/* Question Adding Options Section */}
               {totalQuestions > 0 && (
-                <div className="relative group">
-                  <label className="absolute -top-2 left-3 px-2 bg-black text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Add Questions</label>
-                  <div className="grid grid-cols-3 gap-6 pt-6">
+                <div>
+                  <label className="block text-sm mb-3 text-gray-300">Add Questions</label>
+                  <div className="grid grid-cols-3 gap-6">
                     {/* CSV Upload */}
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-orange-500/50 transition-all">
                       <h3 className="font-semibold text-white mb-4">Drop CSV/PDF file</h3>
@@ -459,8 +522,8 @@ const CreateAssessment = () => {
                 </div>
               )}
 
-              <div className="relative group">
-                <label className="absolute -top-2 left-3 px-2 bg-black text-xs text-gray-400 group-focus-within:text-orange-400 transition-colors">Status</label>
+              <div>
+                <label className="block text-sm mb-3 text-gray-300">Status</label>
                 <GlassSelect
                   value={formData.status}
                   onChange={(value) => setFormData({ ...formData, status: value })}
@@ -531,7 +594,7 @@ const CreateAssessment = () => {
 
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-400 mb-3">Prompt</label>
+                  <label className="block text-sm mb-3 text-gray-300">Prompt</label>
                   <div className="relative">
                     <div className="absolute left-3 top-3">
                       <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -549,7 +612,7 @@ const CreateAssessment = () => {
 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Difficulty</label>
+                    <label className="block text-sm mb-3 text-gray-300">Difficulty</label>
                     <GlassSelect
                       value={aiDifficulty}
                       onChange={(value) => setAiDifficulty(value)}
@@ -562,7 +625,7 @@ const CreateAssessment = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-400 mb-3">Number of Questions</label>
+                    <label className="block text-sm mb-3 text-gray-300">Number of Questions</label>
                     <input
                       type="number"
                       value={aiQuestionCount}
@@ -625,7 +688,7 @@ const CreateAssessment = () => {
               <div className="space-y-6">
                 {/* Question Type Selector */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-400 mb-3">Question Type</label>
+                  <label className="block text-sm mb-3 text-gray-300">Question Type</label>
                   <GlassSelect
                     value={newQuestion.type}
                     onChange={(value) => setNewQuestion({ ...newQuestion, type: value })}
@@ -640,7 +703,7 @@ const CreateAssessment = () => {
 
                 {/* Question Input */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-400 mb-3">Question</label>
+                  <label className="block text-sm mb-3 text-gray-300">Question</label>
                   <textarea
                     value={newQuestion.question}
                     onChange={(e) => setNewQuestion({ ...newQuestion, question: e.target.value })}
@@ -653,7 +716,7 @@ const CreateAssessment = () => {
                 {newQuestion.type === 'coding' && (
                   <>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-400 mb-3">Test Cases</label>
+                      <label className="block text-sm mb-3 text-gray-300">Test Cases</label>
                       <textarea
                         value={newQuestion.testCases}
                         onChange={(e) => setNewQuestion({ ...newQuestion, testCases: e.target.value })}
@@ -662,7 +725,7 @@ const CreateAssessment = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-400 mb-3">Expected Output</label>
+                      <label className="block text-sm mb-3 text-gray-300">Expected Output</label>
                       <textarea
                         value={newQuestion.expectedOutput}
                         onChange={(e) => setNewQuestion({ ...newQuestion, expectedOutput: e.target.value })}
@@ -676,7 +739,7 @@ const CreateAssessment = () => {
                 {newQuestion.type === 'mcq' && (
                   <>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-400 mb-3">Options</label>
+                      <label className="block text-sm mb-3 text-gray-300">Options</label>
                       <div className="space-y-3">
                         {['A', 'B', 'C', 'D'].map((option, idx) => (
                           <input
@@ -695,7 +758,7 @@ const CreateAssessment = () => {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-400 mb-3">Correct Answer</label>
+                      <label className="block text-sm mb-3 text-gray-300">Correct Answer</label>
                       <input
                         type="text"
                         value={newQuestion.correctAnswer}

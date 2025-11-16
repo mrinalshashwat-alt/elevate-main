@@ -29,7 +29,6 @@ const AICareerCoach = () => {
     scrollToBottom();
   }, [chatMessages]);
 
-  // Initial agent greeting
   useEffect(() => {
     const initialMessage = {
       type: 'agent',

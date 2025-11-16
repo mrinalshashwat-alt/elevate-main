@@ -3,8 +3,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
-
-// Admin Pages
 import AdminDashboard from '../pages/Admin/Dashboard';
 import ManageUsers from '../pages/Admin/ManageUsers';
 import Jobs from '../pages/Admin/Jobs';

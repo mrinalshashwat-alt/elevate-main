@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getJobs, createJob, updateJob, deleteJob } from '../../api/admin';
+import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
 
 const Jobs = () => {
   const router = useRouter();
@@ -11,6 +12,8 @@ const Jobs = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -21,14 +24,63 @@ const Jobs = () => {
     salary: '',
     status: 'active',
   });
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [pendingClose, setPendingClose] = useState(false);
 
   const { data: jobsData, isLoading } = useQuery({
     queryKey: ['adminJobs'],
-    queryFn: () => getJobs(),
+    queryFn: async () => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const apiData = await getJobs();
+        // Merge with localStorage data
+        const localJobs = jobsStorage.getAll();
+        const apiJobIds = new Set(apiData.data.map(j => j.id));
+        const uniqueLocalJobs = localJobs.filter(j => !apiJobIds.has(j.id));
+        
+        return {
+          ...apiData,
+          data: [...apiData.data, ...uniqueLocalJobs],
+          total: apiData.total + uniqueLocalJobs.length,
+        };
+      } catch (error) {
+        // If API fails, use localStorage only
+        console.log('API call failed, using localStorage:', error);
+        const localJobs = jobsStorage.getAll();
+        return {
+          data: localJobs,
+          total: localJobs.length,
+          page: 1,
+          pageSize: 10,
+        };
+      }
+    },
   });
 
   const createMutation = useMutation({
-    mutationFn: createJob,
+    mutationFn: async (jobData) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const result = await createJob(jobData);
+        // Also save to localStorage
+        jobsStorage.save({
+          ...jobData,
+          id: result.id || `job_${Date.now()}`,
+          postedAt: new Date().toISOString(),
+        });
+        return result;
+      } catch (error) {
+        // If API fails, use localStorage
+        console.log('API call failed, using localStorage:', error);
+        const savedJob = jobsStorage.save({
+          ...jobData,
+          id: `job_${Date.now()}`,
+          postedAt: new Date().toISOString(),
+        });
+        return savedJob;
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       setShowModal(false);
@@ -37,7 +89,20 @@ const Jobs = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => updateJob(id, data),
+    mutationFn: async ({ id, data }) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        const result = await updateJob(id, data);
+        // Also update localStorage
+        jobsStorage.save({ ...data, id });
+        return result;
+      } catch (error) {
+        // If API fails, use localStorage
+        console.log('API call failed, using localStorage:', error);
+        jobsStorage.save({ ...data, id });
+        return { ...data, id };
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       setShowModal(false);
@@ -46,7 +111,16 @@ const Jobs = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteJob,
+    mutationFn: async (jobId) => {
+      // TODO: Replace with actual API call when backend is ready
+      try {
+        await deleteJob(jobId);
+      } catch (error) {
+        console.log('API call failed, using localStorage:', error);
+      }
+      // Always delete from localStorage
+      jobsStorage.delete(jobId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
     },
@@ -55,6 +129,67 @@ const Jobs = () => {
   const resetForm = () => {
     setFormData({ title: '', description: '', yearsOfExperience: '', company: '', location: '', type: 'full-time', salary: '', status: 'active' });
     setEditingJob(null);
+    setHasUnsavedChanges(false);
+  };
+
+  // Track form changes
+  useEffect(() => {
+    if (showModal) {
+      const hasChanges = formData.title || formData.description || formData.yearsOfExperience || 
+                        formData.company || formData.location || formData.salary;
+      setHasUnsavedChanges(hasChanges);
+    }
+  }, [formData, showModal]);
+
+  // Handle window close/tab switch
+  useEffect(() => {
+    if (!showModal || !hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (e) => {
+      // Auto-save as draft when user navigates away
+      if (hasUnsavedChanges) {
+        const draftData = {
+          ...formData,
+          status: 'draft',
+          id: editingJob?.id || `draft_${Date.now()}`,
+          postedAt: new Date().toISOString(),
+        };
+        jobsStorage.save(draftData);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [showModal, hasUnsavedChanges, formData, editingJob]);
+
+  const handleCloseModal = () => {
+    if (hasUnsavedChanges) {
+      setPendingClose(true);
+      setShowDiscardModal(true);
+    } else {
+      setShowModal(false);
+      resetForm();
+    }
+  };
+
+  const handleSaveDraft = () => {
+    const draftData = {
+      ...formData,
+      status: 'draft',
+      id: editingJob?.id || `draft_${Date.now()}`,
+      postedAt: new Date().toISOString(),
+    };
+    jobsStorage.save(draftData);
+    queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+    setShowModal(false);
+    setShowDiscardModal(false);
+    resetForm();
+  };
+
+  const handleDiscard = () => {
+    setShowModal(false);
+    setShowDiscardModal(false);
+    resetForm();
   };
 
   const handleSubmit = (e) => {
@@ -85,6 +220,17 @@ const Jobs = () => {
     if (confirm('Are you sure you want to delete this job?')) {
       deleteMutation.mutate(jobId);
     }
+  };
+
+  const handleViewAssessments = (job) => {
+    setSelectedJob(job);
+    setShowAssessmentModal(true);
+  };
+
+  const getJobAssessments = (jobId) => {
+    // Get assessments from both API and localStorage
+    const localAssessments = assessmentsStorage.getByJobId(jobId);
+    return localAssessments;
   };
 
   const generateJobDescription = async () => {
@@ -168,9 +314,11 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                     <p className="text-gray-400">{job.company}</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    job.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                    job.status === 'active' ? 'bg-green-500/20 text-green-400' : 
+                    job.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
                   }`}>
-                    {job.status}
+                    {job.status || 'draft'}
                   </span>
                 </div>
                 
@@ -210,6 +358,12 @@ Join us and be part of an innovative team driving excellence in our industry.`;
 
                 <div className="flex space-x-2">
                   <button
+                    onClick={() => handleViewAssessments(job)}
+                    className="flex-1 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-lg transition-all text-sm font-medium"
+                  >
+                    View Assessments ({getJobAssessments(job.id).length})
+                  </button>
+                  <button
                     onClick={() => handleEdit(job)}
                     className="flex-1 py-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-all"
                   >
@@ -232,7 +386,17 @@ Join us and be part of an innovative team driving excellence in our industry.`;
       {showModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-2xl w-full my-8">
-            <h2 className="text-2xl font-bold mb-6">{editingJob ? 'Edit Job' : 'Post New Job'}</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">{editingJob ? 'Edit Job' : 'Post New Job'}</h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Required Fields - Priority */}
               <div>
@@ -263,29 +427,94 @@ Join us and be part of an innovative team driving excellence in our industry.`;
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-white">Job Description *</label>
-                  <button
-                    type="button"
-                    onClick={generateJobDescription}
-                    disabled={isGeneratingAI || !formData.title || !formData.yearsOfExperience}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                  >
-                    {isGeneratingAI ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Generating...
-                      </>
-                    ) : (
-                      <>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={generateJobDescription}
+                      disabled={isGeneratingAI || !formData.title || !formData.yearsOfExperience}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                      {isGeneratingAI ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          Generate with AI
+                        </>
+                      )}
+                    </button>
+                    {formData.description && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Improvement button - could enhance description with AI
+                          const improvedPrompt = `Improve and enhance the following job description: ${formData.description}`;
+                          generateJobDescription();
+                        }}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-all text-sm"
+                        title="Improve description"
+                      >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                        Generate with AI
-                      </>
+                        Improve
+                      </button>
                     )}
-                  </button>
+                    {formData.description && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Export to PDF functionality
+                          const printWindow = window.open('', '_blank');
+                          printWindow.document.write(`
+                            <html>
+                              <head>
+                                <title>${formData.title} - Job Description</title>
+                                <style>
+                                  body { font-family: Arial, sans-serif; padding: 40px; }
+                                  h1 { color: #333; }
+                                  .meta { color: #666; margin-bottom: 20px; }
+                                  .description { line-height: 1.6; }
+                                </style>
+                              </head>
+                              <body>
+                                <h1>${formData.title}</h1>
+                                <div class="meta">
+                                  <p><strong>Company:</strong> ${formData.company || 'N/A'}</p>
+                                  <p><strong>Location:</strong> ${formData.location || 'N/A'}</p>
+                                  <p><strong>Experience:</strong> ${formData.yearsOfExperience || 'N/A'} years</p>
+                                  <p><strong>Type:</strong> ${formData.type || 'N/A'}</p>
+                                  <p><strong>Salary:</strong> ${formData.salary || 'N/A'}</p>
+                                </div>
+                                <div class="description">
+                                  ${formData.description.replace(/\n/g, '<br>')}
+                                </div>
+                              </body>
+                            </html>
+                          `);
+                          printWindow.document.close();
+                          setTimeout(() => {
+                            printWindow.print();
+                          }, 250);
+                        }}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-all text-sm"
+                        title="Export to PDF"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        Export PDF
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <textarea
                   value={formData.description}
@@ -359,13 +588,17 @@ Join us and be part of an innovative team driving excellence in our industry.`;
               <div className="flex space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
+                  onClick={handleCloseModal}
                   className="flex-1 py-3 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  className="px-4 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-all text-sm"
+                >
+                  Save as Draft
                 </button>
                 <button
                   type="submit"
@@ -376,6 +609,125 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assessment Modal */}
+      {showAssessmentModal && selectedJob && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-4xl w-full my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Assessments for {selectedJob.title}</h2>
+                <p className="text-gray-400 mt-1">{selectedJob.company} • {selectedJob.location}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAssessmentModal(false);
+                  setSelectedJob(null);
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {getJobAssessments(selectedJob.id).length > 0 ? (
+                getJobAssessments(selectedJob.id).map((assessment) => (
+                  <div
+                    key={assessment.id}
+                    className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-white mb-2">{assessment.title}</h3>
+                        <p className="text-gray-400 text-sm mb-3">{assessment.description}</p>
+                        <div className="flex flex-wrap gap-3 text-sm">
+                          <span className="text-gray-400">
+                            <span className="font-semibold">Duration:</span> {assessment.duration} min
+                          </span>
+                          <span className="text-gray-400">
+                            <span className="font-semibold">Questions:</span> {assessment.questions || assessment.questionData?.length || 0}
+                          </span>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            assessment.status === 'published' ? 'bg-green-500/20 text-green-400' :
+                            assessment.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {assessment.status}
+                          </span>
+                        </div>
+                        {assessment.questionTypes && assessment.questionTypes.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {assessment.questionTypes.map((qt, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs font-medium"
+                              >
+                                {qt.type}: {qt.count}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => router.push(`/admin/create-assessment?jobId=${selectedJob.id}&assessmentId=${assessment.id}`)}
+                        className="ml-4 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all text-sm font-medium"
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-lg mb-2">No assessments found for this job</p>
+                  <p className="text-sm">Create an assessment to get started</p>
+                  <button
+                    onClick={() => {
+                      setShowAssessmentModal(false);
+                      router.push(`/admin/create-assessment?jobId=${selectedJob.id}`);
+                    }}
+                    className="mt-4 px-6 py-2 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg font-semibold hover:shadow-lg transition-all"
+                  >
+                    Create Assessment
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discard Confirmation Modal */}
+      {showDiscardModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1100] p-4">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-8 max-w-md w-full">
+            <h3 className="text-2xl font-bold mb-4 text-white">Unsaved Changes</h3>
+            <p className="text-gray-400 mb-6">
+              You have unsaved changes. Would you like to save as draft or discard?
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={handleDiscard}
+                className="flex-1 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-red-400 font-semibold"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleSaveDraft}
+                className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-semibold text-white hover:shadow-lg transition-all"
+              >
+                Save as Draft
+              </button>
+            </div>
           </div>
         </div>
       )}
