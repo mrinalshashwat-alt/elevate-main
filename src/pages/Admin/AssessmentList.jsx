@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FiEdit, FiTrash2, FiX } from 'react-icons/fi';
 import { getAssessments, deleteAssessment, getJobs, createJob, updateJob, deleteJob, createAssessment } from '../../api/admin';
 import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
 
@@ -433,22 +434,63 @@ const AssessmentList = () => {
     setShowJobModal(true);
   };
 
-  const generateJobDescription = async () => {
-    if (!newJob.title || !newJob.yearsOfExperience) {
-      alert('Please enter Job Title and Years of Experience first to generate a description.');
-      return;
+  const generateJobDescription = async (isImprove = false) => {
+    if (isImprove) {
+      // For improvement, we need existing description
+      if (!newJob.description || !newJob.description.trim()) {
+        alert('Please enter a job description first to improve it.');
+        return;
+      }
+    } else {
+      // For generation, we need title and experience
+      if (!newJob.title || !newJob.yearsOfExperience) {
+        alert('Please enter Job Title and Years of Experience first to generate a description.');
+        return;
+      }
     }
 
     setIsGeneratingAI(true);
     try {
-      // Mock AI generation - in production, this would call your AI API
-      const prompt = `Create a comprehensive job description for a ${newJob.title} position requiring ${newJob.yearsOfExperience} years of experience. Include responsibilities, requirements, and qualifications.`;
-      
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Mock generated description
-      const generatedDescription = `We are seeking an experienced ${newJob.title} with ${newJob.yearsOfExperience}+ years of experience to join our team.
+      let improvedDescription = '';
+      
+      if (isImprove) {
+        // Mock improved description - enhance the existing description
+        const currentDesc = newJob.description;
+        
+        // Create an improved version with better structure and formatting
+        improvedDescription = `We are seeking an experienced ${newJob.title || 'professional'} with ${newJob.yearsOfExperience || 'relevant'}+ years of experience to join our team.
+
+**Key Responsibilities:**
+- Lead and manage ${(newJob.title || 'project').toLowerCase()} initiatives and deliverables
+- Collaborate effectively with cross-functional teams to achieve organizational goals
+- Develop and implement strategic solutions that drive business value
+- Ensure quality deliverables within established deadlines
+- ${currentDesc.includes('responsibilities') || currentDesc.includes('duties') ? '' : 'Execute core job functions as outlined in the role requirements'}
+
+**Required Qualifications:**
+- ${newJob.yearsOfExperience || 'Relevant'}+ years of professional experience in related field
+- Strong problem-solving and analytical capabilities
+- Excellent written and verbal communication skills
+- Proven ability to work collaboratively in team environments
+- Demonstrated track record of success in similar roles
+${currentDesc.includes('qualifications') || currentDesc.includes('requirements') ? '' : '- Additional qualifications as specified in the job description'}
+
+**Preferred Skills:**
+- Industry-recognized certifications and credentials
+- Advanced technical knowledge and expertise
+- Leadership and mentorship capabilities
+- Continuous learning mindset and adaptability
+
+**About the Role:**
+${currentDesc}
+
+Join us and be part of an innovative team that values excellence, collaboration, and professional growth.`;
+      } else {
+        // Mock generated description
+        improvedDescription = `We are seeking an experienced ${newJob.title} with ${newJob.yearsOfExperience}+ years of experience to join our team.
 
 **Key Responsibilities:**
 - Lead and manage ${newJob.title.toLowerCase()} initiatives
@@ -468,13 +510,61 @@ const AssessmentList = () => {
 - Leadership experience
 
 Join us and be part of an innovative team driving excellence in our industry.`;
+      }
 
-      setNewJob({ ...newJob, description: generatedDescription });
+      setNewJob({ ...newJob, description: improvedDescription });
     } catch (error) {
-      console.error('Error generating job description:', error);
-      alert('Failed to generate job description. Please try again or paste your existing JD.');
+      console.error('Error generating/improving job description:', error);
+      alert(`Failed to ${isImprove ? 'improve' : 'generate'} job description. Please try again or paste your existing JD.`);
     } finally {
       setIsGeneratingAI(false);
+    }
+  };
+
+  const handlePDFUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a PDF file.');
+      return;
+    }
+
+    try {
+      setIsGeneratingAI(true);
+      
+      // Dynamically import pdfjs-dist
+      const pdfjsLib = await import('pdfjs-dist');
+      
+      // Set worker source for Next.js compatibility
+      if (typeof window !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      let fullText = '';
+      
+      // Extract text from all pages
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n\n';
+      }
+
+      // Set the extracted text to the description field
+      setNewJob({ ...newJob, description: fullText.trim() });
+      
+      alert('PDF text extracted successfully!');
+    } catch (error) {
+      console.error('Error parsing PDF:', error);
+      alert('Failed to parse PDF. Please try again or paste the text manually.');
+    } finally {
+      setIsGeneratingAI(false);
+      // Reset file input
+      e.target.value = '';
     }
   };
 
@@ -483,6 +573,12 @@ Join us and be part of an innovative team driving excellence in our industry.`;
       deleteJobMutation.mutate(jobId);
     }
   };
+
+  const handleJobTitleClick = (job) => {
+    setSelectedJobForView(job);
+    setShowJobAssessmentModal(true);
+  };
+
 
   const handleJobSubmit = (e) => {
     e?.preventDefault();
@@ -766,7 +862,12 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-2xl font-bold text-white">{assessment.title}</h3>
+                              <h3 
+                                onClick={() => router.push(`/admin/assessment-view?id=${assessment.id}`)}
+                                className="text-2xl font-bold text-white cursor-pointer hover:text-orange-400 transition-colors"
+                              >
+                                {assessment.title}
+                              </h3>
                               {assessment.jobTitle && (
                                 <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-semibold">
                                   {assessment.jobTitle}
@@ -786,15 +887,17 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                           <div className="flex gap-2 ml-4">
                             <button
                               onClick={() => router.push(`/admin/create-assessment?assessmentId=${assessment.id}`)}
-                              className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg transition-all text-sm font-medium"
+                              className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5"
+                              title="Edit"
                             >
-                              Edit
+                              <FiEdit className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDelete(assessment.id)}
-                              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-sm font-medium"
+                              className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5"
+                              title="Delete"
                             >
-                              Delete
+                              <FiTrash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -1009,81 +1112,72 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                    getActiveJobs().map((job, index) => (
                      <motion.div
                        key={job.id || index}
-                       className="group relative bg-black/90 border border-white/10 rounded-3xl p-6 overflow-hidden hover:border-orange-500/50 transition-all"
+                       className="group relative bg-gradient-to-br from-gray-900/90 to-black/90 border border-white/10 rounded-2xl p-6 overflow-visible hover:border-orange-500/50 transition-all shadow-lg"
                        initial={{ opacity: 0, y: 20 }}
                        animate={{ opacity: 1, y: 0 }}
                        transition={{ duration: 0.3, delay: index * 0.1 }}
-                       whileHover={{ y: -4 }}
+                       whileHover={{ y: -4, shadow: '0 20px 40px rgba(0, 0, 0, 0.3)' }}
                      >
-                       <div className="flex items-start gap-6">
-                         <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
-                           <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <div className="flex items-start gap-5">
+                         <div className="w-16 h-16 bg-gradient-to-br from-orange-500/30 to-orange-600/30 border-2 border-orange-500/50 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+                           <svg className="w-8 h-8 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                            </svg>
                          </div>
                          <div className="flex-1 min-w-0">
-                           <div className="flex items-start justify-between mb-3">
-                             <div className="flex-1 min-w-0">
-                               <div className="flex items-center gap-3 mb-2">
-                                 <h3 className="text-2xl font-bold text-white">{job.title || 'Untitled Job'}</h3>
-                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                   job.status === 'active' ? 'bg-green-500/20 text-green-400' : 
-                                   job.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
-                                   'bg-red-500/20 text-red-400'
-                                 }`}>
-                                   {job.status || 'active'}
-                                 </span>
-                               </div>
-                               {job.company && (
-                                 <p className="text-gray-400 mb-2">{job.company} • {job.location || 'Location not specified'}</p>
-                               )}
-                               {job.description && (
-                                 <p className="text-sm text-gray-300 mb-4 line-clamp-2">{job.description}</p>
-                               )}
-                               {job.competencies && Array.isArray(job.competencies) && job.competencies.length > 0 ? (
-                                 <div>
-                                   <p className="text-sm text-gray-400 mb-2">Competencies:</p>
-                                   <div className="flex flex-wrap gap-2">
-                                     {job.competencies.map((comp, idx) => (
-                                       <span key={idx} className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm font-semibold">
-                                         {comp}
-                                       </span>
-                                     ))}
-                                   </div>
-                                 </div>
-                               ) : null}
-                               <div className="mt-3 flex items-center gap-4">
-                                 <span className="text-sm text-gray-400">
-                                   Assessments: <span className="font-bold text-white">{getJobAssessments(job.id).length}</span>
-                                 </span>
-                                 {job.yearsOfExperience && (
-                                   <span className="text-sm text-gray-400">
-                                     Experience: <span className="font-bold text-white">{job.yearsOfExperience} years</span>
-                                   </span>
-                                 )}
-                               </div>
+                           {/* Job Title - Clickable */}
+                           <h3 
+                             onClick={() => handleJobTitleClick(job)}
+                             className="text-2xl font-bold text-white mb-4 cursor-pointer hover:text-orange-400 transition-colors"
+                           >
+                             {job.title || 'Untitled Job'}
+                           </h3>
+                           
+                           {/* Years of Experience */}
+                           {job.yearsOfExperience && (
+                             <div className="flex items-center gap-2 mb-4">
+                               <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                               </svg>
+                               <span className="text-sm text-gray-400">Years of Experience:</span>
+                               <span className="text-base font-semibold text-white">{job.yearsOfExperience} years</span>
                              </div>
-                             <div className="flex gap-2 ml-4">
-                               <button
-                                 onClick={() => handleViewJob(job)}
-                                 className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 rounded-lg transition-all text-sm font-medium"
-                               >
-                                 View
-                               </button>
-                               <button
-                                 onClick={() => handleEditJob(job)}
-                                 className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg transition-all text-sm font-medium"
-                               >
-                                 Edit
-                               </button>
-                               <button
-                                 onClick={() => handleDeleteJob(job.id)}
-                                 className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-sm font-medium"
-                               >
-                                 Delete
-                               </button>
-                             </div>
+                           )}
+                         </div>
+
+                         {/* Right Side: Status Badge, Action Buttons, and 3-dot Menu */}
+                         <div className="flex items-start gap-3 flex-shrink-0">
+                           {/* Status Badge */}
+                           <div className={`relative px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 ${
+                             job.status === 'active' 
+                               ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/30' 
+                               : job.status === 'draft' 
+                               ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-lg shadow-yellow-500/30' :
+                               'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/30'
+                           }`}>
+                             {job.status === 'active' && (
+                               <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                             )}
+                             {job.status || 'active'}
                            </div>
+
+                          {/* Edit and Delete Buttons */}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditJob(job)}
+                              className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg transition-all text-sm font-medium text-blue-300 flex items-center gap-1.5"
+                              title="Edit"
+                            >
+                              <FiEdit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteJob(job.id)}
+                              className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all text-sm font-medium text-red-300 flex items-center gap-1.5"
+                              title="Delete"
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                          </div>
                        </div>
                      </motion.div>
@@ -1692,14 +1786,14 @@ Join us and be part of an innovative team driving excellence in our industry.`;
       <AnimatePresence>
         {showJobModal && (
           <motion.div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[1000] p-4"
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[1000] p-4 overflow-y-auto"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={handleCloseJobModal}
           >
             <motion.div
-              className="group relative bg-black/90 border border-white/10 rounded-3xl p-8 max-w-2xl w-full"
+              className="group relative bg-black/90 border border-white/10 rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto my-8"
               initial={{ scale: 0.9, y: 50 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 50 }}
@@ -1749,89 +1843,44 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-sm font-medium text-white">Job Description *</label>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={generateJobDescription}
-                          disabled={isGeneratingAI || !newJob.title || !newJob.yearsOfExperience}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                        >
-                          {isGeneratingAI ? (
-                            <>
-                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                              Generate with AI
-                            </>
-                          )}
-                        </button>
-                        {newJob.description && (
+                        <label className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all text-sm cursor-pointer">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          Upload PDF
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            className="hidden"
+                            onChange={handlePDFUpload}
+                          />
+                        </label>
+                        {newJob.description && newJob.description.trim() && (
                           <button
                             type="button"
                             onClick={() => {
-                              // Improvement button - could enhance description with AI
-                              generateJobDescription();
+                              generateJobDescription(true);
                             }}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-all text-sm"
-                            title="Improve description"
+                            disabled={isGeneratingAI}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Improve description with AI"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Improve
-                          </button>
-                        )}
-                        {newJob.description && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Export to PDF functionality
-                              const printWindow = window.open('', '_blank');
-                              printWindow.document.write(`
-                                <html>
-                                  <head>
-                                    <title>${newJob.title} - Job Description</title>
-                                    <style>
-                                      body { font-family: Arial, sans-serif; padding: 40px; }
-                                      h1 { color: #333; }
-                                      .meta { color: #666; margin-bottom: 20px; }
-                                      .description { line-height: 1.6; }
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <h1>${newJob.title}</h1>
-                                    <div class="meta">
-                                      <p><strong>Company:</strong> ${newJob.company || 'N/A'}</p>
-                                      <p><strong>Location:</strong> ${newJob.location || 'N/A'}</p>
-                                      <p><strong>Experience:</strong> ${newJob.yearsOfExperience || 'N/A'} years</p>
-                                      <p><strong>Type:</strong> ${newJob.type || 'N/A'}</p>
-                                      <p><strong>Salary:</strong> ${newJob.salary || 'N/A'}</p>
-                                    </div>
-                                    <div class="description">
-                                      ${newJob.description.replace(/\n/g, '<br>')}
-                                    </div>
-                                  </body>
-                                </html>
-                              `);
-                              printWindow.document.close();
-                              setTimeout(() => {
-                                printWindow.print();
-                              }, 250);
-                            }}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-all text-sm"
-                            title="Export to PDF"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                            Export PDF
+                            {isGeneratingAI ? (
+                              <>
+                                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Improving...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                Improve with AI
+                              </>
+                            )}
                           </button>
                         )}
                       </div>
@@ -1840,11 +1889,28 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                       value={newJob.description}
                       onChange={(e) => setNewJob({ ...newJob, description: e.target.value })}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 min-h-[200px] resize-y text-white placeholder-gray-500"
-                      placeholder="Paste your existing job description here or click 'Generate with AI' to create one automatically..."
+                      placeholder="Paste your existing job description here or upload a PDF file..."
                       required
                     />
-                    <p className="mt-1 text-xs text-gray-400">You can paste your existing JD or use AI to generate one</p>
+                    <p className="mt-1 text-xs text-gray-400">You can paste your existing JD or upload a PDF file to extract text</p>
                   </div>
+
+                  {/* Status Field - Only show when editing */}
+                  {editingJob && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">Status</label>
+                      <GlassSelect
+                        value={newJob.status}
+                        onChange={(value) => setNewJob({ ...newJob, status: value })}
+                        options={[
+                          { value: 'draft', label: 'Draft' },
+                          { value: 'active', label: 'Active' },
+                          { value: 'closed', label: 'Closed' }
+                        ]}
+                        placeholder="Select status"
+                      />
+                    </div>
+                  )}
 
                   {createdJobId ? (
                     <div className="space-y-4">
@@ -2033,7 +2099,7 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                             <button
                               onClick={() => {
                                 setShowJobAssessmentModal(false);
-                                router.push(`/admin/create-assessment?jobId=${selectedJobForView.id}&assessmentId=${assessment.id}`);
+                                router.push(`/admin/assessment-view?id=${assessment.id}`);
                               }}
                               className="ml-4 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all text-sm font-medium"
                             >
@@ -2117,3 +2183,4 @@ Join us and be part of an innovative team driving excellence in our industry.`;
 };
 
 export default AssessmentList;
+

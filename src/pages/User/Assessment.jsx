@@ -2,9 +2,96 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiStop, FiRotateCw, FiX, FiCheck } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiStop, FiRotateCw, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
+import Editor from '@monaco-editor/react';
 import { executeCode, runTestCases, formatOutput, validateCode } from '../../lib/codeSandbox';
+
+// Proctoring Alert Modal Component
+const ProctoringAlert = ({ isOpen, violation, onClose, violationCount }) => {
+  if (!isOpen) return null;
+
+  const getViolationMessage = () => {
+    switch (violation?.type) {
+      case 'copy':
+        return 'Copy operation detected. Copying content is not allowed during the assessment.';
+      case 'paste':
+        return 'Paste operation detected. Pasting content is not allowed during the assessment.';
+      case 'cut':
+        return 'Cut operation detected. Cutting content is not allowed during the assessment.';
+      case 'context_menu':
+        return 'Right-click context menu detected. Right-clicking is disabled during the assessment.';
+      case 'tab_switch':
+        return 'Tab/window switching detected. You must remain on the assessment page at all times.';
+      case 'devtools':
+        return 'Developer tools detected. Opening developer tools is not allowed during the assessment.';
+      case 'print_screen':
+        return 'Print screen detected. Taking screenshots is not allowed during the assessment.';
+      case 'multiple_persons':
+        return 'Multiple persons detected in the camera view. Only one person is allowed during the assessment.';
+      case 'face_not_detected':
+        return 'Face not detected. Please ensure your face is visible in the camera at all times.';
+      case 'looking_away':
+        return 'Looking away detected. Please keep your attention focused on the assessment screen.';
+      case 'suspicious_hand_position':
+        return 'Suspicious hand position detected. Please keep your hands away from your face and maintain proper posture.';
+      default:
+        return 'Suspicious activity detected. Please remain focused on the assessment.';
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="bg-gradient-to-br from-red-900/95 to-orange-900/95 border-2 border-red-500/50 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl"
+            style={{ boxShadow: '0 20px 60px rgba(255, 0, 0, 0.3)' }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-red-500/20 rounded-full">
+                  <FiAlertTriangle className="w-8 h-8 text-red-400 animate-pulse" />
+                </div>
+                <h2 className="text-2xl font-bold text-white">Proctoring Alert</h2>
+              </div>
+              {violationCount > 0 && (
+                <div className="px-3 py-1 bg-red-500/30 rounded-full text-red-300 text-sm font-semibold">
+                  Violation {violationCount}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-200 text-lg leading-relaxed mb-4">
+                {getViolationMessage()}
+              </p>
+              <p className="text-red-300 text-sm font-semibold">
+                ⚠️ Continued violations may result in assessment disqualification.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-red-500/30">
+              <span className="text-gray-400 text-sm">
+                Time: {violation?.timestamp ? new Date(violation.timestamp).toLocaleTimeString() : ''}
+              </span>
+              <button
+                onClick={onClose}
+                className="px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold text-white transition-colors flex items-center space-x-2"
+              >
+                <span>Acknowledge</span>
+                <FiCheck className="w-5 h-5" />
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
 
 // Custom glass popover select component matching AIMockInterview style
 const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
@@ -49,6 +136,7 @@ const GlassSelect = ({ value, onChange, options, placeholder = 'Select', classNa
 const Assessment = () => {
   const router = useRouter();
   const videoRef = useRef(null);
+  const hiddenProctoringVideoRef = useRef(null);
   
   // Check if user has completed the pre-assessment flow
   useEffect(() => {
@@ -74,6 +162,15 @@ const Assessment = () => {
   ]);
   const [currentSection, setCurrentSection] = useState('mcq');
   const [stream, setStream] = useState(null);
+  
+  // Proctoring state
+  const [proctoringAlert, setProctoringAlert] = useState({ isOpen: false, violation: null });
+  const [violationCount, setViolationCount] = useState(0);
+  const violationsRef = useRef([]);
+  const alertCooldownRef = useRef(false);
+  const lastTabSwitchRef = useRef(null);
+  const devToolsOpenRef = useRef(false);
+  const mediaPipeProctoringRef = useRef(null);
   
   // Coding section state - support multiple problems
   const [currentCodingProblem, setCurrentCodingProblem] = useState(0);
@@ -362,6 +459,268 @@ func main() {
   const videoRecorderRef = useRef(null);
   const videoPreviewRef = useRef(null);
 
+  // Proctoring: Handle violation alerts (use useCallback to stabilize reference)
+  const handleViolationRef = useRef(null);
+  
+  useEffect(() => {
+    handleViolationRef.current = (type, details = {}) => {
+      // Prevent spam with cooldown
+      if (alertCooldownRef.current) return;
+      
+      const violation = {
+        type,
+        timestamp: Date.now(),
+        ...details
+      };
+
+      violationsRef.current.push(violation);
+      setViolationCount(prev => prev + 1);
+      setProctoringAlert({ isOpen: true, violation });
+
+      // Save violation to localStorage for reporting
+      const savedViolations = JSON.parse(localStorage.getItem('assessment_violations') || '[]');
+      savedViolations.push(violation);
+      localStorage.setItem('assessment_violations', JSON.stringify(savedViolations));
+
+      // Set cooldown to prevent spam (3 seconds)
+      alertCooldownRef.current = true;
+      setTimeout(() => {
+        alertCooldownRef.current = false;
+      }, 3000);
+    };
+  }, []);
+
+  const handleViolation = (type, details = {}) => {
+    if (handleViolationRef.current) {
+      handleViolationRef.current(type, details);
+    }
+  };
+
+  const closeProctoringAlert = () => {
+    setProctoringAlert({ isOpen: false, violation: null });
+  };
+
+  // Proctoring: Copy/Paste/Cut detection
+  useEffect(() => {
+    const handleCopy = (e) => {
+      // Allow copying within Monaco editor for normal editor operations
+      const target = e.target;
+      const isMonacoEditor = target.closest('.monaco-editor') || target.closest('[class*="monaco"]');
+      
+      if (!isMonacoEditor) {
+        e.preventDefault();
+        if (e.clipboardData) {
+          e.clipboardData.setData('text/plain', '');
+        }
+        if (handleViolationRef.current) {
+          handleViolationRef.current('copy', { key: 'copy', clipboardData: true });
+        }
+      }
+    };
+
+    const handlePaste = (e) => {
+      // Always block paste - even in editor
+      e.preventDefault();
+      if (e.clipboardData) {
+        e.clipboardData.setData('text/plain', '');
+      }
+      if (handleViolationRef.current) {
+        handleViolationRef.current('paste', { key: 'paste', clipboardData: true });
+      }
+    };
+
+    const handleCut = (e) => {
+      // Allow cutting within Monaco editor for normal editor operations
+      const target = e.target;
+      const isMonacoEditor = target.closest('.monaco-editor') || target.closest('[class*="monaco"]');
+      
+      if (!isMonacoEditor) {
+        e.preventDefault();
+        if (e.clipboardData) {
+          e.clipboardData.setData('text/plain', '');
+        }
+        if (handleViolationRef.current) {
+          handleViolationRef.current('cut', { key: 'cut', clipboardData: true });
+        }
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      // Detect Ctrl+C / Cmd+C
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        const target = e.target;
+        const isMonacoEditor = target.closest('.monaco-editor') || target.closest('[class*="monaco"]');
+        if (!isMonacoEditor) {
+          e.preventDefault();
+          if (handleViolationRef.current) {
+            handleViolationRef.current('copy', { key: 'Ctrl+C' });
+          }
+        }
+      }
+      // Detect Ctrl+V / Cmd+V (always block)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        if (handleViolationRef.current) {
+          handleViolationRef.current('paste', { key: 'Ctrl+V' });
+        }
+      }
+      // Detect Ctrl+X / Cmd+X
+      if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+        const target = e.target;
+        const isMonacoEditor = target.closest('.monaco-editor') || target.closest('[class*="monaco"]');
+        if (!isMonacoEditor) {
+          e.preventDefault();
+          if (handleViolationRef.current) {
+            handleViolationRef.current('cut', { key: 'Ctrl+X' });
+          }
+        }
+      }
+      // Detect Print Screen (Windows) / Cmd+Shift+3/4 (Mac)
+      if (e.key === 'PrintScreen' || (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4'))) {
+        e.preventDefault();
+        if (handleViolationRef.current) {
+          handleViolationRef.current('print_screen', { key: e.key });
+        }
+      }
+      // Detect DevTools shortcuts
+      if (
+        e.key === 'F12' ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+        ((e.ctrlKey || e.metaKey) && e.key === 'U')
+      ) {
+        e.preventDefault();
+        if (handleViolationRef.current) {
+          handleViolationRef.current('devtools', { key: e.key });
+        }
+      }
+    };
+
+    // Right-click context menu detection
+    const handleContextMenu = (e) => {
+      // Allow context menu in Monaco editor for editor functionality
+      const target = e.target;
+      const isMonacoEditor = target.closest('.monaco-editor') || target.closest('[class*="monaco"]');
+      
+      if (!isMonacoEditor) {
+        e.preventDefault();
+        if (handleViolationRef.current) {
+          handleViolationRef.current('context_menu', { x: e.clientX, y: e.clientY });
+        }
+        return false;
+      }
+    };
+
+    document.addEventListener('copy', handleCopy, true);
+    document.addEventListener('paste', handlePaste, true);
+    document.addEventListener('cut', handleCut, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('contextmenu', handleContextMenu, true);
+
+    return () => {
+      document.removeEventListener('copy', handleCopy, true);
+      document.removeEventListener('paste', handlePaste, true);
+      document.removeEventListener('cut', handleCut, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+    };
+  }, []);
+
+  // Proctoring: Tab/Window switching detection
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab/window switched or minimized
+        lastTabSwitchRef.current = Date.now();
+        if (handleViolationRef.current) {
+          handleViolationRef.current('tab_switch', { 
+            type: 'visibility_hidden',
+            duration: null 
+          });
+        }
+      } else {
+        // Tab/window focused again
+        if (lastTabSwitchRef.current) {
+          const duration = Date.now() - lastTabSwitchRef.current;
+          // Only alert if it was away for more than 1 second
+          if (duration > 1000 && handleViolationRef.current) {
+            handleViolationRef.current('tab_switch', { 
+              type: 'visibility_visible',
+              duration: Math.round(duration / 1000) 
+            });
+          }
+          lastTabSwitchRef.current = null;
+        }
+      }
+    };
+
+    const handleBlur = () => {
+      // Window lost focus
+      lastTabSwitchRef.current = Date.now();
+    };
+
+    const handleFocus = () => {
+      // Window regained focus
+      if (lastTabSwitchRef.current) {
+        const duration = Date.now() - lastTabSwitchRef.current;
+        if (duration > 1000 && handleViolationRef.current) {
+          handleViolationRef.current('tab_switch', { 
+            type: 'window_focus',
+            duration: Math.round(duration / 1000) 
+          });
+        }
+        lastTabSwitchRef.current = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  // Proctoring: DevTools detection (advanced)
+  useEffect(() => {
+    let devToolsCheckInterval;
+    
+    const detectDevTools = () => {
+      // Method 1: Check window dimensions
+      const widthThreshold = window.outerWidth - window.innerWidth > 160;
+      const heightThreshold = window.outerHeight - window.innerHeight > 160;
+      
+      // Method 2: Check console (less reliable, can cause performance issues)
+      let consoleTime = 0;
+      try {
+        const startTime = performance.now();
+        // This is a minimal console check
+        const endTime = performance.now();
+        consoleTime = endTime - startTime;
+      } catch (e) {
+        // Ignore
+      }
+
+      if ((widthThreshold || heightThreshold) && !devToolsOpenRef.current) {
+        devToolsOpenRef.current = true;
+        if (handleViolationRef.current) {
+          handleViolationRef.current('devtools', { method: 'dimension_detection', detected: true });
+        }
+      } else if (!widthThreshold && !heightThreshold && devToolsOpenRef.current) {
+        devToolsOpenRef.current = false;
+      }
+    };
+
+    // Check periodically (every 2 seconds to reduce performance impact)
+    devToolsCheckInterval = setInterval(detectDevTools, 2000);
+
+    return () => {
+      if (devToolsCheckInterval) clearInterval(devToolsCheckInterval);
+    };
+  }, []);
+
   useEffect(() => {
     // Save start time
     if (!localStorage.getItem('assessment_start_time')) {
@@ -370,12 +729,33 @@ func main() {
     
     // Start camera for proctoring
     startProctoring();
+    
     // Start timer
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmitSection();
+          // Time's up - save all current state and submit entire assessment
+          if (currentSection === 'mcq') {
+            // Save MCQ answers
+            if (selectedAnswer) {
+              const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+              mcqAnswers[currentQuestion.toString()] = selectedAnswer;
+              localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+            }
+          } else if (currentSection === 'coding') {
+            saveCodingState();
+          } else if (currentSection === 'video') {
+            // Save video answer if recording
+            const videoAnswers = JSON.parse(localStorage.getItem('assessment_video_answers') || '[]');
+            if (!videoAnswers.includes(currentVideoQuestion)) {
+              videoAnswers.push(currentVideoQuestion);
+              localStorage.setItem('assessment_video_answers', JSON.stringify(videoAnswers));
+            }
+          }
+          // Clear flow completion flag and navigate to end
+          localStorage.removeItem('assessment_flow_completed');
+          router.push('/user/assessment-end');
           return 0;
         }
         return prev - 1;
@@ -387,7 +767,7 @@ func main() {
       if (currentSection === 'coding') {
         saveCodingState();
       }
-    }, 30000); // Autosave every 30 seconds
+    }, 2000); // Autosave every 2 seconds
     autosaveIntervalRef.current = autosaveTimer;
 
     return () => {
@@ -400,6 +780,21 @@ func main() {
       }
       if (videoStream) {
         videoStream.getTracks().forEach(track => track.stop());
+      }
+      // Stop MediaPipe proctoring
+      if (mediaPipeProctoringRef.current) {
+        try {
+          mediaPipeProctoringRef.current.stop();
+        } catch (e) {
+          console.warn('Error stopping MediaPipe:', e);
+        }
+        mediaPipeProctoringRef.current = null;
+      }
+      
+      // Remove hidden video element if it exists
+      if (hiddenProctoringVideoRef.current) {
+        hiddenProctoringVideoRef.current.remove();
+        hiddenProctoringVideoRef.current = null;
       }
     };
   }, []);
@@ -452,12 +847,106 @@ func main() {
     }
   }, [currentSection, currentQuestion]);
 
+  // Update video element when stream changes or section changes
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      // Always set the stream when section changes or stream changes
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(err => {
+        console.error('Error playing video:', err);
+      });
+    }
+  }, [stream, currentSection]);
+
+  // Update video preview element when switching to video section
+  useEffect(() => {
+    if (currentSection === 'video' && stream && videoPreviewRef.current) {
+      // Set the stream to video preview when in video section
+      // Only set if not recording (recording uses its own stream)
+      if (!isRecording && !recordedBlob) {
+        if (videoPreviewRef.current.srcObject !== stream) {
+          videoPreviewRef.current.srcObject = stream;
+          videoPreviewRef.current.play().catch(err => {
+            console.error('Error playing video preview:', err);
+          });
+        }
+      }
+    }
+  }, [stream, currentSection, isRecording, recordedBlob]);
+
   const startProctoring = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      setStream(mediaStream);
+      
+      // Set video stream to visible video element (if exists)
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        setStream(mediaStream);
+      }
+      
+      // Determine which video element to use for MediaPipe
+      // Use visible video if available, otherwise use hidden video
+      let proctoringVideoElement = videoRef.current;
+      
+      // Always ensure hidden video exists for MediaPipe (works in all sections)
+      if (!hiddenProctoringVideoRef.current) {
+        const hiddenVideo = document.createElement('video');
+        hiddenVideo.id = 'proctoring-video-hidden';
+        hiddenVideo.style.position = 'absolute';
+        hiddenVideo.style.width = '1px';
+        hiddenVideo.style.height = '1px';
+        hiddenVideo.style.opacity = '0';
+        hiddenVideo.style.pointerEvents = 'none';
+        hiddenVideo.style.zIndex = '-1';
+        hiddenVideo.autoplay = true;
+        hiddenVideo.playsInline = true;
+        hiddenVideo.muted = true;
+        document.body.appendChild(hiddenVideo);
+        hiddenProctoringVideoRef.current = hiddenVideo;
+      }
+      
+      // Set stream to hidden video for MediaPipe (always active)
+      hiddenProctoringVideoRef.current.srcObject = mediaStream;
+      proctoringVideoElement = hiddenProctoringVideoRef.current;
+      
+      // Initialize MediaPipe proctoring (optional, graceful failure)
+      if (proctoringVideoElement && !mediaPipeProctoringRef.current) {
+        try {
+          // Dynamically import MediaPipe to avoid blocking if it fails
+          const { MediaPipeProctoring } = await import('../../lib/mediapipeProctoring');
+          
+          mediaPipeProctoringRef.current = new MediaPipeProctoring(
+            proctoringVideoElement,
+            (violation) => {
+              // Handle MediaPipe violations
+              handleViolation(violation.type, violation.details);
+            }
+          );
+          
+          // Start MediaPipe detection once video is ready
+          const startMediaPipe = async () => {
+            if (proctoringVideoElement && proctoringVideoElement.readyState >= 2 && mediaPipeProctoringRef.current) {
+              try {
+                await mediaPipeProctoringRef.current.start();
+                console.log('MediaPipe proctoring started successfully');
+              } catch (error) {
+                console.error('Error starting MediaPipe:', error);
+                // Gracefully handle MediaPipe failure - continue without it
+                mediaPipeProctoringRef.current = null;
+              }
+            } else if (proctoringVideoElement) {
+              // Retry after a short delay
+              setTimeout(startMediaPipe, 100);
+            }
+          };
+          
+          proctoringVideoElement.addEventListener('loadedmetadata', startMediaPipe);
+          proctoringVideoElement.addEventListener('canplay', startMediaPipe);
+          startMediaPipe(); // Also try immediately
+        } catch (error) {
+          console.warn('MediaPipe proctoring not available:', error);
+          // Continue without MediaPipe - basic proctoring still works
+        }
       }
     } catch (error) {
       console.error('Proctoring camera error:', error);
@@ -514,13 +1003,26 @@ func main() {
 
   const handleSubmitSection = () => {
     // Save final state before submission
-    if (currentSection === 'coding') {
+    if (currentSection === 'mcq') {
+      // Save all MCQ answers before moving to next section
+      if (selectedAnswer) {
+        const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+        mcqAnswers[currentQuestion.toString()] = selectedAnswer;
+        localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+      }
+      // Navigate to coding section
+      setCurrentSection('coding');
+    } else if (currentSection === 'coding') {
+      // Save coding state
       saveCodingState();
+      // Navigate to video section
+      setCurrentSection('video');
+    } else if (currentSection === 'video') {
+      // Final submission - navigate to assessment end
+      // Clear flow completion flag
+      localStorage.removeItem('assessment_flow_completed');
+      router.push('/user/assessment-end');
     }
-    // Clear flow completion flag
-    localStorage.removeItem('assessment_flow_completed');
-    // Navigate to assessment end page
-    router.push('/user/assessment-end');
   };
 
   const handleSaveAndExit = () => {
@@ -710,34 +1212,37 @@ func main() {
   const handleCompile = async () => {
     setIsExecuting(true);
     setShowOutput(true);
-    setExecutionResult(null);
     
     try {
-      const validation = validateCode(selectedLanguage, code);
-      if (!validation.valid) {
-        setExecutionResult({
+      // Actually execute the code with empty input to check for compilation/runtime errors
+      const result = await executeCode(selectedLanguage, code, '');
+      
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        executionResult: {
+          success: result.success,
+          output: result.success ? 'Compilation successful!' : (result.output || ''),
+          error: result.error || null,
+          executionTime: result.executionTime || 0,
+        },
+        testResults: [], // Clear test results - only show compilation status
+      };
+      setCodingProblems(updatedProblems);
+      saveCodingState();
+    } catch (error) {
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        executionResult: {
           success: false,
           output: '',
-          error: validation.error,
+          error: error.toString(),
           executionTime: 0,
-        });
-        setIsExecuting(false);
-        return;
-      }
-      
-      setExecutionResult({
-        success: true,
-        output: 'Compilation successful!',
-        error: null,
-        executionTime: 0,
-      });
-    } catch (error) {
-      setExecutionResult({
-        success: false,
-        output: '',
-        error: error.toString(),
-        executionTime: 0,
-      });
+        },
+        testResults: [], // Clear test results on error too
+      };
+      setCodingProblems(updatedProblems);
     } finally {
       setIsExecuting(false);
     }
@@ -745,43 +1250,65 @@ func main() {
 
   const handleRunCustomInput = async () => {
     if (!customInput.trim()) {
-      setExecutionResult({
-        success: false,
-        output: '',
-        error: 'Please provide custom input',
-        executionTime: 0,
-      });
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        executionResult: {
+          success: false,
+          output: '',
+          error: 'Please provide custom input',
+          executionTime: 0,
+        },
+      };
+      setCodingProblems(updatedProblems);
       setShowOutput(true);
       return;
     }
     
     setIsExecuting(true);
     setShowOutput(true);
-    setExecutionResult(null);
-    setTestResults([]);
     
     try {
       const validation = validateCode(selectedLanguage, code);
       if (!validation.valid) {
-        setExecutionResult({
-          success: false,
-          output: '',
-          error: validation.error,
-          executionTime: 0,
-        });
+        const updatedProblems = [...codingProblems];
+        updatedProblems[currentCodingProblem] = {
+          ...updatedProblems[currentCodingProblem],
+          executionResult: {
+            success: false,
+            output: '',
+            error: validation.error,
+            executionTime: 0,
+          },
+          testResults: [],
+        };
+        setCodingProblems(updatedProblems);
         setIsExecuting(false);
         return;
       }
       
       const result = await executeCode(selectedLanguage, code, customInput);
-      setExecutionResult(result);
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        executionResult: result,
+        testResults: [],
+      };
+      setCodingProblems(updatedProblems);
+      saveCodingState();
     } catch (error) {
-      setExecutionResult({
-        success: false,
-        output: '',
-        error: error.toString(),
-        executionTime: 0,
-      });
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        executionResult: {
+          success: false,
+          output: '',
+          error: error.toString(),
+          executionTime: 0,
+        },
+        testResults: [], // Clear test results on error too
+      };
+      setCodingProblems(updatedProblems);
     } finally {
       setIsExecuting(false);
     }
@@ -789,7 +1316,10 @@ func main() {
 
   const handleSubmitCoding = () => {
     console.log('Submitting coding solution...');
-    // Implement submission
+    // Save final coding state
+    saveCodingState();
+    // Navigate to video section
+    setCurrentSection('video');
   };
 
   const handleNextCodingProblem = () => {
@@ -801,18 +1331,40 @@ func main() {
   // Video section handlers
   const handleStartRecording = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      setVideoStream(mediaStream);
+      // Request video and audio permissions
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user'
+        }, 
+        audio: true 
+      });
       
+      setVideoStream(mediaStream);
+      setIsRecording(true);
+      
+      // Set video stream to preview element
       if (videoPreviewRef.current) {
         videoPreviewRef.current.srcObject = mediaStream;
+        videoPreviewRef.current.play().catch(err => console.error('Error playing video:', err));
       }
 
-      const recorder = new MediaRecorder(mediaStream);
+      // Initialize MediaRecorder with supported MIME type
+      const options = { mimeType: 'video/webm;codecs=vp8,opus' };
+      let recorder;
+      
+      if (MediaRecorder.isTypeSupported(options.mimeType)) {
+        recorder = new MediaRecorder(mediaStream, options);
+      } else {
+        // Fallback to default
+        recorder = new MediaRecorder(mediaStream);
+      }
+      
       const chunks = [];
       
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           chunks.push(e.data);
         }
       };
@@ -820,27 +1372,40 @@ func main() {
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
         setRecordedBlob(blob);
+        setIsRecording(false);
+        
+        // Stop all tracks
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+        }
+        
         if (videoPreviewRef.current) {
           videoPreviewRef.current.srcObject = null;
         }
       };
 
+      recorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+        setIsRecording(false);
+      };
+
       videoRecorderRef.current = recorder;
-      recorder.start();
-      setIsRecording(true);
+      recorder.start(100); // Collect data every 100ms
     } catch (error) {
       console.error('Error starting recording:', error);
+      setIsRecording(false);
+      alert('Failed to start recording. Please check camera and microphone permissions.');
     }
   };
 
   const handleStopRecording = () => {
     if (videoRecorderRef.current && isRecording) {
-      videoRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-        setVideoStream(null);
+      try {
+        videoRecorderRef.current.stop();
+        setIsRecording(false);
+      } catch (error) {
+        console.error('Error stopping recording:', error);
+        setIsRecording(false);
       }
     }
   };
@@ -848,10 +1413,28 @@ func main() {
   const handleRetake = () => {
     setRecordedBlob(null);
     setIsRecording(false);
+    
+    // Stop current recording if active
+    if (videoRecorderRef.current && isRecording) {
+      try {
+        videoRecorderRef.current.stop();
+      } catch (error) {
+        console.error('Error stopping recorder:', error);
+      }
+    }
+    
+    // Stop and cleanup video stream
     if (videoStream) {
       videoStream.getTracks().forEach(track => track.stop());
       setVideoStream(null);
     }
+    
+    // Clear video preview
+    if (videoPreviewRef.current) {
+      videoPreviewRef.current.srcObject = null;
+    }
+    
+    videoRecorderRef.current = null;
   };
 
   const handleSubmitVideo = () => {
@@ -862,15 +1445,29 @@ func main() {
       videoAnswers.push(currentVideoQuestion);
       localStorage.setItem('assessment_video_answers', JSON.stringify(videoAnswers));
     }
-    // Implement video submission
+    
+    // Check if this is the last video question
     if (currentVideoQuestion < totalVideoQuestions) {
+      // Move to next video question
       setCurrentVideoQuestion(currentVideoQuestion + 1);
       handleRetake();
+    } else {
+      // All sections completed - navigate to assessment end
+      localStorage.removeItem('assessment_flow_completed');
+      router.push('/user/assessment-end');
     }
   };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
+      {/* Proctoring Alert Modal */}
+      <ProctoringAlert
+        isOpen={proctoringAlert.isOpen}
+        violation={proctoringAlert.violation}
+        onClose={closeProctoringAlert}
+        violationCount={violationCount}
+      />
+      
       {/* Header */}
       <header className="border-b border-gray-800 px-6 py-4 flex justify-between items-center bg-black">
         <div className="flex items-center space-x-3">
@@ -894,106 +1491,85 @@ func main() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Left Panel - Proctoring and Navigation (hidden in coding and video sections) */}
-        {currentSection !== 'coding' && currentSection !== 'video' && (
+        {/* Left Panel - Proctoring and Navigation (only visible in MCQ section) */}
+        {currentSection === 'mcq' && (
           <div className="w-80 bg-black border-r border-gray-800 p-6 overflow-y-auto">
-          {/* Proctoring Active */}
-          <motion.div 
-            className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 mb-6"
-            style={{
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-              transformStyle: 'preserve-3d'
-            }}
-            whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
-            transition={{ duration: 0.3 }}
-          >
-            {/* Shine effect */}
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-              <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-            </div>
-            <div className="premium-card-content relative z-20">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold leading-tight">Proctoring Active</h3>
-              <span className="px-3 py-1 bg-green-500/20 text-green-500 rounded-full text-xs font-semibold">
-                Good
-              </span>
-            </div>
-            
-            {/* Video Feed */}
-            <div className="rounded-xl overflow-hidden mb-4" style={{ aspectRatio: '4/3' }}>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-            {/* Assessment Progress */}
-            <div className="mb-4">
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-gray-400">Total: {totalQuestions}</span>
-                <span className="text-gray-400">Attempted: {attempted}</span>
+            {/* Proctoring Active */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold leading-tight">Proctoring Active</h3>
+                <span className="px-3 py-1 bg-green-500/20 text-green-500 rounded-full text-xs font-semibold">
+                  Good
+                </span>
               </div>
-              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-orange-500 transition-all"
-                  style={{ width: `${(attempted / totalQuestions) * 100}%` }}
+              
+              {/* Video Feed */}
+              <div className="rounded-xl overflow-hidden mb-4 bg-black relative" style={{ aspectRatio: '4/3' }}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover bg-black"
+                  style={{ backgroundColor: '#000' }}
                 />
+                {!stream && (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm bg-black/80">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-2 border-gray-600 border-t-orange-500 rounded-full animate-spin mx-auto mb-2"></div>
+                      <p>Initializing camera...</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Assessment Progress */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-gray-400">Total: {totalQuestions}</span>
+                  <span className="text-gray-400">Attempted: {attempted}</span>
+                </div>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-orange-500 transition-all"
+                    style={{ width: `${(attempted / totalQuestions) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 text-sm">
+                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                <span className="text-gray-400">Pending</span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 text-sm">
-              <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-              <span className="text-gray-400">Pending</span>
+            {/* Question Map */}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+              <h3 className="font-semibold mb-4 leading-tight">Question Map</h3>
+              <div className="grid grid-cols-5 gap-2">
+                {questions.map((q) => (
+                  <button
+                    key={q.id}
+                    onClick={() => setCurrentQuestion(q.id)}
+                    className={`w-10 h-10 rounded-lg font-semibold transition-colors ${
+                      q.current
+                        ? 'bg-orange-500 text-white'
+                        : q.attempted
+                        ? 'bg-green-500 text-white'
+                        : 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    {q.id}
+                  </button>
+                ))}
+              </div>
             </div>
-            </div>
-          </motion.div>
 
-          {/* Question Map */}
-          <motion.div 
-            className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 mb-6"
-            style={{
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-              transformStyle: 'preserve-3d'
-            }}
-            whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
-            transition={{ duration: 0.3 }}
-          >
-            {/* Shine effect */}
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-              <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-            </div>
-            <div className="premium-card-content relative z-20">
-            <h3 className="font-semibold mb-4 leading-tight">Question Map</h3>
-            <div className="grid grid-cols-5 gap-2">
-              {questions.map((q) => (
-                <button
-                  key={q.id}
-                  onClick={() => setCurrentQuestion(q.id)}
-                  className={`w-10 h-10 rounded-lg font-semibold transition-colors ${
-                    q.current
-                      ? 'bg-orange-500 text-white'
-                      : q.attempted
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  {q.id}
-                </button>
-              ))}
-            </div>
-            </div>
-          </motion.div>
-
-          {/* System Check */}
-          <button className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-green-500/20 border border-green-500/30 rounded-lg text-green-500 font-semibold">
-            <FiCheckCircle />
-            <span>System Check: All Good</span>
-          </button>
+            {/* System Check */}
+            <button className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-green-500/20 border border-green-500/30 rounded-lg text-green-500 font-semibold">
+              <FiCheckCircle />
+              <span>System Check: All Good</span>
+            </button>
           </div>
         )}
 
@@ -1017,14 +1593,23 @@ func main() {
                   <span>Proctoring</span>
                 </span>
               </div>
-              <div className="rounded-lg overflow-hidden" style={{ aspectRatio: '4/3' }}>
+              <div className="rounded-lg overflow-hidden bg-black relative" style={{ aspectRatio: '4/3' }}>
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover bg-black"
+                  style={{ backgroundColor: '#000' }}
                 />
+                {!stream && (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-xs bg-black/80">
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-2 border-gray-600 border-t-orange-500 rounded-full animate-spin mx-auto mb-1"></div>
+                      <p className="text-xs">Loading...</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1090,26 +1675,12 @@ func main() {
                     </div>
                   </div>
 
-                  <motion.div 
-                    className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 mb-6"
-                    style={{
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-                      transformStyle: 'preserve-3d'
-                    }}
-                    whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                    </div>
-                    <div className="premium-card-content relative z-20">
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
                     <h2 className="text-xl font-semibold mb-6 leading-tight">
                       Which sorting algorithm has the best average time complexity for large, randomly distributed datasets?
                     </h2>
 
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {[
                         { id: 'bubble-sort', label: 'Bubble Sort' },
                         { id: 'merge-sort', label: 'Merge Sort' },
@@ -1121,7 +1692,7 @@ func main() {
                           className={`flex items-center space-x-3 p-4 rounded-lg cursor-pointer transition-colors ${
                             selectedAnswer === option.id
                               ? 'bg-orange-500/20 border border-orange-500/50'
-                              : 'bg-gray-700/50 border border-gray-700 hover:bg-gray-700'
+                              : 'bg-white/5 border border-white/10 hover:bg-white/10'
                           }`}
                         >
                           <input
@@ -1146,8 +1717,7 @@ func main() {
                         </label>
                       ))}
                     </div>
-                    </div>
-                  </motion.div>
+                  </div>
 
                   {/* Navigation Buttons */}
                   <div className="flex items-center justify-between">
@@ -1231,21 +1801,7 @@ func main() {
                       <span className="text-sm text-gray-400">Coding — Problem {currentCodingProblem + 1} of {totalCodingProblems}</span>
                     </div>
                   
-                  <motion.div 
-                    className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 mb-6"
-                    style={{
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-                      transformStyle: 'preserve-3d'
-                    }}
-                    whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                    </div>
-                    <div className="premium-card-content relative z-20">
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
                     <h1 className="text-2xl font-bold mb-4">{currentProblem?.title || 'Coding Problem'}</h1>
                     <div className="flex items-center space-x-4 text-sm text-gray-400 mb-6">
                       <span>Difficulty: Easy</span>
@@ -1310,8 +1866,7 @@ func main() {
                         If yes, return the stored index and i. This yields linear time complexity O(n) and O(1) space.
                       </p>
                     </div>
-                    </div>
-                  </motion.div>
+                  </div>
                 </div>
 
                 {/* Right Panel - Code Editor */}
@@ -1356,18 +1911,58 @@ func main() {
                   </div>
 
                   {/* Code Editor */}
-                  <div className="flex-1 p-4">
-                    <textarea
+                  <div className="flex-1 p-4" style={{ minHeight: 0 }}>
+                    <Editor
+                      height="100%"
+                      language={selectedLanguage === 'python' ? 'python' : 
+                               selectedLanguage === 'javascript' ? 'javascript' :
+                               selectedLanguage === 'java' ? 'java' :
+                               selectedLanguage === 'cpp' ? 'cpp' :
+                               selectedLanguage === 'c' ? 'c' :
+                               selectedLanguage === 'go' ? 'go' : 'python'}
                       value={code}
-                      onChange={(e) => handleCodeChange(e.target.value)}
-                      className="w-full h-full bg-black text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-700 focus:border-orange-500 focus:outline-none resize-none"
-                      spellCheck={false}
-                      placeholder="Write your code here..."
-                      style={{ 
+                      onChange={(value) => handleCodeChange(value || '')}
+                      theme="vs-dark"
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 14,
+                        lineNumbers: 'on',
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                        tabSize: 4,
+                        insertSpaces: true,
+                        wordWrap: 'on',
+                        formatOnPaste: true,
+                        formatOnType: true,
+                        suggestOnTriggerCharacters: true,
+                        quickSuggestions: true,
+                        acceptSuggestionOnCommitCharacter: true,
+                        acceptSuggestionOnEnter: 'on',
+                        snippetSuggestions: 'top',
+                        suggestSelection: 'first',
+                        tabCompletion: 'on',
+                        wordBasedSuggestions: 'allDocuments',
                         fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, "source-code-pro", monospace',
-                        lineHeight: '1.5',
-                        tabSize: 4
+                        fontLigatures: true,
+                        cursorBlinking: 'smooth',
+                        cursorSmoothCaretAnimation: 'on',
+                        smoothScrolling: true,
+                        padding: { top: 16, bottom: 16 },
+                        renderWhitespace: 'selection',
+                        renderLineHighlight: 'all',
+                        scrollbar: {
+                          vertical: 'auto',
+                          horizontal: 'auto',
+                          useShadows: false,
+                          verticalHasArrows: false,
+                          horizontalHasArrows: false,
+                        },
                       }}
+                      loading={
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-gray-400">Loading editor...</div>
+                        </div>
+                      }
                     />
                   </div>
 
@@ -1402,7 +1997,7 @@ func main() {
                       className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm disabled:opacity-50"
                     >
                       <FiPlay />
-                      <span>Compile</span>
+                      <span>Run</span>
                     </button>
                     <button
                       onClick={handleRunCustomInput}
@@ -1506,15 +2101,13 @@ func main() {
                                         <span className="text-gray-300 font-mono">{test.input}</span>
                                       </div>
                                       <div>
+                                        <span className="text-gray-500">Output: </span>
+                                        <span className={`font-mono ${test.passed ? 'text-green-400' : 'text-red-400'}`}>{test.actualOutput || 'No output'}</span>
+                                      </div>
+                                      <div>
                                         <span className="text-gray-500">Expected: </span>
                                         <span className="text-green-400 font-mono">{test.expectedOutput}</span>
                                       </div>
-                                      {!test.passed && (
-                                        <div>
-                                          <span className="text-gray-500">Got: </span>
-                                          <span className="text-red-400 font-mono">{test.actualOutput || 'No output'}</span>
-                                        </div>
-                                      )}
                                       {test.error && (
                                         <div className="text-red-400 font-mono text-xs mt-1">
                                           {test.error}
@@ -1541,24 +2134,10 @@ func main() {
               <div className="flex-1 flex overflow-hidden">
                 {/* Left Panel - Question */}
                 <div className="w-1/2 border-r border-gray-800 overflow-y-auto p-6">
-                  <motion.div 
-                    className="group relative bg-black/90 border border-[#FF5728] rounded-3xl p-6 mb-6"
-                    style={{
-                      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 87, 40, 0.3) inset',
-                      transformStyle: 'preserve-3d'
-                    }}
-                    whileHover={{ y: -8, scale: 1.02, rotateX: 2 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0 overflow-hidden rounded-3xl">
-                      <div className="absolute top-2 left-2 right-0 bottom-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                    </div>
-                    <div className="premium-card-content relative z-20">
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
                     <div className="flex items-center justify-between mb-6">
                       <h1 className="text-xl font-semibold">Video Interview — Question {currentVideoQuestion} of {totalVideoQuestions}</h1>
-                      <button className="px-3 py-1 bg-gray-800 rounded-lg text-sm text-gray-300">2 min</button>
+                      <button className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300">2 min</button>
                     </div>
                     
                     <h2 className="text-2xl font-bold mb-6">Explain a challenging bug you fixed recently.</h2>
@@ -1578,7 +2157,7 @@ func main() {
                             className={`w-10 h-10 rounded-full font-semibold transition-colors ${
                               currentVideoQuestion === num
                                 ? 'bg-orange-500 text-white'
-                                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                                : 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10'
                             }`}
                           >
                             {num}
@@ -1586,8 +2165,7 @@ func main() {
                         ))}
                       </div>
                     </div>
-                    </div>
-                  </motion.div>
+                  </div>
                 </div>
 
                 {/* Right Panel - Video Recording */}
@@ -1599,7 +2177,7 @@ func main() {
                     </div>
 
                     {/* Video Preview */}
-                    <div className="flex-1 bg-gray-800 rounded-xl mb-4 flex items-center justify-center overflow-hidden">
+                    <div className="flex-1 bg-gray-800 rounded-xl mb-4 flex items-center justify-center overflow-hidden relative">
                       {recordedBlob ? (
                         <video
                           src={URL.createObjectURL(recordedBlob)}
@@ -1607,21 +2185,33 @@ func main() {
                           className="w-full h-full object-contain"
                         />
                       ) : (
-                        <video
-                          ref={videoPreviewRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className={`w-full h-full object-contain ${isRecording ? '' : 'hidden'}`}
-                        />
-                      )}
-                      {!isRecording && !recordedBlob && (
-                        <div className="text-gray-500 text-center">
-                          <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                          <p>Video preview will appear here</p>
-                        </div>
+                        <>
+                          <video
+                            ref={videoPreviewRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover bg-black"
+                            style={{ backgroundColor: '#000' }}
+                          />
+                          {!isRecording && !stream && (
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-center bg-gray-800/50">
+                              <div>
+                                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <p>Video preview will appear here</p>
+                                <p className="text-sm mt-2">Click "Start Recording" to begin</p>
+                              </div>
+                            </div>
+                          )}
+                          {isRecording && (
+                            <div className="absolute top-4 right-4 flex items-center space-x-2 px-3 py-1.5 bg-red-500/90 rounded-lg">
+                              <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+                              <span className="text-white text-sm font-semibold">Recording...</span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -1678,13 +2268,6 @@ func main() {
           {/* Bottom Navigation for Coding Section */}
           {currentSection === 'coding' && (
             <div className="border-t border-gray-800 px-6 py-4 flex justify-end space-x-4">
-              <button
-                onClick={handleNextCodingProblem}
-                className="flex items-center space-x-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <span>Next Code</span>
-                <FiChevronRight />
-              </button>
               <button
                 onClick={handleSubmitCoding}
                 className="flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors font-semibold"

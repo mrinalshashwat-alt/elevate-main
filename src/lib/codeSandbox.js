@@ -1,8 +1,10 @@
 /**
  * Code Sandbox - Execute code in a safe environment
  * Supports JavaScript execution in browser
- * For other languages, integrates with backend API
+ * For other languages, integrates with Judge0 API
  */
+
+import { executeWithJudge0, isJudge0Available, getSupportedLanguages } from './judge0';
 
 // Test case structure
 export const createTestCases = (testCasesString) => {
@@ -225,54 +227,67 @@ export const executeJavaScript = async (code, input = '') => {
   });
 };
 
-// Execute Python code (requires backend API or Pyodide)
+// Execute Python code using Judge0
 export const executePython = async (code, input = '') => {
-  // This would typically call a backend API
-  // For now, return a placeholder
+  if (isJudge0Available()) {
+    return await executeWithJudge0('python', code, input);
+  }
   return {
     success: false,
     output: '',
-    error: 'Python execution requires backend API integration. Please configure a code execution service.',
+    error: 'Judge0 API not configured. Please set NEXT_PUBLIC_JUDGE0_API_URL or NEXT_PUBLIC_JUDGE0_RAPIDAPI_KEY',
     executionTime: 0,
   };
 };
 
-// Execute Java code (requires backend API)
+// Execute Java code using Judge0
 export const executeJava = async (code, input = '') => {
+  if (isJudge0Available()) {
+    return await executeWithJudge0('java', code, input);
+  }
   return {
     success: false,
     output: '',
-    error: 'Java execution requires backend API integration. Please configure a code execution service.',
+    error: 'Judge0 API not configured. Please set NEXT_PUBLIC_JUDGE0_API_URL or NEXT_PUBLIC_JUDGE0_RAPIDAPI_KEY',
     executionTime: 0,
   };
 };
 
-// Execute C++ code (requires backend API)
+// Execute C++ code using Judge0
 export const executeCpp = async (code, input = '') => {
+  if (isJudge0Available()) {
+    return await executeWithJudge0('cpp', code, input);
+  }
   return {
     success: false,
     output: '',
-    error: 'C++ execution requires backend API integration. Please configure a code execution service.',
+    error: 'Judge0 API not configured. Please set NEXT_PUBLIC_JUDGE0_API_URL or NEXT_PUBLIC_JUDGE0_RAPIDAPI_KEY',
     executionTime: 0,
   };
 };
 
-// Execute C code (requires backend API)
+// Execute C code using Judge0
 export const executeC = async (code, input = '') => {
+  if (isJudge0Available()) {
+    return await executeWithJudge0('c', code, input);
+  }
   return {
     success: false,
     output: '',
-    error: 'C execution requires backend API integration. Please configure a code execution service.',
+    error: 'Judge0 API not configured. Please set NEXT_PUBLIC_JUDGE0_API_URL or NEXT_PUBLIC_JUDGE0_RAPIDAPI_KEY',
     executionTime: 0,
   };
 };
 
-// Execute Go code (requires backend API)
+// Execute Go code using Judge0
 export const executeGo = async (code, input = '') => {
+  if (isJudge0Available()) {
+    return await executeWithJudge0('go', code, input);
+  }
   return {
     success: false,
     output: '',
-    error: 'Go execution requires backend API integration. Please configure a code execution service.',
+    error: 'Judge0 API not configured. Please set NEXT_PUBLIC_JUDGE0_API_URL or NEXT_PUBLIC_JUDGE0_RAPIDAPI_KEY',
     executionTime: 0,
   };
 };
@@ -283,11 +298,20 @@ export const executeCode = async (language, code, input = '', testCases = []) =>
   
   let result;
   
-  switch (language) {
+  // Normalize language name
+  const normalizedLang = language.toLowerCase().trim();
+  
+  switch (normalizedLang) {
     case 'javascript':
+    case 'js':
+    case 'nodejs':
+    case 'node':
+      // Use browser execution for JavaScript (faster) or Judge0 if preferred
+      // You can change this to use Judge0 for consistency: result = await executeWithJudge0('javascript', code, input);
       result = await executeJavaScript(code, input);
       break;
     case 'python':
+    case 'py':
       result = await executePython(code, input);
       break;
     case 'java':
@@ -295,24 +319,44 @@ export const executeCode = async (language, code, input = '', testCases = []) =>
       break;
     case 'cpp':
     case 'c++':
+    case 'cplusplus':
       result = await executeCpp(code, input);
       break;
     case 'c':
       result = await executeC(code, input);
       break;
     case 'go':
+    case 'golang':
       result = await executeGo(code, input);
       break;
     default:
-      result = {
-        success: false,
-        output: '',
-        error: `Unsupported language: ${language}`,
-        executionTime: 0,
-      };
+      // Try Judge0 for other languages if available
+      if (isJudge0Available()) {
+        const supportedLangs = getSupportedLanguages();
+        if (supportedLangs.includes(normalizedLang)) {
+          result = await executeWithJudge0(normalizedLang, code, input);
+        } else {
+          result = {
+            success: false,
+            output: '',
+            error: `Unsupported language: ${language}. Supported languages: ${supportedLangs.join(', ')}`,
+            executionTime: 0,
+          };
+        }
+      } else {
+        result = {
+          success: false,
+          output: '',
+          error: `Unsupported language: ${language}. Judge0 API not configured.`,
+          executionTime: 0,
+        };
+      }
   }
   
-  result.executionTime = Date.now() - startTime;
+  // Execution time is already set by individual functions, but ensure it's accurate
+  if (!result.executionTime) {
+    result.executionTime = Date.now() - startTime;
+  }
   
   // If test cases provided, run them
   if (testCases.length > 0 && result.success) {
@@ -323,6 +367,19 @@ export const executeCode = async (language, code, input = '', testCases = []) =>
   return result;
 };
 
+// Normalize output for comparison (handles newlines, whitespace, etc.)
+const normalizeOutput = (output) => {
+  if (!output) return '';
+  // Remove trailing newlines and whitespace, normalize line endings
+  return output
+    .replace(/\r\n/g, '\n')  // Normalize Windows line endings
+    .replace(/\r/g, '\n')    // Normalize Mac line endings
+    .split('\n')
+    .map(line => line.trimEnd())  // Remove trailing spaces from each line
+    .join('\n')
+    .trim();  // Remove leading/trailing newlines and whitespace
+};
+
 // Run test cases against code
 export const runTestCases = async (language, code, testCases) => {
   const results = [];
@@ -330,14 +387,20 @@ export const runTestCases = async (language, code, testCases) => {
   for (const testCase of testCases) {
     const result = await executeCode(language, code, testCase.input);
     
-    const passed = result.success && 
-                   result.output.trim() === testCase.expectedOutput.trim();
+    // Normalize both outputs for comparison
+    const normalizedActual = normalizeOutput(result.output);
+    const normalizedExpected = normalizeOutput(testCase.expectedOutput);
+    
+    const passed = result.success && normalizedActual === normalizedExpected;
     
     results.push({
       ...testCase,
       passed,
-      actualOutput: result.output,
+      actualOutput: result.output,  // Keep original for display
+      normalizedActual,  // Add normalized version for debugging
+      normalizedExpected,  // Add normalized expected for debugging
       error: result.error,
+      executionTime: result.executionTime,
     });
   }
   
