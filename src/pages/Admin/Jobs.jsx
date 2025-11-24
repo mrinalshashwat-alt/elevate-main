@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getJobs, createJob, updateJob, deleteJob } from '../../api/admin';
 import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
+import AdminLayout from '../../components/AdminLayout';
 
 const Jobs = () => {
   const router = useRouter();
@@ -279,35 +280,53 @@ Join us and be part of an innovative team driving excellence in our industry.`;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white">
-      <header className="bg-black/50 backdrop-blur-lg border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <button onClick={() => router.push('/admin/dashboard')} className="flex items-center space-x-2 hover:text-orange-500">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            <span>Back to Dashboard</span>
-          </button>
-          <h1 className="text-2xl font-bold">Manage Jobs</h1>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowModal(true);
-            }}
-            className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg font-semibold hover:shadow-lg transition-all"
-          >
-            Post Job
-          </button>
+    <AdminLayout title="Jobs">
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold mb-2 text-white">Manage Jobs</h1>
+          <p className="text-gray-400">Create and manage job postings with AI-powered descriptions</p>
         </div>
-      </header>
+        <button
+          onClick={() => {
+            resetForm();
+            setShowModal(true);
+          }}
+          className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all flex items-center space-x-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Post Job</span>
+        </button>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <div>
         {isLoading ? (
-          <div className="text-center py-12">Loading jobs...</div>
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading jobs...</p>
+          </div>
+        ) : jobsData?.data?.length === 0 ? (
+          <div className="text-center py-16">
+            <svg className="w-20 h-20 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <h3 className="text-xl font-semibold text-white mb-2">No jobs yet</h3>
+            <p className="text-gray-400 mb-6">Get started by creating your first job posting</p>
+            <button
+              onClick={() => {
+                resetForm();
+                setShowModal(true);
+              }}
+              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
+            >
+              Create Your First Job
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {jobsData?.data.map((job) => (
-              <div key={job.id} className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-all">
+              <div key={job.id} className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-xl p-6 hover:bg-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-orange-500/10 transition-all duration-300">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="text-xl font-bold mb-1">{job.title}</h3>
@@ -359,19 +378,19 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                 <div className="flex space-x-2">
                   <button
                     onClick={() => handleViewAssessments(job)}
-                    className="flex-1 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-lg transition-all text-sm font-medium"
+                    className="flex-1 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-lg transition-all text-sm font-medium hover:scale-105"
                   >
                     View Assessments ({getJobAssessments(job.id).length})
                   </button>
                   <button
                     onClick={() => handleEdit(job)}
-                    className="flex-1 py-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-all"
+                    className="flex-1 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-500/50 rounded-lg transition-all hover:scale-105"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(job.id)}
-                    className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-all"
+                    className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 hover:border-red-500/50 rounded-lg transition-all hover:scale-105"
                   >
                     Delete
                   </button>
@@ -380,7 +399,7 @@ Join us and be part of an innovative team driving excellence in our industry.`;
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {/* Modal */}
       {showModal && (
@@ -731,7 +750,7 @@ Join us and be part of an innovative team driving excellence in our industry.`;
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 };
 

@@ -118,15 +118,10 @@ const AssessmentSummary = () => {
             <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-2xl p-6 flex flex-col">
               <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-bold">Overall Progress</h1>
-                {allCompleted ? (
+                {allCompleted && (
                   <div className="flex items-center space-x-2 px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-lg">
                     <FiCheckCircle className="text-green-400 text-sm" />
                     <span className="text-green-400 font-semibold text-sm">Complete</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2 px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
-                    <FiAlertCircle className="text-yellow-400 text-sm" />
-                    <span className="text-yellow-400 font-semibold text-sm">In Progress</span>
                   </div>
                 )}
               </div>

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import AdminLayout from '../../components/AdminLayout';
 
 // Custom Dropdown Component with Orange Background
 const CustomDropdown = ({ label, value, onChange, options, placeholder }) => {
@@ -284,36 +285,11 @@ const CandidatesList = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
-      {/* Animated Background Effects */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+    <AdminLayout title="Candidates">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2 text-white">Candidates</h1>
+        <p className="text-gray-400">Browse and filter candidates by competency, score, and location</p>
       </div>
-
-      {/* Navigation Header */}
-      <header className="bg-black/40 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 shadow-2xl">
-        <div className="max-w-7xl mx-auto px-4 py-5 flex justify-between items-center">
-          <button 
-            onClick={() => router.push('/admin/assessment-list')} 
-            className="flex items-center space-x-2 hover:text-orange-400 transition-all group px-3 py-2 rounded-lg hover:bg-white/5"
-          >
-            <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="font-medium">Back to Assessments</span>
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/30">
-              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Candidates</h1>
-          </div>
-          <div className="w-40"></div>
-        </div>
-      </header>
 
       <main className="max-w-7xl mx-auto px-4 py-12 relative z-10">
         {/* Header */}
@@ -551,7 +527,7 @@ const CandidatesList = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </AdminLayout>
   );
 };
 

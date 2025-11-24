@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FiEdit, FiTrash2, FiX } from 'react-icons/fi';
 import { getAssessments, deleteAssessment, getJobs, createJob, updateJob, deleteJob, createAssessment } from '../../api/admin';
 import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
+import AdminLayout from '../../components/AdminLayout';
 
 // Custom glass popover select component matching AIMockInterview style
 const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
@@ -68,9 +69,17 @@ const AssessmentList = () => {
     if (section === 'completed') {
       setActiveSection('completed');
       setActiveMainTab('assessments');
+    } else if (tab === 'jobs') {
+      setActiveMainTab('jobs');
+    } else if (tab === 'assessments') {
+      setActiveMainTab('assessments');
     } else if (tab === 'candidates') {
       // Navigate to candidates page if that's what's requested
       router.push('/admin/candidates');
+    }
+    // If no tab is specified, default to assessments tab
+    else if (!tab) {
+      setActiveMainTab('assessments');
     }
   }, [searchParams, router]);
   const [assessmentType, setAssessmentType] = useState('coding');
@@ -744,38 +753,7 @@ Join us and be part of an innovative team driving excellence in our industry.`;
   const avgScore = 78;
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
-      {/* Animated Background Effects */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-      </div>
-
-      {/* Navigation Header */}
-      <header className="bg-black/40 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 shadow-2xl">
-        <div className="max-w-7xl mx-auto px-4 py-5 flex justify-between items-center">
-          <button 
-            onClick={() => router.push('/admin/dashboard')} 
-            className="flex items-center space-x-2 hover:text-orange-400 transition-all group px-3 py-2 rounded-lg hover:bg-white/5"
-          >
-            <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="font-medium">Back to Dashboard</span>
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/30">
-              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">AI Assessment</h1>
-          </div>
-          <div className="w-40"></div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-12 relative z-10">
+    <AdminLayout title="Assessments">
         {/* Toggle Section */}
         <div className="flex gap-4 mb-8">
           <button
@@ -1258,7 +1236,6 @@ Join us and be part of an innovative team driving excellence in our industry.`;
              )}
            </>
          )}
-      </main>
 
       {/* New Assessment Modal */}
       <AnimatePresence>
@@ -2178,7 +2155,7 @@ Join us and be part of an innovative team driving excellence in our industry.`;
         </div>
       )}
 
-    </div>
+    </AdminLayout>
   );
 };
 

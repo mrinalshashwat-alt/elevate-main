@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getAssessments, getJobs } from '../../api/admin';
 import { assessmentsStorage, jobsStorage } from '../../lib/localStorage';
 import { FiArrowLeft, FiEdit, FiTrash2, FiCopy, FiExternalLink, FiClock, FiFileText, FiUsers, FiCheckCircle, FiXCircle, FiLink } from 'react-icons/fi';
+import AdminLayout from '../../components/AdminLayout';
 
 const AssessmentView = () => {
   const router = useRouter();
@@ -111,47 +112,48 @@ const AssessmentView = () => {
 
   if (!assessment) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading assessment...</p>
+      <AdminLayout title="Assessment View">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading assessment...</p>
+          </div>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="bg-black/50 backdrop-blur-lg border-b border-white/10 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <button
-            onClick={() => router.push('/admin/assessment-list')}
-            className="flex items-center space-x-2 hover:text-orange-500 transition-colors"
-          >
-            <FiArrowLeft className="w-5 h-5" />
-            <span>Back to Assessments</span>
-          </button>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={handleEdit}
-              className="flex items-center space-x-2 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all"
-            >
-              <FiEdit />
-              <span>Edit</span>
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all"
-            >
-              <FiTrash2 />
-              <span>Delete</span>
-            </button>
-          </div>
+    <AdminLayout 
+      title="Assessment View"
+      breadcrumbs={[
+        { label: 'Dashboard', path: '/admin/dashboard' },
+        { label: 'Assessments', path: '/admin/assessment-list' },
+        { label: assessment?.title || 'Assessment View' }
+      ]}
+    >
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold mb-2 text-white">{assessment?.title || 'Assessment View'}</h1>
+          <p className="text-gray-400">View assessment details and manage settings</p>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleEdit}
+            className="flex items-center space-x-2 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 rounded-lg transition-all"
+          >
+            <FiEdit />
+            <span>Edit</span>
+          </button>
+          <button
+            onClick={handleDelete}
+            className="flex items-center space-x-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all"
+          >
+            <FiTrash2 />
+            <span>Delete</span>
+          </button>
+        </div>
+      </div>
         {/* Assessment Overview */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -349,8 +351,7 @@ const AssessmentView = () => {
             </div>
           </motion.div>
         </div>
-      </main>
-    </div>
+    </AdminLayout>
   );
 };
 

@@ -266,11 +266,17 @@ def reverse_list(head):
   const [isExecuting, setIsExecuting] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
   
-  // Test cases for the current problem
+  // Test cases for the current problem (visible sample test cases)
   const [problemTestCases] = useState([
     { input: '4\n2 7 11 15\n9', expectedOutput: '0 1' },
     { input: '5\n3 2 4 8 1\n6', expectedOutput: '1 2' },
     { input: '3\n1 2 3\n4', expectedOutput: '0 2' },
+  ]);
+
+  // Hidden test cases (not shown in UI, used when submitting code)
+  const [hiddenTestCases] = useState([
+    { input: '2\n1 3\n4', expectedOutput: '0 1' },
+    { input: '6\n1 5 3 7 9 2\n10', expectedOutput: '1 3' },
   ]);
   
   const languages = [
@@ -1070,7 +1076,7 @@ func main() {
         return;
       }
       
-      // Run test cases
+      // Run visible sample test cases
       const results = await runTestCases(currentLang, currentCode, problemTestCases);
       
       // Calculate summary
@@ -1083,7 +1089,7 @@ func main() {
         testResults: results,
         executionResult: {
           success: true,
-          output: `Test Results: ${passed}/${total} passed`,
+          output: `Sample Test Results: ${passed}/${total} passed`,
           error: null,
           executionTime: 0,
           testSummary: { passed, total },
@@ -1209,45 +1215,6 @@ func main() {
     }
   }, [isDragging, dragOffset]);
 
-  const handleCompile = async () => {
-    setIsExecuting(true);
-    setShowOutput(true);
-    
-    try {
-      // Actually execute the code with empty input to check for compilation/runtime errors
-      const result = await executeCode(selectedLanguage, code, '');
-      
-      const updatedProblems = [...codingProblems];
-      updatedProblems[currentCodingProblem] = {
-        ...updatedProblems[currentCodingProblem],
-        executionResult: {
-          success: result.success,
-          output: result.success ? 'Compilation successful!' : (result.output || ''),
-          error: result.error || null,
-          executionTime: result.executionTime || 0,
-        },
-        testResults: [], // Clear test results - only show compilation status
-      };
-      setCodingProblems(updatedProblems);
-      saveCodingState();
-    } catch (error) {
-      const updatedProblems = [...codingProblems];
-      updatedProblems[currentCodingProblem] = {
-        ...updatedProblems[currentCodingProblem],
-        executionResult: {
-          success: false,
-          output: '',
-          error: error.toString(),
-          executionTime: 0,
-        },
-        testResults: [], // Clear test results on error too
-      };
-      setCodingProblems(updatedProblems);
-    } finally {
-      setIsExecuting(false);
-    }
-  };
-
   const handleRunCustomInput = async () => {
     if (!customInput.trim()) {
       const updatedProblems = [...codingProblems];
@@ -1314,17 +1281,74 @@ func main() {
     }
   };
 
-  const handleSubmitCoding = () => {
-    console.log('Submitting coding solution...');
-    // Save final coding state
-    saveCodingState();
-    // Navigate to video section
-    setCurrentSection('video');
-  };
+  // Submit code and run visible + hidden test cases
+  const handleSubmitCoding = async () => {
+    setIsExecuting(true);
+    setShowOutput(true);
 
-  const handleNextCodingProblem = () => {
-    if (currentCodingProblem < totalCodingProblems) {
-      setCurrentCodingProblem(currentCodingProblem + 1);
+    const currentCode = codingProblems[currentCodingProblem].code;
+    const currentLang = codingProblems[currentCodingProblem].selectedLanguage;
+
+    try {
+      // Validate code first
+      const validation = validateCode(currentLang, currentCode);
+      if (!validation.valid) {
+        const updatedProblems = [...codingProblems];
+        updatedProblems[currentCodingProblem] = {
+          ...updatedProblems[currentCodingProblem],
+          executionResult: {
+            success: false,
+            output: '',
+            error: validation.error,
+            executionTime: 0,
+          },
+          testResults: [],
+        };
+        setCodingProblems(updatedProblems);
+        setIsExecuting(false);
+        return;
+      }
+
+      const allTestCases = [...problemTestCases, ...hiddenTestCases];
+      const results = await runTestCases(currentLang, currentCode, allTestCases);
+
+      const passed = results.filter((r) => r.passed).length;
+      const total = results.length;
+
+      // Only show visible test cases in UI, keep hidden ones secret
+      const visibleResults = results.slice(0, problemTestCases.length);
+
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        testResults: visibleResults,
+        executionResult: {
+          success: passed === total,
+          output:
+            passed === total
+              ? `All test cases passed (${passed}/${total}). Code submitted successfully.`
+              : `Some test cases failed (${passed}/${total}). Please review your solution.`,
+          error: null,
+          executionTime: 0,
+          testSummary: { passed, total },
+        },
+      };
+      setCodingProblems(updatedProblems);
+      saveCodingState();
+    } catch (error) {
+      const updatedProblems = [...codingProblems];
+      updatedProblems[currentCodingProblem] = {
+        ...updatedProblems[currentCodingProblem],
+        executionResult: {
+          success: false,
+          output: '',
+          error: error.toString(),
+          executionTime: 0,
+        },
+      };
+      setCodingProblems(updatedProblems);
+    } finally {
+      setIsExecuting(false);
     }
   };
 
@@ -1643,7 +1667,7 @@ func main() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
-              <span>&lt;/&gt; Coding Section</span>
+              <span>Coding Section</span>
             </button>
             <button
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
@@ -1987,25 +2011,25 @@ func main() {
                       {isExecuting ? (
                         <FiRefreshCw className="animate-spin" />
                       ) : (
-                        <FiGrid />
+                        <FiPlay />
                       )}
-                      <span>Run Test Cases</span>
-                    </button>
-                    <button
-                      onClick={handleCompile}
-                      disabled={isExecuting}
-                      className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm disabled:opacity-50"
-                    >
-                      <FiPlay />
                       <span>Run</span>
                     </button>
                     <button
                       onClick={handleRunCustomInput}
                       disabled={isExecuting}
-                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50"
+                      className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span>Run Custom Input</span>
                       <FiArrowRight />
+                    </button>
+                    <button
+                      onClick={handleSubmitCoding}
+                      disabled={isExecuting}
+                      className="flex items-center space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span>Submit Code</span>
+                      <FiSend />
                     </button>
                   </div>
 
@@ -2269,11 +2293,19 @@ func main() {
           {currentSection === 'coding' && (
             <div className="border-t border-gray-800 px-6 py-4 flex justify-end space-x-4">
               <button
-                onClick={handleSubmitCoding}
+                onClick={() => {
+                  if (currentCodingProblem < totalCodingProblems - 1) {
+                    handleProblemChange(currentCodingProblem + 1);
+                  } else {
+                    // On last coding problem, move to next section
+                    saveCodingState();
+                    setCurrentSection('video');
+                  }
+                }}
                 className="flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors font-semibold"
               >
-                <span>Submit</span>
-                <FiSend />
+                <span>{currentCodingProblem < totalCodingProblems - 1 ? 'Next' : 'Submit'}</span>
+                {currentCodingProblem < totalCodingProblems - 1 ? <FiChevronRight /> : <FiSend />}
               </button>
             </div>
           )}

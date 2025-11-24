@@ -47,6 +47,13 @@ export const JUDGE0_STATUS = {
   EXEC_FORMAT_ERROR: 14,
 };
 
+const USE_BACKEND_FOR_JUDGE0 =
+  process.env.NEXT_PUBLIC_USE_BACKEND_FOR_JUDGE0 === 'true';
+
+const getBackendBaseURL = () => {
+  return process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+};
+
 /**
  * Get Judge0 API base URL from environment or use default
  */
@@ -198,7 +205,7 @@ export const pollJudge0Result = async (token, maxRetries = 30, retryDelay = 1000
  * @param {Object} options - Additional options (cpuTimeLimit, memoryLimit)
  * @returns {Promise<Object>} Execution result
  */
-export const executeWithJudge0 = async (language, code, input = '', options = {}) => {
+const executeWithJudge0Direct = async (language, code, input = '', options = {}) => {
   const startTime = Date.now();
   
   try {
@@ -274,11 +281,74 @@ export const executeWithJudge0 = async (language, code, input = '', options = {}
   }
 };
 
+const executeWithBackend = async (language, code, input = '', options = {}) => {
+  const startTime = Date.now();
+  try {
+    const backendURL = getBackendBaseURL();
+    const response = await fetch(`${backendURL}/api/judge/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        language,
+        sourceCode: code,
+        stdin: input,
+        cpuTimeLimit: options.cpuTimeLimit || 5,
+        memoryLimit: options.memoryLimit || 128000,
+        maxRetries: options.maxRetries || 30,
+        retryDelay: options.retryDelay || 1000,
+        metadata: options.metadata || {},
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Backend Judge0 execute error: ${response.status} - ${text}`
+      );
+    }
+
+    const data = await response.json();
+    if (data && data.result) {
+      return data.result;
+    }
+
+    // Fallback in case shape is different
+    return {
+      success: false,
+      output: '',
+      error: 'Invalid response from backend Judge0 service',
+      executionTime: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      output: '',
+      error: error.message || 'Unknown error occurred',
+      executionTime: Date.now() - startTime,
+    };
+  }
+};
+
+/**
+ * Execute code using Judge0, optionally via backend
+ */
+export const executeWithJudge0 = async (language, code, input = '', options = {}) => {
+  if (USE_BACKEND_FOR_JUDGE0 && process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return executeWithBackend(language, code, input, options);
+  }
+  return executeWithJudge0Direct(language, code, input, options);
+};
+
 /**
  * Check if Judge0 is available/configured
  * @returns {boolean}
  */
 export const isJudge0Available = () => {
+  if (USE_BACKEND_FOR_JUDGE0 && process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return true;
+  }
   // Check hardcoded config first (for testing)
   if (USE_HARDCODED_CONFIG && RAPIDAPI_KEY && RAPIDAPI_KEY !== 'YOUR_RAPIDAPI_KEY_HERE') {
     return true;

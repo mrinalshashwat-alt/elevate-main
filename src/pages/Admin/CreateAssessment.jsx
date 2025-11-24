@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createAssessment, getJobs } from '../../api/admin';
 import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
+import AdminLayout from '../../components/AdminLayout';
 
 // Custom glass popover select component matching AIMockInterview style
 const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
@@ -278,36 +279,18 @@ const CreateAssessment = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
-      {/* Animated Background Effects */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+    <AdminLayout 
+      title="Create Assessment"
+      breadcrumbs={[
+        { label: 'Dashboard', path: '/admin/dashboard' },
+        { label: 'Assessments', path: '/admin/assessment-list' },
+        { label: 'Create Assessment' }
+      ]}
+    >
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2 text-white">Create Assessment</h1>
+        <p className="text-gray-400">Create a new assessment with AI-generated or manual questions</p>
       </div>
-
-      {/* Navigation Header */}
-      <header className="bg-black/40 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 shadow-2xl">
-        <div className="max-w-7xl mx-auto px-4 py-5 flex justify-between items-center">
-          <button 
-            onClick={() => router.push('/admin/assessment-list')} 
-            className="flex items-center space-x-2 hover:text-orange-400 transition-all group px-3 py-2 rounded-lg hover:bg-white/5"
-          >
-            <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="font-medium">Back to Assessments</span>
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
-              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">Create Assessment</h1>
-          </div>
-          <div className="w-32"></div>
-        </div>
-      </header>
 
       <main className="max-w-4xl mx-auto px-4 py-12 relative z-10">
         <motion.div 
@@ -1008,7 +991,7 @@ const CreateAssessment = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </AdminLayout>
   );
 };
 
