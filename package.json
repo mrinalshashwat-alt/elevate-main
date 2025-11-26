@@ -22,6 +22,7 @@
     "@mui/material": "^7.3.4",
     "@tanstack/react-query": "^5.90.2",
     "axios": "^1.12.2",
+    "country-state-city": "^3.2.1",
     "firebase": "^10.14.1",
     "framer-motion": "^12.23.24",
     "next": "^14.2.0",
@@ -31,7 +32,8 @@
     "react-dom": "^18.3.1",
     "react-icons": "^5.5.0",
     "react-intersection-observer": "^9.16.0",
-    "react-router-dom": "^7.9.3"
+    "react-router-dom": "^7.9.3",
+    "react-select": "^5.10.2"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.19",

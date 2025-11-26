@@ -3,11 +3,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getJob, updateJob, publishJob } from '../../api/admin';
+import Select from 'react-select';
+import { Country, State, City } from 'country-state-city';
+import { getJob, updateJob, publishJob, improveJobDescription } from '../../api/admin';
 import AdminLayout from '../../components/AdminLayout';
 import JobTitleSearch from '../../components/JobTitleSearch';
 import CompetencySelector from '../../components/CompetencySelector';
 import { FiSave, FiSend, FiArrowLeft, FiLoader } from 'react-icons/fi';
+import { FaMagic } from 'react-icons/fa';
+import { CURRENCIES } from '../../utils/currencies';
 
 const JobEdit = () => {
   const router = useRouter();
@@ -20,8 +24,70 @@ const JobEdit = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isImprovingDescription, setIsImprovingDescription] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState(null);
+  const [selectedState, setSelectedState] = useState(null);
+  const [selectedCity, setSelectedCity] = useState(null);
   const saveTimeoutRef = useRef(null);
   const initialFormDataRef = useRef(null);
+
+  // Prepare location and currency options
+  const countries = Country.getAllCountries().map(country => ({
+    value: country.isoCode,
+    label: country.name,
+  }));
+
+  const states = selectedCountry
+    ? State.getStatesOfCountry(selectedCountry.value).map(state => ({
+        value: state.isoCode,
+        label: state.name,
+      }))
+    : [];
+
+  const cities = selectedCountry && selectedState
+    ? City.getCitiesOfState(selectedCountry.value, selectedState.value).map(city => ({
+        value: city.name,
+        label: city.name,
+      }))
+    : [];
+
+  // Custom styles for react-select (dark theme)
+  const selectStyles = {
+    control: (base) => ({
+      ...base,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      padding: '0.5rem',
+      '&:hover': {
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+      },
+    }),
+    menu: (base) => ({
+      ...base,
+      backgroundColor: '#1f2937',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isFocused ? 'rgba(249, 115, 22, 0.2)' : 'transparent',
+      color: '#fff',
+      '&:hover': {
+        backgroundColor: 'rgba(249, 115, 22, 0.3)',
+      },
+    }),
+    singleValue: (base) => ({
+      ...base,
+      color: '#fff',
+    }),
+    input: (base) => ({
+      ...base,
+      color: '#fff',
+    }),
+    placeholder: (base) => ({
+      ...base,
+      color: 'rgba(255, 255, 255, 0.5)',
+    }),
+  };
 
   const [formData, setFormData] = useState({
     title: '',
@@ -87,8 +153,28 @@ const JobEdit = () => {
           category: c.competency_category,
         })));
       }
+
+      // Set location dropdowns
+      if (job.location_country) {
+        const country = countries.find(c => c.label === job.location_country || c.value === job.location_country);
+        if (country) {
+          setSelectedCountry(country);
+
+          if (job.location_state) {
+            const countryStates = State.getStatesOfCountry(country.value);
+            const state = countryStates.find(s => s.name === job.location_state || s.isoCode === job.location_state);
+            if (state) {
+              setSelectedState({ value: state.isoCode, label: state.name });
+
+              if (job.location_city) {
+                setSelectedCity({ value: job.location_city, label: job.location_city });
+              }
+            }
+          }
+        }
+      }
     }
-  }, [job]);
+  }, [job, countries]);
 
   // Auto-save mutation
   const autoSaveMutation = useMutation({
@@ -114,6 +200,25 @@ const JobEdit = () => {
       router.push('/admin/assessment-list?tab=jobs');
     },
   });
+
+  // Improve description handler
+  const handleImproveDescription = async () => {
+    if (!formData.description || !formData.description.trim()) {
+      alert('Please enter a description first');
+      return;
+    }
+
+    setIsImprovingDescription(true);
+    try {
+      const improved = await improveJobDescription(jobId, formData.description);
+      handleFieldChange('description', improved);
+    } catch (error) {
+      console.error('Failed to improve description:', error);
+      alert(error.response?.data?.error || 'Failed to improve description. Please try again.');
+    } finally {
+      setIsImprovingDescription(false);
+    }
+  };
 
   // Debounced auto-save function
   const debouncedAutoSave = useCallback((data) => {
@@ -315,7 +420,27 @@ const JobEdit = () => {
 
         {/* Job Description */}
         <div>
-          <label className="block text-sm font-medium mb-2 text-white">Job Description *</label>
+          <div className="flex justify-between items-center mb-2">
+            <label className="block text-sm font-medium text-white">Job Description *</label>
+            <button
+              type="button"
+              onClick={handleImproveDescription}
+              disabled={isImprovingDescription || !formData.description?.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+            >
+              {isImprovingDescription ? (
+                <>
+                  <FiLoader className="w-4 h-4 animate-spin" />
+                  Improving...
+                </>
+              ) : (
+                <>
+                  <FaMagic className="w-4 h-4" />
+                  Improve Writing
+                </>
+              )}
+            </button>
+          </div>
           <textarea
             value={formData.description}
             onChange={(e) => handleFieldChange('description', e.target.value)}
@@ -357,33 +482,53 @@ const JobEdit = () => {
         {/* Location Details */}
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2 text-white">City</label>
-            <input
-              type="text"
-              value={formData.location_city}
-              onChange={(e) => handleFieldChange('location_city', e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-              placeholder="San Francisco"
+            <label className="block text-sm font-medium mb-2 text-white">Country</label>
+            <Select
+              value={selectedCountry}
+              onChange={(option) => {
+                setSelectedCountry(option);
+                setSelectedState(null);
+                setSelectedCity(null);
+                handleFieldChange('location_country', option ? option.label : '');
+                handleFieldChange('location_state', '');
+                handleFieldChange('location_city', '');
+              }}
+              options={countries}
+              styles={selectStyles}
+              isClearable
+              placeholder="Select country..."
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-2 text-white">State</label>
-            <input
-              type="text"
-              value={formData.location_state}
-              onChange={(e) => handleFieldChange('location_state', e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-              placeholder="CA"
+            <Select
+              value={selectedState}
+              onChange={(option) => {
+                setSelectedState(option);
+                setSelectedCity(null);
+                handleFieldChange('location_state', option ? option.label : '');
+                handleFieldChange('location_city', '');
+              }}
+              options={states}
+              styles={selectStyles}
+              isClearable
+              isDisabled={!selectedCountry}
+              placeholder={selectedCountry ? "Select state..." : "Select country first"}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2 text-white">Country</label>
-            <input
-              type="text"
-              value={formData.location_country}
-              onChange={(e) => handleFieldChange('location_country', e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-              placeholder="USA"
+            <label className="block text-sm font-medium mb-2 text-white">City</label>
+            <Select
+              value={selectedCity}
+              onChange={(option) => {
+                setSelectedCity(option);
+                handleFieldChange('location_city', option ? option.value : '');
+              }}
+              options={cities}
+              styles={selectStyles}
+              isClearable
+              isDisabled={!selectedState}
+              placeholder={selectedState ? "Select city..." : "Select state first"}
             />
           </div>
         </div>
@@ -411,13 +556,12 @@ const JobEdit = () => {
               />
             </div>
             <div>
-              <input
-                type="text"
-                value={formData.salary_currency}
-                onChange={(e) => handleFieldChange('salary_currency', e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                placeholder="USD"
-                maxLength={3}
+              <Select
+                value={CURRENCIES.find(c => c.value === formData.salary_currency) || null}
+                onChange={(option) => handleFieldChange('salary_currency', option ? option.value : 'USD')}
+                options={CURRENCIES}
+                styles={selectStyles}
+                placeholder="Currency"
               />
             </div>
           </div>

@@ -1370,7 +1370,7 @@ const Home = () => {
       location: "Bangalore",
       content: "ElevateCareer has transformed my career trajectory. The AI-powered mock interviews were incredibly realistic, and the personalized feedback helped me identify and improve my weak areas. I landed my dream job at a top tech company with a 40% salary increase!",
       avatar: "C",
-      videoUrl: "/video.mp4"
+      // videoUrl: "/video.mp4" // Commented out - video not available
     },
     {
       name: "Arpad Czimbalmos",
@@ -1378,7 +1378,7 @@ const Home = () => {
       location: "US",
       content: "The platform's AI-driven career guidance was spot-on. It analyzed my skills and suggested career paths I hadn't considered. The resume optimization feature alone increased my interview callbacks by 300%. Highly recommended!",
       avatar: "A",
-      videoUrl: "/video.mp4"
+      // videoUrl: "/video.mp4" // Commented out - video not available
     },
     {
       name: "Jeff Henry",
@@ -1386,7 +1386,7 @@ const Home = () => {
       location: "US",
       content: "As someone transitioning into product management, ElevateCareer's structured learning paths and AI mentorship were invaluable. The mock interviews prepared me for real scenarios, and I successfully made the career switch with confidence.",
       avatar: "J",
-      videoUrl: "/video.mp4"
+      // videoUrl: "/video.mp4" // Commented out - video not available
     },
     {
       name: "Drew Edwards",
@@ -1394,7 +1394,7 @@ const Home = () => {
       location: "US",
       content: "The coding challenges and technical interview prep on ElevateCareer are exceptional. The AI feedback on my solutions helped me improve my problem-solving approach. I aced multiple interviews and now work at a leading FAANG company.",
       avatar: "D",
-      videoUrl: "/video.mp4"
+      // videoUrl: "/video.mp4" // Commented out - video not available
     },
     {
       name: "Vikrant Dhawan",
@@ -1402,7 +1402,7 @@ const Home = () => {
       location: "Wells Fargo",
       content: "ElevateCareer's data science track is comprehensive and practical. The hands-on projects and AI-powered skill assessments gave me the confidence to pursue leadership roles. The platform's industry connections opened doors I didn't know existed.",
       avatar: "V",
-      videoUrl: "/video.mp4"
+      // videoUrl: "/video.mp4" // Commented out - video not available
     },
     {
       name: "Ritesh Joshi",
@@ -1410,7 +1410,7 @@ const Home = () => {
       location: "Anyaudit.in",
       content: "As an entrepreneur, I used ElevateCareer to build my technical team. The candidate screening tools and skill verification features helped us hire top talent efficiently. It's now an integral part of our recruitment process.",
       avatar: "R",
-      videoUrl: "/video.mp4"
+      // videoUrl: "/video.mp4" // Commented out - video not available
     },
     {
       name: "Vaishnavi Paturu",
@@ -1418,7 +1418,7 @@ const Home = () => {
       location: "Oragano Urban Living",
       content: "The communication skills training on ElevateCareer was transformative. The AI-powered feedback on my presentation and leadership skills helped me excel in product management. I successfully led multiple high-impact projects.",
       avatar: "V",
-      videoUrl: "/video.mp4"
+      // videoUrl: "/video.mp4" // Commented out - video not available
     }
   ];
 
@@ -2112,8 +2112,8 @@ const Home = () => {
             {/* Bottom action buttons removed per request */}
           </motion.div>
 
-          {/* Right Side - Brain Video (Floating) */}
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[45%] h-[700px] pointer-events-none hidden lg:block">
+          {/* Right Side - Brain Video (Floating) - Commented out until video file is added */}
+          {/* <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[45%] h-[700px] pointer-events-none hidden lg:block">
             <video
               src="/brain.mp4"
               autoPlay
@@ -2124,14 +2124,14 @@ const Home = () => {
               onLoadedData={() => setIsBrainVideoLoaded(true)}
               onError={() => setIsBrainVideoLoaded(true)}
               className="w-full h-full object-contain"
-              style={{ 
+              style={{
                 mixBlendMode: 'normal',
                 opacity: isBrainVideoLoaded ? 1 : 0,
                 transition: 'opacity 0.8s ease-in'
               }}
               aria-hidden="true"
             />
-          </div>
+          </div> */}
         </div>
 
       </main>

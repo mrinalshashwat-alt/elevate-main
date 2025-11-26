@@ -410,9 +410,9 @@ const AICommunication = () => {
 
   return (
     <div className="min-h-screen bg-black text-white overflow-visible relative">
-      {/* Video Loader */}
-      {showLoader && (
-        <div 
+      {/* Video Loader - Commented out until video file is added */}
+      {/* {showLoader && (
+        <div
           className={`fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-500 ${
             loaderFade ? 'opacity-0' : 'opacity-100'
           }`}
@@ -428,7 +428,7 @@ const AICommunication = () => {
             Your browser does not support the video tag.
           </video>
         </div>
-      )}
+      )} */}
 
       {/* Animated Background Effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -461,18 +461,17 @@ const AICommunication = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-center min-h-[80vh]">
             {/* Enhanced Agent Section */}
             <div className="space-y-6">
-              {/* Video */}
-              <div className="relative w-full aspect-video max-w-2xl">
-                <video
-                  className="w-full h-full object-cover rounded-2xl"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                >
-                  <source src="/ai.mp4" type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
+              {/* Video - Commented out until video file is added */}
+              <div className="relative w-full aspect-video max-w-2xl bg-gradient-to-br from-orange-500/10 to-blue-500/10 rounded-2xl border border-orange-500/20 flex items-center justify-center">
+                <div className="flex flex-col items-center justify-center p-8">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500/20 to-blue-600/20 flex items-center justify-center mb-4">
+                    <svg className="w-12 h-12 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-300 text-center font-medium">AI Communication Coach</p>
+                  <p className="text-gray-500 text-xs text-center mt-1">Interactive coaching sessions</p>
+                </div>
               </div>
               {/* Content Below Video */}
               <div className="space-y-4">

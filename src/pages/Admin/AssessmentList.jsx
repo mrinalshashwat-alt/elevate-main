@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiEdit, FiTrash2, FiX } from 'react-icons/fi';
 import { getAssessments, deleteAssessment, getJobs, createJob, updateJob, deleteJob, createAssessment, createDraftJob } from '../../api/admin';
-import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
 import AdminLayout from '../../components/AdminLayout';
 import JobTitleSearch from '../../components/JobTitleSearch';
 import CompetencySelector from '../../components/CompetencySelector';
@@ -141,107 +140,27 @@ const AssessmentList = () => {
 
   const { data: assessmentsData, isLoading } = useQuery({
     queryKey: ['adminAssessments'],
-    queryFn: async () => {
-      // TODO: Replace with actual API call when backend is ready
-      try {
-        const apiData = await getAssessments();
-        // Merge with localStorage data
-        const localAssessments = assessmentsStorage.getAll();
-        const apiAssessmentIds = new Set(apiData.data.map(a => a.id));
-        const uniqueLocalAssessments = localAssessments.filter(a => !apiAssessmentIds.has(a.id));
-        
-        return {
-          ...apiData,
-          data: [...apiData.data, ...uniqueLocalAssessments],
-          total: apiData.total + uniqueLocalAssessments.length,
-        };
-      } catch (error) {
-        // If API fails, use localStorage only
-        console.log('API call failed, using localStorage:', error);
-        const localAssessments = assessmentsStorage.getAll();
-        return {
-          data: localAssessments,
-          total: localAssessments.length,
-          page: 1,
-          pageSize: 10,
-        };
-      }
-    },
-    retry: false,
+    queryFn: getAssessments,
+    retry: 1,
     refetchOnWindowFocus: false,
   });
 
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: ['adminJobs'],
-    queryFn: async () => {
-      // TODO: Replace with actual API call when backend is ready
-      try {
-        const apiData = await getJobs();
-        // Merge with localStorage data
-        const localJobs = jobsStorage.getAll();
-        const apiJobIds = new Set(apiData.data.map(j => j.id));
-        const uniqueLocalJobs = localJobs.filter(j => !apiJobIds.has(j.id));
-        
-        return {
-          ...apiData,
-          data: [...apiData.data, ...uniqueLocalJobs],
-          total: apiData.total + uniqueLocalJobs.length,
-        };
-      } catch (error) {
-        // If API fails, use localStorage only
-        console.log('API call failed, using localStorage:', error);
-        const localJobs = jobsStorage.getAll();
-        return {
-          data: localJobs,
-          total: localJobs.length,
-          page: 1,
-          pageSize: 10,
-        };
-      }
-    },
-    retry: false,
+    queryFn: getJobs,
+    retry: 1,
     refetchOnWindowFocus: false,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (assessmentId) => {
-      // TODO: Replace with actual API call when backend is ready
-      try {
-        await deleteAssessment(assessmentId);
-      } catch (error) {
-        console.log('API call failed, using localStorage:', error);
-      }
-      // Always delete from localStorage
-      assessmentsStorage.delete(assessmentId);
-    },
+    mutationFn: deleteAssessment,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
     },
   });
 
   const createJobMutation = useMutation({
-    mutationFn: async (jobData) => {
-      // TODO: Replace with actual API call when backend is ready
-      try {
-        const result = await createJob(jobData);
-        // Also save to localStorage
-        jobsStorage.save({
-          ...jobData,
-          id: result.id || `job_${Date.now()}`,
-          postedAt: new Date().toISOString(),
-        });
-        return result;
-      } catch (error) {
-        // If API fails, use localStorage
-        console.log('API call failed, using localStorage:', error);
-        const savedJob = jobsStorage.save({
-          ...jobData,
-          id: `job_${Date.now()}`,
-          postedAt: new Date().toISOString(),
-        });
-        return savedJob;
-      }
-    },
+    mutationFn: createJob,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       setCreatedJobId(data.id);
@@ -250,20 +169,7 @@ const AssessmentList = () => {
   });
 
   const updateJobMutation = useMutation({
-    mutationFn: async ({ id, data }) => {
-      // TODO: Replace with actual API call when backend is ready
-      try {
-        const result = await updateJob(id, data);
-        // Also update localStorage
-        jobsStorage.save({ ...data, id });
-        return result;
-      } catch (error) {
-        // If API fails, use localStorage
-        console.log('API call failed, using localStorage:', error);
-        jobsStorage.save({ ...data, id });
-        return { ...data, id };
-      }
-    },
+    mutationFn: ({ id, data }) => updateJob(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       setShowJobModal(false);
@@ -272,21 +178,7 @@ const AssessmentList = () => {
   });
 
   const deleteJobMutation = useMutation({
-    mutationFn: async (jobId) => {
-      // TODO: Replace with actual API call when backend is ready
-      try {
-        await deleteJob(jobId);
-      } catch (error) {
-        console.log('API call failed, using localStorage:', error);
-      }
-      // Always delete from localStorage
-      jobsStorage.delete(jobId);
-      // Delete associated assessments
-      const assessments = assessmentsStorage.getByJobId(jobId);
-      assessments.forEach(assessment => {
-        assessmentsStorage.delete(assessment.id);
-      });
-    },
+    mutationFn: deleteJob,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
@@ -294,27 +186,7 @@ const AssessmentList = () => {
   });
 
   const createAssessmentMutation = useMutation({
-    mutationFn: async (assessmentData) => {
-      // TODO: Replace with actual API call when backend is ready
-      try {
-        const result = await createAssessment(assessmentData);
-        // Also save to localStorage as backup
-        const saved = assessmentsStorage.save({
-          ...assessmentData,
-          id: result.id || `assessment_${Date.now()}`,
-        });
-        return { ...result, id: result.id || saved.id };
-      } catch (error) {
-        // If API fails, use localStorage
-        console.log('API call failed, using localStorage:', error);
-        const assessmentId = `assessment_${Date.now()}`;
-        const savedAssessment = assessmentsStorage.save({
-          ...assessmentData,
-          id: assessmentId,
-        });
-        return { ...savedAssessment, id: savedAssessment.id || assessmentId };
-      }
-    },
+    mutationFn: createAssessment,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
@@ -394,13 +266,7 @@ const AssessmentList = () => {
     const handleBeforeUnload = (e) => {
       // Auto-save as draft when user navigates away
       if (hasUnsavedChanges) {
-        const draftData = {
-          ...newJob,
-          status: 'draft',
-          id: editingJob?.id || `job_${Date.now()}`,
-          postedAt: new Date().toISOString(),
-        };
-        jobsStorage.save(draftData);
+        // Draft auto-save removed - using new flow with redirect to edit page
         queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       }
     };
@@ -420,29 +286,15 @@ const AssessmentList = () => {
   };
 
   const handleSaveDraft = () => {
-    const draftData = {
-      ...newJob,
-      status: 'draft',
-      id: editingJob?.id || `job_${Date.now()}`,
-      postedAt: new Date().toISOString(),
-    };
-    jobsStorage.save(draftData);
-    queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+    // Draft save removed - using new flow with redirect to edit page
     setShowJobModal(false);
     setShowDiscardModal(false);
     resetJobForm();
   };
 
   const handleDiscard = () => {
-    // Auto-save as draft when discarding if there are changes
+    // Discard changes - using new flow with redirect to edit page
     if (hasUnsavedChanges) {
-      const draftData = {
-        ...newJob,
-        status: 'draft',
-        id: editingJob?.id || `job_${Date.now()}`,
-        postedAt: new Date().toISOString(),
-      };
-      jobsStorage.save(draftData);
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
     }
     setShowJobModal(false);
@@ -611,7 +463,7 @@ Join us and be part of an innovative team driving excellence in our industry.`;
   };
 
   const getJobAssessments = (jobId) => {
-    return assessmentsStorage.getByJobId(jobId);
+    return (assessmentsData?.data || []).filter(assessment => assessment.jobId === jobId);
   };
 
   // Filter jobs by status
@@ -657,8 +509,8 @@ Join us and be part of an innovative team driving excellence in our industry.`;
       return;
     }
     
-    // Get selected job from jobsData or localStorage
-    const selectedJob = jobsData?.data?.find(j => j.id === selectedJobId) || jobsStorage.getById(selectedJobId);
+    // Get selected job from jobsData
+    const selectedJob = jobsData?.data?.find(j => j.id === selectedJobId);
     
     if (!selectedJob) {
       alert('Selected job not found. Please select a valid job.');
@@ -683,21 +535,12 @@ Join us and be part of an innovative team driving excellence in our industry.`;
     createAssessmentMutation.mutate(assessmentData);
   };
 
-  // Get active assessments from localStorage and API data
+  // Get active assessments from API data
   const getActiveAssessments = () => {
     const allAssessments = assessmentsData?.data || [];
-    const localAssessments = assessmentsStorage.getAll();
-    
-    // Merge and deduplicate
-    const merged = [...allAssessments];
-    localAssessments.forEach(local => {
-      if (!merged.find(a => a.id === local.id)) {
-        merged.push(local);
-      }
-    });
-    
+
     // Filter for active assessments (published, draft, active, or no status - everything except archived)
-    return merged
+    return allAssessments
       .filter(a => a.status !== 'archived' && a.status !== 'completed')
       .map((assessment, index) => ({
         id: assessment.id || `assessment-${index}`,
@@ -1074,7 +917,10 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                      console.log('Creating draft job...');
                      const result = await createDraftJob();
                      console.log('Draft job created:', result);
-                     router.push(`/admin/jobs/edit?id=${result.id}`);
+                     // Navigate to edit page
+                     const editUrl = `/admin/jobs/edit?id=${result.id}`;
+                     console.log('Navigating to:', editUrl);
+                     window.location.href = editUrl;
                    } catch (error) {
                      console.error('Failed to create draft job - Full error:', error);
                      console.error('Error response:', error.response);

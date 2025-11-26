@@ -378,3 +378,10 @@ export const publishJob = async (jobId: string): Promise<any> => {
   const { data } = await axiosInstance.post(`/admin/jobs/${jobId}/publish/`);
   return data;
 };
+
+export const improveJobDescription = async (jobId: string, description: string): Promise<string> => {
+  const { data } = await axiosInstance.post(`/admin/jobs/${jobId}/improve_description/`, {
+    description,
+  });
+  return data.improved_description;
+};
