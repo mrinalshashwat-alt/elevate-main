@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiStop, FiRotateCw, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
+import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiPause, FiRotateCw, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 import Editor from '@monaco-editor/react';
 import { executeCode, runTestCases, formatOutput, validateCode } from '../../lib/codeSandbox';
 
@@ -2255,7 +2255,7 @@ func main() {
                           onClick={handleStopRecording}
                           className="flex items-center space-x-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
                         >
-                          <FiStop />
+                          <FiPause />
                           <span>Stop</span>
                         </button>
                       )}

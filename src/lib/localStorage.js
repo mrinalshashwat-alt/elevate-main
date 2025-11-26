@@ -3,10 +3,19 @@ const STORAGE_KEYS = {
   ASSESSMENTS: 'elevate_admin_assessments',
 };
 
+const getStorage = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return window.localStorage;
+};
+
 export const jobsStorage = {
   getAll: () => {
+    const storage = getStorage();
+    if (!storage) return [];
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.JOBS);
+      const stored = storage.getItem(STORAGE_KEYS.JOBS);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.error('Error reading jobs from localStorage:', error);
@@ -15,6 +24,8 @@ export const jobsStorage = {
   },
 
   save: (job) => {
+    const storage = getStorage();
+    if (!storage) return job;
     try {
       const jobs = jobsStorage.getAll();
       const existingIndex = jobs.findIndex(j => j.id === job.id);
@@ -25,7 +36,7 @@ export const jobsStorage = {
         jobs.push({ ...job, id: job.id || `job_${Date.now()}` });
       }
       
-      localStorage.setItem(STORAGE_KEYS.JOBS, JSON.stringify(jobs));
+      storage.setItem(STORAGE_KEYS.JOBS, JSON.stringify(jobs));
       return job;
     } catch (error) {
       console.error('Error saving job to localStorage:', error);
@@ -34,10 +45,12 @@ export const jobsStorage = {
   },
 
   delete: (jobId) => {
+    const storage = getStorage();
+    if (!storage) return;
     try {
       const jobs = jobsStorage.getAll();
       const filtered = jobs.filter(j => j.id !== jobId);
-      localStorage.setItem(STORAGE_KEYS.JOBS, JSON.stringify(filtered));
+      storage.setItem(STORAGE_KEYS.JOBS, JSON.stringify(filtered));
     } catch (error) {
       console.error('Error deleting job from localStorage:', error);
       throw error;
@@ -52,8 +65,10 @@ export const jobsStorage = {
 
 export const assessmentsStorage = {
   getAll: () => {
+    const storage = getStorage();
+    if (!storage) return [];
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.ASSESSMENTS);
+      const stored = storage.getItem(STORAGE_KEYS.ASSESSMENTS);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.error('Error reading assessments from localStorage:', error);
@@ -62,6 +77,8 @@ export const assessmentsStorage = {
   },
 
   save: (assessment) => {
+    const storage = getStorage();
+    if (!storage) return assessment;
     try {
       const assessments = assessmentsStorage.getAll();
       const existingIndex = assessments.findIndex(a => a.id === assessment.id);
@@ -76,7 +93,7 @@ export const assessmentsStorage = {
         });
       }
       
-      localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(assessments));
+      storage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(assessments));
       return assessment;
     } catch (error) {
       console.error('Error saving assessment to localStorage:', error);
@@ -85,10 +102,12 @@ export const assessmentsStorage = {
   },
 
   delete: (assessmentId) => {
+    const storage = getStorage();
+    if (!storage) return;
     try {
       const assessments = assessmentsStorage.getAll();
       const filtered = assessments.filter(a => a.id !== assessmentId);
-      localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(filtered));
+      storage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(filtered));
     } catch (error) {
       console.error('Error deleting assessment from localStorage:', error);
       throw error;

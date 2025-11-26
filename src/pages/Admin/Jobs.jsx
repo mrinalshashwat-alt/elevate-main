@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { getJobs, createJob, updateJob, deleteJob } from '../../api/admin';
 import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
 import AdminLayout from '../../components/AdminLayout';
+import JobTitleSearch from '../../components/JobTitleSearch';
+import CompetencySelector from '../../components/CompetencySelector';
 
 const Jobs = () => {
   const router = useRouter();
@@ -15,15 +17,25 @@ const Jobs = () => {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [selectedJobTitle, setSelectedJobTitle] = useState(null);
+  const [selectedCompetencies, setSelectedCompetencies] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
+    job_title: '',
     description: '',
-    yearsOfExperience: '',
-    company: '',
-    location: '',
-    type: 'full-time',
-    salary: '',
-    status: 'active',
+    responsibilities: [],
+    requirements: [],
+    min_experience_years: '',
+    max_experience_years: '',
+    job_type: 'full_time',
+    location_type: 'remote',
+    location_city: '',
+    location_state: '',
+    location_country: '',
+    salary_min: '',
+    salary_max: '',
+    salary_currency: 'USD',
+    competency_ids: [],
   });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
@@ -128,7 +140,26 @@ const Jobs = () => {
   });
 
   const resetForm = () => {
-    setFormData({ title: '', description: '', yearsOfExperience: '', company: '', location: '', type: 'full-time', salary: '', status: 'active' });
+    setFormData({
+      title: '',
+      job_title: '',
+      description: '',
+      responsibilities: [],
+      requirements: [],
+      min_experience_years: '',
+      max_experience_years: '',
+      job_type: 'full_time',
+      location_type: 'remote',
+      location_city: '',
+      location_state: '',
+      location_country: '',
+      salary_min: '',
+      salary_max: '',
+      salary_currency: 'USD',
+      competency_ids: [],
+    });
+    setSelectedJobTitle(null);
+    setSelectedCompetencies([]);
     setEditingJob(null);
     setHasUnsavedChanges(false);
   };
@@ -136,8 +167,8 @@ const Jobs = () => {
   // Track form changes
   useEffect(() => {
     if (showModal) {
-      const hasChanges = formData.title || formData.description || formData.yearsOfExperience || 
-                        formData.company || formData.location || formData.salary;
+      const hasChanges = formData.title || formData.description || formData.min_experience_years ||
+                        formData.max_experience_years || formData.location_city || formData.salary_min;
       setHasUnsavedChanges(hasChanges);
     }
   }, [formData, showModal]);
@@ -206,13 +237,21 @@ const Jobs = () => {
     setEditingJob(job);
     setFormData({
       title: job.title || '',
+      job_title: job.job_title || '',
       description: job.description || '',
-      yearsOfExperience: job.yearsOfExperience || '',
-      company: job.company || '',
-      location: job.location || '',
-      type: job.type || 'full-time',
-      salary: job.salary || '',
-      status: job.status || 'active',
+      responsibilities: job.responsibilities || [],
+      requirements: job.requirements || [],
+      min_experience_years: job.min_experience_years || '',
+      max_experience_years: job.max_experience_years || '',
+      job_type: job.job_type || 'full_time',
+      location_type: job.location_type || 'remote',
+      location_city: job.location_city || '',
+      location_state: job.location_state || '',
+      location_country: job.location_country || '',
+      salary_min: job.salary_min || '',
+      salary_max: job.salary_max || '',
+      salary_currency: job.salary_currency || 'USD',
+      competency_ids: job.competency_ids || [],
     });
     setShowModal(true);
   };
@@ -235,21 +274,24 @@ const Jobs = () => {
   };
 
   const generateJobDescription = async () => {
-    if (!formData.title || !formData.yearsOfExperience) {
-      alert('Please enter Job Title and Years of Experience first to generate a description.');
+    if (!formData.title || !formData.min_experience_years) {
+      alert('Please enter Job Title and Minimum Experience first to generate a description.');
       return;
     }
 
     setIsGeneratingAI(true);
     try {
       // Mock AI generation - in production, this would call your AI API
-      const prompt = `Create a comprehensive job description for a ${formData.title} position requiring ${formData.yearsOfExperience} years of experience. Include responsibilities, requirements, and qualifications.`;
-      
+      const experienceRange = formData.max_experience_years
+        ? `${formData.min_experience_years}-${formData.max_experience_years}`
+        : `${formData.min_experience_years}+`;
+      const prompt = `Create a comprehensive job description for a ${formData.title} position requiring ${experienceRange} years of experience. Include responsibilities, requirements, and qualifications.`;
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // Mock generated description
-      const generatedDescription = `We are seeking an experienced ${formData.title} with ${formData.yearsOfExperience}+ years of experience to join our team.
+      const generatedDescription = `We are seeking an experienced ${formData.title} with ${experienceRange} years of experience to join our team.
 
 **Key Responsibilities:**
 - Lead and manage ${formData.title.toLowerCase()} initiatives
@@ -258,7 +300,7 @@ const Jobs = () => {
 - Ensure quality deliverables within deadlines
 
 **Required Qualifications:**
-- ${formData.yearsOfExperience}+ years of relevant experience
+- ${experienceRange} years of relevant experience
 - Strong problem-solving and analytical skills
 - Excellent communication and collaboration abilities
 - Proven track record of success in similar roles
@@ -417,30 +459,76 @@ Join us and be part of an innovative team driving excellence in our industry.`;
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Required Fields - Priority */}
+              {/* Job Title Search */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-white">Job Title *</label>
+                <JobTitleSearch
+                  onSelect={(jobTitle) => {
+                    setSelectedJobTitle(jobTitle);
+                    setFormData(prev => ({
+                      ...prev,
+                      job_title: jobTitle.id,
+                      title: prev.title || jobTitle.name
+                    }));
+                  }}
+                  value={selectedJobTitle?.name || ''}
+                />
+              </div>
+
+              {/* Custom Job Posting Title */}
+              <div>
+                <label className="block text-sm font-medium mb-2 text-white">Job Posting Title *</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                  placeholder="e.g., Senior Software Engineer"
+                  placeholder="e.g., Senior Software Engineer - Backend Team"
                   required
+                />
+                <p className="mt-1 text-xs text-gray-400">This can be more specific than the job title above</p>
+              </div>
+
+              {/* Competencies Selector */}
+              <div>
+                <CompetencySelector
+                  jobTitleId={selectedJobTitle?.id}
+                  selectedCompetencies={selectedCompetencies}
+                  onCompetenciesChange={(comps) => {
+                    setSelectedCompetencies(comps);
+                    setFormData(prev => ({
+                      ...prev,
+                      competency_ids: comps.map(c => c.id)
+                    }));
+                  }}
                 />
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Years of Experience *</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.yearsOfExperience}
-                  onChange={(e) => setFormData({ ...formData, yearsOfExperience: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                  placeholder="e.g., 3"
-                  required
-                />
+
+              {/* Experience Range */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">Min Experience (years)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={formData.min_experience_years}
+                    onChange={(e) => setFormData({ ...formData, min_experience_years: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">Max Experience (years)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={formData.max_experience_years}
+                    onChange={(e) => setFormData({ ...formData, max_experience_years: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                    placeholder="10"
+                  />
+                </div>
               </div>
 
               <div>
@@ -450,7 +538,7 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                     <button
                       type="button"
                       onClick={generateJobDescription}
-                      disabled={isGeneratingAI || !formData.title || !formData.yearsOfExperience}
+                      disabled={isGeneratingAI || !formData.title || !formData.min_experience_years}
                       className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                     >
                       {isGeneratingAI ? (
@@ -493,6 +581,14 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                         onClick={() => {
                           // Export to PDF functionality
                           const printWindow = window.open('', '_blank');
+                          const location = [formData.location_city, formData.location_state, formData.location_country]
+                            .filter(Boolean).join(', ') || formData.location_type || 'N/A';
+                          const experience = formData.max_experience_years
+                            ? `${formData.min_experience_years}-${formData.max_experience_years} years`
+                            : formData.min_experience_years ? `${formData.min_experience_years}+ years` : 'N/A';
+                          const salary = formData.salary_min && formData.salary_max
+                            ? `${formData.salary_currency} ${formData.salary_min} - ${formData.salary_max}`
+                            : 'N/A';
                           printWindow.document.write(`
                             <html>
                               <head>
@@ -507,11 +603,10 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                               <body>
                                 <h1>${formData.title}</h1>
                                 <div class="meta">
-                                  <p><strong>Company:</strong> ${formData.company || 'N/A'}</p>
-                                  <p><strong>Location:</strong> ${formData.location || 'N/A'}</p>
-                                  <p><strong>Experience:</strong> ${formData.yearsOfExperience || 'N/A'} years</p>
-                                  <p><strong>Type:</strong> ${formData.type || 'N/A'}</p>
-                                  <p><strong>Salary:</strong> ${formData.salary || 'N/A'}</p>
+                                  <p><strong>Location:</strong> ${location}</p>
+                                  <p><strong>Experience:</strong> ${experience}</p>
+                                  <p><strong>Type:</strong> ${formData.job_type?.replace('_', ' ') || 'N/A'}</p>
+                                  <p><strong>Salary:</strong> ${salary}</p>
                                 </div>
                                 <div class="description">
                                   ${formData.description.replace(/\n/g, '<br>')}
@@ -546,63 +641,106 @@ Join us and be part of an innovative team driving excellence in our industry.`;
               </div>
 
               <div className="border-t border-white/10 pt-4 mt-6">
-                <h3 className="text-sm font-semibold text-gray-400 mb-4">Additional Information</h3>
+                <h3 className="text-sm font-semibold text-gray-400 mb-4">Job Type & Location</h3>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Company</label>
-                <input
-                  type="text"
-                  value={formData.company}
-                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                  placeholder="Enter company name"
-                  required
-                />
+
+              {/* Job Type & Location Type */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">Job Type</label>
+                  <select
+                    value={formData.job_type}
+                    onChange={(e) => setFormData({ ...formData, job_type: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
+                  >
+                    <option value="full_time">Full Time</option>
+                    <option value="part_time">Part Time</option>
+                    <option value="contract">Contract</option>
+                    <option value="internship">Internship</option>
+                    <option value="freelance">Freelance</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">Location Type</label>
+                  <select
+                    value={formData.location_type}
+                    onChange={(e) => setFormData({ ...formData, location_type: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
+                  >
+                    <option value="remote">Remote</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="onsite">On-site</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Location</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                  placeholder="Enter job location"
-                  required
-                />
+
+              {/* Location Details */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">City</label>
+                  <input
+                    type="text"
+                    value={formData.location_city}
+                    onChange={(e) => setFormData({ ...formData, location_city: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                    placeholder="San Francisco"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">State</label>
+                  <input
+                    type="text"
+                    value={formData.location_state}
+                    onChange={(e) => setFormData({ ...formData, location_state: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                    placeholder="CA"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">Country</label>
+                  <input
+                    type="text"
+                    value={formData.location_country}
+                    onChange={(e) => setFormData({ ...formData, location_country: e.target.value })}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                    placeholder="USA"
+                  />
+                </div>
               </div>
+
+              {/* Salary Range */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-white">Job Type</label>
-                <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
-                >
-                  <option value="full-time">Full-time</option>
-                  <option value="part-time">Part-time</option>
-                  <option value="contract">Contract</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Salary</label>
-                <input
-                  type="text"
-                  value={formData.salary}
-                  onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                  placeholder="e.g., $100k - $120k"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
-                >
-                  <option value="active">Active</option>
-                  <option value="closed">Closed</option>
-                </select>
+                <label className="block text-sm font-medium mb-2 text-white">Salary Range</label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <input
+                      type="number"
+                      value={formData.salary_min}
+                      onChange={(e) => setFormData({ ...formData, salary_min: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                      placeholder="Min (120000)"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      value={formData.salary_max}
+                      onChange={(e) => setFormData({ ...formData, salary_max: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                      placeholder="Max (180000)"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={formData.salary_currency}
+                      onChange={(e) => setFormData({ ...formData, salary_currency: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                      placeholder="USD"
+                      maxLength={3}
+                    />
+                  </div>
+                </div>
               </div>
               <div className="flex space-x-3 pt-4">
                 <button

@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { FirebaseError } from 'firebase/app';
 import { useAuth } from '../../context/AuthContext';
+import { useOtpLogin } from '../../hooks/useOtpLogin';
 import { motion, AnimatePresence, useScroll, useSpring, useInView, useReducedMotion } from 'framer-motion';
 import CountUp from 'react-countup';
 import { FiEye, FiEyeOff, FiX, FiCheck, FiLoader, FiAward, FiStar, FiUsers, FiTrendingUp, FiClock, FiArrowRight, FiMessageSquare, FiUserCheck, FiCompass, FiCode, FiTarget, FiBriefcase, FiHome, FiZap, FiPackage } from 'react-icons/fi';
@@ -1059,7 +1059,7 @@ const Sparkline = ({
 const Home = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, register, logout, isAuthenticated } = useAuth();
+  const { requestOtp, verifyOtp, register, logout, isAuthenticated } = useAuth();
   const prefersReducedMotion = useReducedMotion();
   
   // State management
@@ -1087,12 +1087,23 @@ const Home = () => {
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginRole, setLoginRole] = useState('user');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loginError, setLoginError] = useState('');
-  const [loginSuccess, setLoginSuccess] = useState(false);
+  const {
+    email: loginEmail,
+    setEmail: setLoginEmail,
+    otpCode,
+    setOtpCode,
+    rememberMe,
+    setRememberMe,
+    otpRequested,
+    isLoading: isOtpLoading,
+    error: loginError,
+    successMessage: loginSuccessMessage,
+    isSuccess: loginSuccess,
+    startOtpRequest,
+    verifyOtpCode,
+    resetOtpFlow,
+    setErrorMessage,
+  } = useOtpLogin();
   
   // Signup modal state
   const [showSignupModal, setShowSignupModal] = useState(false);
@@ -1106,30 +1117,59 @@ const Home = () => {
   const [signupError, setSignupError] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
 
-  const getAuthErrorMessage = (error) => {
-    if (!error) return 'Something went wrong. Please try again.';
+  const getApiErrorMessage = (error, fallback = 'Something went wrong. Please try again.') => {
+    if (!error) return fallback;
 
-    const code = error.code || '';
+    const responseData = error?.response?.data;
 
-    switch (code) {
-      case 'auth/invalid-email':
-        return 'Please enter a valid email address.';
-      case 'auth/user-disabled':
-        return 'This account has been disabled. Contact support for help.';
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-        return 'Incorrect email or password. Please try again.';
-      case 'auth/email-already-in-use':
-        return 'An account with this email already exists. Try logging in instead.';
-      case 'auth/weak-password':
-        return 'Choose a stronger password (at least 6 characters).';
-      case 'auth/too-many-requests':
-        return 'Too many attempts. Please wait a moment before trying again.';
-      case 'auth/network-request-failed':
-        return 'Network error. Check your connection and try again.';
-      default:
-        return error.message || 'An unexpected authentication error occurred.';
+    if (responseData) {
+      if (typeof responseData === 'string') {
+        return responseData;
+      }
+
+      if (responseData.detail) {
+        return responseData.detail;
+      }
+
+      if (responseData.message) {
+        if (typeof responseData.message === 'string') {
+          return responseData.message;
+        }
+
+        if (typeof responseData.message === 'object') {
+          const nestedValues = Object.values(responseData.message);
+          if (nestedValues.length > 0) {
+            const firstValue = nestedValues[0];
+            if (Array.isArray(firstValue) && firstValue.length > 0) {
+              return firstValue[0];
+            }
+            if (typeof firstValue === 'string') {
+              return firstValue;
+            }
+          }
+        }
+      }
+
+      if (responseData.details) {
+        if (typeof responseData.details === 'string') {
+          return responseData.details;
+        }
+        if (typeof responseData.details === 'object') {
+          const detailValues = Object.values(responseData.details);
+          if (detailValues.length > 0) {
+            const detail = detailValues[0];
+            if (Array.isArray(detail) && detail.length > 0) {
+              return detail[0];
+            }
+            if (typeof detail === 'string') {
+              return detail;
+            }
+          }
+        }
+      }
     }
+
+    return error.message || fallback;
   };
 
   // Scroll progress
@@ -1564,54 +1604,36 @@ const Home = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    if (!email || !password) {
-      setLoginError('Please enter both email and password.');
-      return;
-    }
-
     if (loginRole !== 'user') {
-      setLoginError('Admin login will be available soon. Please use user login for now.');
+      setErrorMessage('Admin login will be available soon. Please use user login for now.');
       return;
     }
 
-    setIsLoading(true);
-    setLoginError('');
-    setLoginSuccess(false);
-    
-    try {
-      await login(email.trim(), password, loginRole);
-      setLoginSuccess(true);
-      
+    if (!otpRequested) {
+      await startOtpRequest();
+      return;
+    }
+
+    const verified = await verifyOtpCode();
+    if (verified) {
       setTimeout(() => {
         closeLoginModal();
-        // Stay on home page after login
       }, 900);
-    } catch (error) {
-      console.error('Login failed:', error);
-      const friendlyMessage =
-        error instanceof FirebaseError
-          ? getAuthErrorMessage(error)
-          : 'Unable to sign in right now. Please try again.';
-      setLoginError(friendlyMessage);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const openLoginModal = (role) => {
     setLoginRole(role);
     setShowLoginModal(true);
-    setLoginError('');
-    setLoginSuccess(false);
+    setErrorMessage('');
+    resetOtpFlow();
   };
 
   const closeLoginModal = () => {
     setShowLoginModal(false);
-    setEmail('');
-    setPassword('');
-    setShowPassword(false);
-    setLoginError('');
-    setLoginSuccess(false);
+    setLoginEmail('');
+    setRememberMe(true);
+    resetOtpFlow();
   };
 
   const openSignupModal = () => {
@@ -1638,8 +1660,12 @@ const Home = () => {
     if (searchParams.get('auth') === 'required') {
       setShowLoginModal(true);
       setLoginRole('user');
-      setLoginError('Please log in to continue.');
-      setLoginSuccess(false);
+      setErrorMessage('Please log in to continue.');
+    }
+
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setLoginEmail(emailParam);
     }
   }, [searchParams]);
 
@@ -1677,20 +1703,18 @@ const Home = () => {
 
     setIsSignupLoading(true);
     try {
-      await register(signupName.trim(), signupEmail.trim(), signupPassword);
+      const sanitizedEmail = signupEmail.trim().toLowerCase();
+      await register(signupName.trim(), sanitizedEmail, signupPassword);
       setSignupSuccess(true);
       
       setTimeout(() => {
         closeSignupModal();
-        // Stay on home page after signup
+        setLoginEmail(sanitizedEmail);
+        openLoginModal('user');
       }, 1200);
     } catch (error) {
       console.error('Signup failed:', error);
-      const friendlyMessage =
-        error instanceof FirebaseError
-          ? getAuthErrorMessage(error)
-          : 'Signup failed. Please try again.';
-      setSignupError(friendlyMessage);
+      setSignupError(getApiErrorMessage(error, 'Signup failed. Please try again.'));
     } finally {
       setIsSignupLoading(false);
     }
@@ -3141,7 +3165,7 @@ const Home = () => {
                   animate={{ opacity: 1, y: 0 }}
                 >
                   <FiCheck className="w-5 h-5 mr-2" />
-                  Login successful!
+                  {loginSuccessMessage || 'Success!'}
                 </motion.div>
               )}
 
@@ -3150,46 +3174,59 @@ const Home = () => {
                   <label className="block text-sm font-medium mb-2 text-white">Email</label>
                   <input
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
                     placeholder="Enter your email"
                     required
                   />
+                  {!otpRequested && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      We&apos;ll email you a six-digit login code. Demo accounts use @elevatecareer.ai.
+                    </p>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-white">Password</label>
-                  <div className="relative">
+                {otpRequested && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-white">One-Time Code</label>
                     <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white pr-12"
-                      placeholder="Enter your password"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
+                      placeholder="Enter the 6-digit code"
                       required
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                    >
-                      {showPassword ? <FiEyeOff className="w-5 h-5" /> : <FiEye className="w-5 h-5" />}
-                    </button>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Using an @elevatecareer.ai email for demos? Enter <span className="text-orange-300 font-semibold">000000</span>.
+                    </p>
+                    <label className="mt-3 inline-flex items-center text-sm text-gray-300 gap-2">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="rounded border-white/30 bg-transparent text-orange-500 focus:ring-orange-500"
+                      />
+                      Keep me signed in on this device
+                    </label>
                   </div>
-                </div>
+                )}
 
                 <motion.button
                   type="submit"
-                  disabled={isLoading || loginSuccess}
+                  disabled={isOtpLoading || (loginSuccess && !otpRequested)}
                   className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  {isLoading ? (
+                  {isOtpLoading ? (
                     <>
                       <FiLoader className="w-5 h-5 mr-2 animate-spin" />
-                      Logging in...
+                      {otpRequested ? 'Verifying code...' : 'Sending code...'}
                     </>
                   ) : loginSuccess ? (
                     <>
@@ -3197,13 +3234,13 @@ const Home = () => {
                       Success!
                     </>
                   ) : (
-                    'Login'
+                    otpRequested ? 'Verify & Sign In' : 'Send Login Code'
                   )}
                 </motion.button>
               </form>
 
               <p className="text-sm text-gray-400 mt-4 text-center">
-                Demo: Use any email/password to login
+                Demo tip: use any @elevatecareer.ai email and code <span className="text-orange-200 font-semibold">000000</span>.
               </p>
             </motion.div>
           </motion.div>
@@ -3256,7 +3293,7 @@ const Home = () => {
                   animate={{ opacity: 1, y: 0 }}
                 >
                   <FiCheck className="w-5 h-5 mr-2" />
-                  Account created successfully! Opening login...
+                  Account created! We just sent your login code via email.
                 </motion.div>
               )}
 

@@ -5,9 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiEdit, FiTrash2, FiX } from 'react-icons/fi';
-import { getAssessments, deleteAssessment, getJobs, createJob, updateJob, deleteJob, createAssessment } from '../../api/admin';
+import { getAssessments, deleteAssessment, getJobs, createJob, updateJob, deleteJob, createAssessment, createDraftJob } from '../../api/admin';
 import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
 import AdminLayout from '../../components/AdminLayout';
+import JobTitleSearch from '../../components/JobTitleSearch';
+import CompetencySelector from '../../components/CompetencySelector';
 
 // Custom glass popover select component matching AIMockInterview style
 const GlassSelect = ({ value, onChange, options, placeholder = 'Select', className = '', required = false }) => {
@@ -92,15 +94,25 @@ const AssessmentList = () => {
   const [showJobModal, setShowJobModal] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [selectedJobTitle, setSelectedJobTitle] = useState(null);
+  const [selectedCompetencies, setSelectedCompetencies] = useState([]);
   const [newJob, setNewJob] = useState({
     title: '',
+    job_title: '',
     description: '',
-    yearsOfExperience: '',
-    company: '',
-    location: '',
-    type: 'full-time',
-    salary: '',
-    status: 'active',
+    responsibilities: [],
+    requirements: [],
+    min_experience_years: '',
+    max_experience_years: '',
+    job_type: 'full_time',
+    location_type: 'remote',
+    location_city: '',
+    location_state: '',
+    location_country: '',
+    salary_min: '',
+    salary_max: '',
+    salary_currency: 'USD',
+    competency_ids: [],
   });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
@@ -344,14 +356,24 @@ const AssessmentList = () => {
   const resetJobForm = () => {
     setNewJob({
       title: '',
+      job_title: '',
       description: '',
-      yearsOfExperience: '',
-      company: '',
-      location: '',
-      type: 'full-time',
-      salary: '',
-      status: 'active',
+      responsibilities: [],
+      requirements: [],
+      min_experience_years: '',
+      max_experience_years: '',
+      job_type: 'full_time',
+      location_type: 'remote',
+      location_city: '',
+      location_state: '',
+      location_country: '',
+      salary_min: '',
+      salary_max: '',
+      salary_currency: 'USD',
+      competency_ids: [],
     });
+    setSelectedJobTitle(null);
+    setSelectedCompetencies([]);
     setEditingJob(null);
     setHasUnsavedChanges(false);
     setCreatedJobId(null);
@@ -360,7 +382,7 @@ const AssessmentList = () => {
   // Track form changes
   useEffect(() => {
     if (showJobModal) {
-      const hasChanges = newJob.title || newJob.description || newJob.yearsOfExperience;
+      const hasChanges = newJob.title || newJob.description || newJob.min_experience_years || newJob.max_experience_years;
       setHasUnsavedChanges(hasChanges);
     }
   }, [newJob, showJobModal]);
@@ -429,18 +451,8 @@ const AssessmentList = () => {
   };
 
   const handleEditJob = (job) => {
-    setEditingJob(job);
-    setNewJob({
-      title: job.title || '',
-      description: job.description || '',
-      yearsOfExperience: job.yearsOfExperience || '',
-      company: job.company || '',
-      location: job.location || '',
-      type: job.type || 'full-time',
-      salary: job.salary || '',
-      status: job.status || 'active',
-    });
-    setShowJobModal(true);
+    // Redirect to job edit page instead of showing modal
+    router.push(`/admin/jobs/edit?id=${job.id}`);
   };
 
   const generateJobDescription = async (isImprove = false) => {
@@ -584,8 +596,8 @@ Join us and be part of an innovative team driving excellence in our industry.`;
   };
 
   const handleJobTitleClick = (job) => {
-    setSelectedJobForView(job);
-    setShowJobAssessmentModal(true);
+    // Redirect to job edit page
+    router.push(`/admin/jobs/edit?id=${job.id}`);
   };
 
 
@@ -1057,9 +1069,18 @@ Join us and be part of an innovative team driving excellence in our industry.`;
 
              <div className="flex justify-end mb-6">
                <button
-                 onClick={() => {
-                   resetJobForm();
-                   setShowJobModal(true);
+                 onClick={async () => {
+                   try {
+                     console.log('Creating draft job...');
+                     const result = await createDraftJob();
+                     console.log('Draft job created:', result);
+                     router.push(`/admin/jobs/edit?id=${result.id}`);
+                   } catch (error) {
+                     console.error('Failed to create draft job - Full error:', error);
+                     console.error('Error response:', error.response);
+                     console.error('Error data:', error.response?.data);
+                     alert(`Failed to create job: ${error.response?.data?.message || error.message}`);
+                   }
                  }}
                  className="px-6 py-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-105 active:scale-95 flex items-center gap-2"
                >
@@ -1790,30 +1811,76 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                 </div>
 
                 <form onSubmit={handleJobSubmit} className="space-y-6">
-                  {/* Required Fields - Priority */}
+                  {/* Job Title Search */}
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-white">Job Title *</label>
+                    <JobTitleSearch
+                      onSelect={(jobTitle) => {
+                        setSelectedJobTitle(jobTitle);
+                        setNewJob(prev => ({
+                          ...prev,
+                          job_title: jobTitle.id,
+                          title: prev.title || jobTitle.name
+                        }));
+                      }}
+                      value={selectedJobTitle?.name || ''}
+                    />
+                  </div>
+
+                  {/* Custom Job Posting Title */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-white">Job Posting Title *</label>
                     <input
                       type="text"
                       value={newJob.title}
                       onChange={(e) => setNewJob({ ...newJob, title: e.target.value })}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                      placeholder="e.g., Senior Software Engineer"
+                      placeholder="e.g., Senior Software Engineer - Backend Team"
                       required
+                    />
+                    <p className="mt-1 text-xs text-gray-400">This can be more specific than the job title above</p>
+                  </div>
+
+                  {/* Competencies Selector */}
+                  <div>
+                    <CompetencySelector
+                      jobTitleId={selectedJobTitle?.id}
+                      selectedCompetencies={selectedCompetencies}
+                      onCompetenciesChange={(comps) => {
+                        setSelectedCompetencies(comps);
+                        setNewJob(prev => ({
+                          ...prev,
+                          competency_ids: comps.map(c => c.id)
+                        }));
+                      }}
                     />
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-white">Years of Experience *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={newJob.yearsOfExperience}
-                      onChange={(e) => setNewJob({ ...newJob, yearsOfExperience: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
-                      placeholder="e.g., 3"
-                      required
-                    />
+
+                  {/* Experience Range */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">Min Experience (years)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={newJob.min_experience_years}
+                        onChange={(e) => setNewJob({ ...newJob, min_experience_years: e.target.value })}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">Max Experience (years)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={newJob.max_experience_years}
+                        onChange={(e) => setNewJob({ ...newJob, max_experience_years: e.target.value })}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                        placeholder="10"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -1870,6 +1937,105 @@ Join us and be part of an innovative team driving excellence in our industry.`;
                       required
                     />
                     <p className="mt-1 text-xs text-gray-400">You can paste your existing JD or upload a PDF file to extract text</p>
+                  </div>
+
+                  {/* Job Type & Location Type */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">Job Type</label>
+                      <select
+                        value={newJob.job_type}
+                        onChange={(e) => setNewJob({ ...newJob, job_type: e.target.value })}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
+                      >
+                        <option value="full_time">Full Time</option>
+                        <option value="part_time">Part Time</option>
+                        <option value="contract">Contract</option>
+                        <option value="internship">Internship</option>
+                        <option value="freelance">Freelance</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">Location Type</label>
+                      <select
+                        value={newJob.location_type}
+                        onChange={(e) => setNewJob({ ...newJob, location_type: e.target.value })}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white"
+                      >
+                        <option value="remote">Remote</option>
+                        <option value="hybrid">Hybrid</option>
+                        <option value="onsite">On-site</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Location Details */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">City</label>
+                      <input
+                        type="text"
+                        value={newJob.location_city}
+                        onChange={(e) => setNewJob({ ...newJob, location_city: e.target.value })}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                        placeholder="San Francisco"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">State</label>
+                      <input
+                        type="text"
+                        value={newJob.location_state}
+                        onChange={(e) => setNewJob({ ...newJob, location_state: e.target.value })}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                        placeholder="CA"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">Country</label>
+                      <input
+                        type="text"
+                        value={newJob.location_country}
+                        onChange={(e) => setNewJob({ ...newJob, location_country: e.target.value })}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                        placeholder="USA"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Salary Range */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-white">Salary Range</label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <input
+                          type="number"
+                          value={newJob.salary_min}
+                          onChange={(e) => setNewJob({ ...newJob, salary_min: e.target.value })}
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                          placeholder="Min (120000)"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          value={newJob.salary_max}
+                          onChange={(e) => setNewJob({ ...newJob, salary_max: e.target.value })}
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                          placeholder="Max (180000)"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={newJob.salary_currency}
+                          onChange={(e) => setNewJob({ ...newJob, salary_currency: e.target.value })}
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-orange-500 text-white placeholder-gray-500"
+                          placeholder="USD"
+                          maxLength={3}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Status Field - Only show when editing */}

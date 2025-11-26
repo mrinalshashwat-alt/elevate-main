@@ -59,15 +59,18 @@ export interface Assessment {
 }
 
 // Job types
+export type JobType = 'full-time' | 'part-time' | 'contract' | 'internship' | 'freelance';
+export type JobStatus = 'draft' | 'published' | 'active' | 'closed' | 'archived';
+
 export interface Job {
   id: string;
   title: string;
   company: string;
   location: string;
-  type: 'full-time' | 'part-time' | 'contract';
+  type: JobType;
   salary: string;
   postedAt: string;
-  status: 'active' | 'closed';
+  status: JobStatus;
   competencies?: string[];
 }
 

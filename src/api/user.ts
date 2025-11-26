@@ -1,160 +1,211 @@
 import axiosInstance from './axiosInstance';
-import { DashboardStats, Course, MockInterview, ApiResponse } from '../types';
+import { DashboardStats, Course, MockInterview, PaginatedResponse } from '../types';
 
-const mockDashboardStats: DashboardStats = {
-  totalCourses: 12,
-  completedCourses: 5,
-  upcomingInterviews: 3,
-  skillScore: 78,
+type DrfListResponse<T> = {
+  count?: number;
+  next?: string | null;
+  previous?: string | null;
+  results?: T[];
+  data?: T[];
 };
 
-const mockCourses: Course[] = [
-  {
-    id: '1',
-    title: 'Advanced JavaScript',
-    description: 'Master modern JavaScript concepts',
-    duration: '8 hours',
-    progress: 65,
-    thumbnail: 'https://via.placeholder.com/300x200',
-  },
-  {
-    id: '2',
-    title: 'React Best Practices',
-    description: 'Learn React patterns and optimization',
-    duration: '6 hours',
-    progress: 40,
-    thumbnail: 'https://via.placeholder.com/300x200',
-  },
-  {
-    id: '3',
-    title: 'System Design',
-    description: 'Design scalable systems',
-    duration: '10 hours',
-    progress: 20,
-    thumbnail: 'https://via.placeholder.com/300x200',
-  },
-];
+type AssessmentPublic = {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  duration_minutes: number;
+  total_questions?: number;
+  time_remaining?: number;
+};
 
-const mockInterviews: MockInterview[] = [
-  {
-    id: '1',
-    title: 'Technical Interview - Frontend',
-    type: 'Technical',
-    duration: '60 min',
-    difficulty: 'medium',
-    scheduledAt: '2024-01-20T10:00:00Z',
-  },
-  {
-    id: '2',
-    title: 'Behavioral Interview',
-    type: 'Behavioral',
-    duration: '45 min',
-    difficulty: 'easy',
-  },
-];
+type AssessmentDetail = AssessmentPublic & {
+  settings?: Record<string, unknown>;
+};
+
+type JobPublic = {
+  id: string;
+  title: string;
+  job_title_name?: string;
+  description?: string;
+  min_experience_years?: number | string;
+  job_type?: string;
+  location_city?: string;
+  location_state?: string;
+  location_country?: string;
+  salary_min?: number | string;
+  salary_max?: number | string;
+  salary_currency?: string;
+  published_at?: string;
+  created_at?: string;
+};
+
+type StartAssessmentPayload = {
+  assessmentId: string;
+  name: string;
+  email: string;
+  phone?: string;
+};
+
+type AttemptStartResponse = {
+  attempt_id: string;
+  assessment: AssessmentDetail & { settings?: Record<string, unknown> };
+  expires_at?: string | null;
+  time_remaining_seconds?: number;
+  questions?: Array<{
+    id: string;
+    type: string;
+    order: number;
+    content: Record<string, unknown>;
+  }>;
+};
+
+const unwrapList = <T>(payload: DrfListResponse<T> | T[] | undefined): T[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload.data)) return payload.data;
+  return [];
+};
+
+const buildLocation = (job: JobPublic): string => {
+  const parts = [job.location_city, job.location_state, job.location_country].filter(Boolean);
+  return parts.length ? parts.join(', ') : 'Remote';
+};
+
+const toCourse = (assessment: AssessmentPublic): Course => ({
+  id: assessment.id,
+  title: assessment.name,
+  description: assessment.description || 'No description provided yet.',
+  duration: assessment.duration_minutes ? `${assessment.duration_minutes} min` : 'Self-paced',
+  progress: assessment.time_remaining && assessment.time_remaining <= 0 ? 100 : 0,
+  thumbnail: '/img.png',
+});
+
+const fetchAssessments = async (): Promise<AssessmentPublic[]> => {
+  const { data } = await axiosInstance.get<DrfListResponse<AssessmentPublic>>('/assessment/');
+  return unwrapList<AssessmentPublic>(data);
+};
+
+const fetchJobs = async (): Promise<JobPublic[]> => {
+  const { data } = await axiosInstance.get<DrfListResponse<JobPublic>>('/jobs/');
+  return unwrapList<JobPublic>(data);
+};
 
 export const getUserDashboard = async (): Promise<DashboardStats> => {
-  try {
-    const response = await axiosInstance.get<ApiResponse<DashboardStats>>('/user/dashboard', {
-      timeout: 5000,
-    });
-    return response.data.data;
-  } catch (error: any) {
-    console.log('Using mock dashboard data', error?.message || error);
-    return Promise.resolve(mockDashboardStats);
-  }
+  const [assessments, jobs] = await Promise.all([fetchAssessments(), fetchJobs()]);
+
+  const completedAssessments = assessments.filter((assessment) => (assessment.time_remaining ?? 0) <= 0).length;
+
+  return {
+    totalCourses: assessments.length,
+    completedCourses: completedAssessments,
+    upcomingInterviews: jobs.length,
+    skillScore:
+      assessments.length > 0
+        ? Math.min(100, Math.round((completedAssessments / assessments.length) * 100))
+        : 0,
+  };
 };
 
 export const getUserCourses = async (): Promise<Course[]> => {
-  try {
-    const response = await axiosInstance.get<ApiResponse<Course[]>>('/user/courses');
-    return response.data.data;
-  } catch (error) {
-    console.log('Using mock courses data');
-    return mockCourses;
-  }
+  const assessments = await fetchAssessments();
+  return assessments.map(toCourse);
 };
 
 export const getCourseContent = async (courseId: string): Promise<any> => {
-  try {
-    const response = await axiosInstance.get(`/user/courses/${courseId}/content`);
-    return response.data.data;
-  } catch (error) {
-    console.log('Using mock course content');
-    return {
-      id: courseId,
-      title: 'Course Content',
-      modules: [
-        { id: '1', title: 'Introduction', duration: '30 min', completed: true },
-        { id: '2', title: 'Core Concepts', duration: '45 min', completed: false },
-        { id: '3', title: 'Advanced Topics', duration: '60 min', completed: false },
-      ],
-    };
+  if (!courseId) {
+    throw new Error('courseId is required to load course content.');
   }
+
+  const { data } = await axiosInstance.get<AssessmentDetail>(`/assessment/${courseId}/`);
+
+  const moduleCount = Math.max(1, Math.min(6, data.total_questions || 1));
+  const modules = Array.from({ length: moduleCount }).map((_, index) => ({
+    id: `${data.id}-module-${index + 1}`,
+    title: `Module ${index + 1}`,
+    duration: data.duration_minutes
+      ? `${Math.max(10, Math.round(data.duration_minutes / moduleCount))} min`
+      : 'Self-paced',
+    completed: index === 0,
+  }));
+
+  return {
+    id: data.id,
+    title: data.name,
+    description: data.description,
+    instructions: data.instructions,
+    duration_minutes: data.duration_minutes,
+    modules,
+  };
 };
 
 export const getMockInterviews = async (): Promise<MockInterview[]> => {
-  try {
-    const response = await axiosInstance.get<ApiResponse<MockInterview[]>>('/user/mock-interviews');
-    return response.data.data;
-  } catch (error) {
-    console.log('Using mock interviews data');
-    return mockInterviews;
-  }
+  const jobs = await fetchJobs();
+
+  return jobs.slice(0, 10).map((job) => ({
+    id: job.id,
+    title: job.title,
+    type: job.job_type?.replace('_', ' ') || 'Interview',
+    duration: job.min_experience_years ? `${job.min_experience_years}+ yrs experience` : '60 min',
+    difficulty: 'medium',
+    scheduledAt: job.published_at || job.created_at || new Date().toISOString(),
+  }));
 };
 
-export const scheduleMockInterview = async (data: Partial<MockInterview>): Promise<MockInterview> => {
-  try {
-    const response = await axiosInstance.post<ApiResponse<MockInterview>>('/user/mock-interviews', data);
-    return response.data.data;
-  } catch (error) {
-    console.log('Mock scheduling interview');
-    return { ...data, id: Date.now().toString() } as MockInterview;
+export const scheduleMockInterview = async (data: Partial<StartAssessmentPayload>): Promise<MockInterview> => {
+  if (!data?.assessmentId || !data?.name || !data?.email) {
+    throw new Error('assessmentId, name, and email are required to schedule an interview.');
   }
+
+  const payload = {
+    name: data.name,
+    email: data.email,
+    phone: data.phone || '',
+  };
+
+  const response = await axiosInstance.post<AttemptStartResponse>(
+    `/assessment/${data.assessmentId}/start/`,
+    payload
+  );
+
+  return {
+    id: response.data.attempt_id,
+    title: response.data.assessment?.name || 'Assessment Attempt',
+    type: 'technical',
+    duration: response.data.assessment?.duration_minutes
+      ? `${response.data.assessment.duration_minutes} min`
+      : '60 min',
+    difficulty: 'medium',
+    scheduledAt: new Date().toISOString(),
+  };
 };
 
 export const getAIAgents = async (): Promise<any[]> => {
-  try {
-    const response = await axiosInstance.get('/user/ai-agents');
-    return response.data.data;
-  } catch (error) {
-    console.log('Using mock AI agents data');
-    return [
-      {
-        id: '1',
-        name: 'AI Communication Coach',
-        description: 'Improve your communication skills',
-        icon: '💬',
-        available: true,
-      },
-      {
-        id: '2',
-        name: 'AI Mock Interview',
-        description: 'Practice interviews with AI',
-        icon: '🎤',
-        available: true,
-      },
-      {
-        id: '3',
-        name: 'AI Career Coach',
-        description: 'Get personalized career guidance',
-        icon: '🎯',
-        available: true,
-      },
-    ];
-  }
+  const jobs = await fetchJobs();
+
+  return jobs.slice(0, 6).map((job, index) => ({
+    id: `${job.id}-agent`,
+    name: job.title,
+    description: job.description || 'AI agent powered by real assessment data.',
+    icon: ['💬', '🤖', '🎯', '⚙️', '🧠', '📈'][index % 6],
+    available: true,
+  }));
 };
 
-export const submitTest = async (testId: string, answers: any): Promise<any> => {
-  try {
-    const response = await axiosInstance.post(`/user/tests/${testId}/submit`, { answers });
-    return response.data.data;
-  } catch (error) {
-    console.log('Mock test submission');
-    return {
-      score: 85,
-      passed: true,
-      feedback: 'Great job! You passed the test.',
-    };
+export const submitTest = async (testId: string, answers: Record<string, unknown>): Promise<any> => {
+  if (!testId) {
+    throw new Error('testId is required to submit a test.');
   }
+
+  // Placeholder until attempt APIs are fully wired to the UI.
+  return {
+    id: testId,
+    answers,
+    submittedAt: new Date().toISOString(),
+    score: 0,
+    passed: false,
+    feedback:
+      'Submission recorded locally. Wire this flow to Attempt APIs once assessment-taking UI is ready.',
+  };
 };

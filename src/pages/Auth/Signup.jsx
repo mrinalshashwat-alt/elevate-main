@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FirebaseError } from 'firebase/app';
 import { useAuth } from '../../context/AuthContext';
 
 const Signup = () => {
@@ -18,23 +17,59 @@ const Signup = () => {
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const getAuthErrorMessage = (authError) => {
-    if (!authError) return 'Something went wrong. Please try again.';
+  const getApiErrorMessage = (error) => {
+    if (!error) return 'Something went wrong. Please try again.';
 
-    const code = authError.code || '';
+    const responseData = error?.response?.data;
 
-    switch (code) {
-      case 'auth/invalid-email':
-        return 'Please enter a valid email address.';
-      case 'auth/email-already-in-use':
-        return 'That email is already registered. Try logging in instead.';
-      case 'auth/weak-password':
-        return 'Choose a stronger password (at least 6 characters).';
-      case 'auth/network-request-failed':
-        return 'Network error. Check your connection and try again.';
-      default:
-        return authError.message || 'An unexpected error occurred. Please try again.';
+    if (responseData) {
+      if (typeof responseData === 'string') {
+        return responseData;
+      }
+
+      if (responseData.detail) {
+        return responseData.detail;
+      }
+
+      if (responseData.message) {
+        if (typeof responseData.message === 'string') {
+          return responseData.message;
+        }
+
+        if (typeof responseData.message === 'object') {
+          const nestedValues = Object.values(responseData.message);
+          if (nestedValues.length > 0) {
+            const first = nestedValues[0];
+            if (Array.isArray(first) && first.length > 0) {
+              return first[0];
+            }
+            if (typeof first === 'string') {
+              return first;
+            }
+          }
+        }
+      }
+
+      if (responseData.details) {
+        if (typeof responseData.details === 'string') {
+          return responseData.details;
+        }
+        if (typeof responseData.details === 'object') {
+          const detailValues = Object.values(responseData.details);
+          if (detailValues.length > 0) {
+            const detail = detailValues[0];
+            if (Array.isArray(detail) && detail.length > 0) {
+              return detail[0];
+            }
+            if (typeof detail === 'string') {
+              return detail;
+            }
+          }
+        }
+      }
     }
+
+    return error.message || 'Something went wrong. Please try again.';
   };
 
   const handleSubmit = async (e) => {
@@ -57,25 +92,22 @@ const Signup = () => {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await register(name.trim(), email.trim(), password);
-      setSuccess('Account created! Redirecting to your dashboard…');
+      const sanitizedEmail = email.trim().toLowerCase();
+      await register(name.trim(), sanitizedEmail, password);
+      setSuccess('Account created! We emailed your login code. Use 000000 for @elevatecareer.ai demos.');
       setTimeout(() => {
-        router.replace('/user/dashboard');
+        router.replace(`/?auth=required&email=${encodeURIComponent(sanitizedEmail)}`);
       }, 1200);
     } catch (authError) {
-      const friendlyMessage =
-        authError instanceof FirebaseError
-          ? getAuthErrorMessage(authError)
-          : 'Unable to create your account right now.';
-      setError(friendlyMessage);
+      setError(getApiErrorMessage(authError));
     } finally {
       setIsSubmitting(false);
     }

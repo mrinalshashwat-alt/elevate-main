@@ -7,13 +7,10 @@ import { useAuth } from '../context/AuthContext';
 const ProtectedRoute = ({ children, requiredRole = 'user' }) => {
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
-
-  if (requiredRole === 'admin') {
-    return <>{children}</>;
-  }
+  const bypassRoleCheck = requiredRole === 'admin';
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || bypassRoleCheck) return;
 
     if (!isAuthenticated) {
       router.replace('/?auth=required');
@@ -23,7 +20,7 @@ const ProtectedRoute = ({ children, requiredRole = 'user' }) => {
     if (requiredRole && user?.role && user.role !== requiredRole) {
       router.replace('/');
     }
-  }, [isAuthenticated, isLoading, requiredRole, router, user?.role]);
+  }, [bypassRoleCheck, isAuthenticated, isLoading, requiredRole, router, user?.role]);
 
   if (isLoading) {
     return (
@@ -33,11 +30,11 @@ const ProtectedRoute = ({ children, requiredRole = 'user' }) => {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !bypassRoleCheck) {
     return null;
   }
 
-  if (requiredRole && user?.role !== requiredRole) {
+  if (!bypassRoleCheck && requiredRole && user?.role !== requiredRole) {
     return null;
   }
 
