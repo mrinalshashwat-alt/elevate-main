@@ -23,9 +23,14 @@ type ParticipantResource = {
 type JobAdminResource = {
   id: string;
   title: string;
+  job_title?: string; // UUID of JobTitle
   job_title_name?: string;
+  description?: string;
+  responsibilities?: string[];
+  requirements?: string[];
   status?: string;
   job_type?: string;
+  location_type?: string;
   location_city?: string;
   location_state?: string;
   location_country?: string;
@@ -36,7 +41,16 @@ type JobAdminResource = {
   max_experience_years?: number | string;
   published_at?: string;
   created_at?: string;
+  updated_at?: string;
   assessment_count?: number;
+  competencies?: Array<{
+    competency_id: string;
+    competency_name: string;
+    competency_category: string;
+    importance_level: number;
+    is_custom: boolean;
+    description?: string;
+  }>;
 };
 
 type AssessmentAdminResource = {
@@ -139,16 +153,57 @@ const formatLocation = (job: JobAdminResource): string => {
   return parts.length ? parts.join(', ') : 'Remote';
 };
 
-const toJob = (job: JobAdminResource): Job => ({
-  id: job.id,
-  title: job.title,
-  company: job.job_title_name || 'Unspecified',
-  location: formatLocation(job),
-  type: mapJobType(job.job_type),
-  salary: formatSalary(job),
-  postedAt: job.published_at || job.created_at || new Date().toISOString(),
-  status: mapJobStatus(job.status),
-  competencies: job.assessment_count !== undefined ? [`Assessments linked: ${job.assessment_count}`] : [],
+const formatExperience = (job: JobAdminResource): string => {
+  const min = job.min_experience_years;
+  const max = job.max_experience_years;
+  if (min !== undefined && max !== undefined && min !== '' && max !== '') {
+    return `${min}-${max} years`;
+  }
+  if (min !== undefined && min !== '') {
+    return `${min}+ years`;
+  }
+  return 'Not specified';
+};
+
+const formatLocationType = (locationType?: string): string => {
+  const map: Record<string, string> = {
+    remote: 'Remote',
+    hybrid: 'Hybrid',
+    onsite: 'On-site',
+  };
+  return locationType ? map[locationType] || locationType : 'Remote';
+};
+
+const toJob = (job: JobAdminResource): Job => {
+  // Extract competency names from the backend response
+  let competencyNames: string[] = [];
+  if (job.competencies && Array.isArray(job.competencies)) {
+    competencyNames = job.competencies.map(c => c.competency_name);
+  }
+
+  return {
+    id: job.id,
+    title: job.title,
+    company: job.job_title_name || 'Unspecified',
+    location: formatLocation(job),
+    type: mapJobType(job.job_type),
+    salary: formatSalary(job),
+    postedAt: job.published_at || job.created_at || new Date().toISOString(),
+    status: mapJobStatus(job.status),
+    competencies: competencyNames,
+  };
+};
+
+// Extended job data for edit page
+export interface JobDetailData extends JobAdminResource {
+  experience: string;
+  locationTypeDisplay: string;
+}
+
+export const toJobDetail = (job: JobAdminResource): JobDetailData => ({
+  ...job,
+  experience: formatExperience(job),
+  locationTypeDisplay: formatLocationType(job.location_type),
 });
 
 const toAssessment = (assessment: AssessmentAdminResource): Assessment => ({
@@ -384,4 +439,313 @@ export const improveJobDescription = async (jobId: string, description: string):
     description,
   });
   return data.improved_description;
+};
+
+// =====================================================
+// Assessment Draft & Edit APIs
+// =====================================================
+
+export interface AssessmentDetailResource {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  job?: string | null;
+  job_title?: string | null;
+  start_at: string;
+  end_at: string;
+  duration_minutes: number;
+  status: string;
+  settings: Record<string, any>;
+  unique_link_token: string;
+  question_distribution?: Record<string, number>;
+  total_marks?: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface QuestionResource {
+  id: string;
+  type: 'mcq' | 'coding' | 'subjective';
+  content: Record<string, any>;
+  scoring: Record<string, any>;
+  difficulty: number;
+  tags: string[];
+  order: number;
+  weightage: string;
+  title?: string;
+  max_marks?: number;
+}
+
+export interface QuestionTemplateResource {
+  id: string;
+  type: 'mcq' | 'coding' | 'subjective';
+  title: string;
+  content: Record<string, any>;
+  scoring: Record<string, any>;
+  difficulty: number;
+  tags: string[];
+  competency?: string | null;
+  competency_name?: string | null;
+  job_title?: string | null;
+  job_title_name?: string | null;
+  usage_count: number;
+  is_active: boolean;
+  max_marks?: number;
+}
+
+/**
+ * Create a draft assessment and get UUID for immediate redirect
+ */
+export const createDraftAssessment = async (data: {
+  name?: string;
+  job?: string;
+}): Promise<{ id: string; name: string; status: string; unique_link_token: string }> => {
+  const response = await axiosInstance.post('/admin/assessments/create_draft/', data);
+  return response.data;
+};
+
+/**
+ * Get assessment details by ID
+ */
+export const getAssessment = async (assessmentId: string): Promise<AssessmentDetailResource> => {
+  const { data } = await axiosInstance.get(`/admin/assessments/${assessmentId}/`);
+  return data;
+};
+
+/**
+ * Update assessment (PATCH for auto-save)
+ */
+export const patchAssessment = async (
+  assessmentId: string,
+  updateData: Partial<{
+    name: string;
+    description: string;
+    instructions: string;
+    job: string | null;
+    start_at: string;
+    end_at: string;
+    duration_minutes: number;
+    settings: Record<string, any>;
+  }>
+): Promise<AssessmentDetailResource> => {
+  const { data } = await axiosInstance.patch(`/admin/assessments/${assessmentId}/`, updateData);
+  return data;
+};
+
+/**
+ * Publish an assessment
+ */
+export const publishAssessment = async (assessmentId: string): Promise<any> => {
+  const { data } = await axiosInstance.post(`/admin/assessments/${assessmentId}/publish/`);
+  return data;
+};
+
+/**
+ * Get assessment preview with all questions
+ */
+export const getAssessmentPreview = async (assessmentId: string): Promise<{
+  assessment: any;
+  questions: QuestionResource[];
+}> => {
+  const { data } = await axiosInstance.get(`/admin/assessments/${assessmentId}/preview/`);
+  return data;
+};
+
+/**
+ * Reorder questions in an assessment
+ */
+export const reorderQuestions = async (
+  assessmentId: string,
+  questionIds: string[]
+): Promise<{ success: boolean; message: string }> => {
+  const { data } = await axiosInstance.post(`/admin/assessments/${assessmentId}/reorder_questions/`, {
+    question_ids: questionIds,
+  });
+  return data;
+};
+
+/**
+ * Update question weightages
+ */
+export const updateWeightages = async (
+  assessmentId: string,
+  weightages: Record<string, number>
+): Promise<{ success: boolean; updated: number; errors: any[] }> => {
+  const { data } = await axiosInstance.post(`/admin/assessments/${assessmentId}/update_weightages/`, {
+    weightages,
+  });
+  return data;
+};
+
+// =====================================================
+// Question APIs
+// =====================================================
+
+/**
+ * Get questions for an assessment
+ */
+export const getAssessmentQuestions = async (assessmentId: string): Promise<QuestionResource[]> => {
+  const { data } = await axiosInstance.get('/admin/questions/', {
+    params: { assessment: assessmentId },
+  });
+  return unwrapList(data);
+};
+
+/**
+ * Create a question manually
+ */
+export const createQuestion = async (questionData: {
+  assessment: string;
+  type: string;
+  content: Record<string, any>;
+  scoring: Record<string, any>;
+  difficulty: number;
+  tags?: string[];
+  order?: number;
+  weightage?: number;
+}): Promise<QuestionResource> => {
+  const { data } = await axiosInstance.post('/admin/questions/', questionData);
+  return data;
+};
+
+/**
+ * Update a question
+ */
+export const updateQuestion = async (
+  questionId: string,
+  updateData: Partial<QuestionResource>
+): Promise<QuestionResource> => {
+  const { data } = await axiosInstance.patch(`/admin/questions/${questionId}/`, updateData);
+  return data;
+};
+
+/**
+ * Delete a question
+ */
+export const deleteQuestion = async (questionId: string): Promise<void> => {
+  await axiosInstance.delete(`/admin/questions/${questionId}/`);
+};
+
+/**
+ * Generate a question using AI
+ */
+export const generateAIQuestion = async (params: {
+  assessment_id: string;
+  type: string;
+  difficulty: number;
+  competencies?: Array<{ id: string; name: string }>;
+  job_title?: string;
+  context?: string;
+  order?: number;
+  weightage?: number;
+}): Promise<{ success: boolean; question: QuestionResource }> => {
+  const { data } = await axiosInstance.post('/admin/questions/generate_ai/', params);
+  return data;
+};
+
+/**
+ * Generate multiple questions using AI
+ */
+export const generateAIQuestionsBulk = async (params: {
+  assessment_id: string;
+  type_counts: Record<string, number>;
+  difficulty: number;
+  competencies?: Array<{ id: string; name: string }>;
+  job_title?: string;
+}): Promise<{
+  success: boolean;
+  created: number;
+  questions: QuestionResource[];
+  errors: any[];
+}> => {
+  const { data } = await axiosInstance.post('/admin/questions/generate_ai_bulk/', params);
+  return data;
+};
+
+// =====================================================
+// Question Template (Bank) APIs
+// =====================================================
+
+/**
+ * Get question templates with filters
+ */
+export const getQuestionTemplates = async (params?: {
+  type?: string;
+  difficulty?: number;
+  competency?: string;
+  job_title?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<PaginatedResponse<QuestionTemplateResource>> => {
+  const { data } = await axiosInstance.get('/admin/questions/templates/', { params });
+  return normalizePaginated(data, params?.page || 1, params?.page_size || 20);
+};
+
+/**
+ * Recommend questions from template bank
+ */
+export const recommendQuestions = async (params: {
+  type?: string;
+  difficulty?: number;
+  competency_id?: string;
+  job_title_id?: string;
+  exclude_ids?: string[];
+  limit?: number;
+}): Promise<{ count: number; results: QuestionTemplateResource[] }> => {
+  const { data } = await axiosInstance.post('/admin/questions/templates/recommend/', params);
+  return data;
+};
+
+/**
+ * Recommend questions in bulk by type counts
+ */
+export const recommendQuestionsBulk = async (params: {
+  type_counts: Record<string, number>;
+  difficulty?: number;
+  competency_id?: string;
+  job_title_id?: string;
+  exclude_ids?: string[];
+}): Promise<{
+  total_count: number;
+  by_type: Record<string, QuestionTemplateResource[]>;
+  all: QuestionTemplateResource[];
+}> => {
+  const { data } = await axiosInstance.post('/admin/questions/templates/recommend_bulk/', params);
+  return data;
+};
+
+/**
+ * Add a template to an assessment
+ */
+export const addTemplateToAssessment = async (
+  templateId: string,
+  assessmentId: string,
+  options?: { order?: number; weightage?: number }
+): Promise<{ success: boolean; question: QuestionResource }> => {
+  const { data } = await axiosInstance.post(`/admin/questions/templates/${templateId}/add_to_assessment/`, {
+    assessment_id: assessmentId,
+    ...options,
+  });
+  return data;
+};
+
+/**
+ * Add multiple templates to an assessment
+ */
+export const addTemplatesToAssessment = async (
+  templateIds: string[],
+  assessmentId: string
+): Promise<{
+  success: boolean;
+  created: number;
+  questions: QuestionResource[];
+  errors: any[];
+}> => {
+  const { data } = await axiosInstance.post('/admin/questions/templates/bulk_add_to_assessment/', {
+    assessment_id: assessmentId,
+    template_ids: templateIds,
+  });
+  return data;
 };

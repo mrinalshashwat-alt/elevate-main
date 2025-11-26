@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Select from 'react-select';
 import { Country, State, City } from 'country-state-city';
-import { getJob, updateJob, publishJob, improveJobDescription } from '../../api/admin';
+import { getJob, updateJob, publishJob, improveJobDescription, getAssessments, createAssessment } from '../../api/admin';
+import axiosInstance from '../../api/axiosInstance';
 import AdminLayout from '../../components/AdminLayout';
 import JobTitleSearch from '../../components/JobTitleSearch';
 import CompetencySelector from '../../components/CompetencySelector';
-import { FiSave, FiSend, FiArrowLeft, FiLoader } from 'react-icons/fi';
+import { FiSave, FiSend, FiArrowLeft, FiLoader, FiLink, FiPlus, FiX, FiFileText, FiExternalLink } from 'react-icons/fi';
 import { FaMagic } from 'react-icons/fa';
 import { CURRENCIES } from '../../utils/currencies';
 
@@ -28,6 +29,11 @@ const JobEdit = () => {
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [selectedState, setSelectedState] = useState(null);
   const [selectedCity, setSelectedCity] = useState(null);
+  const [linkedAssessments, setLinkedAssessments] = useState([]);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [availableAssessments, setAvailableAssessments] = useState([]);
+  const [isLoadingAssessments, setIsLoadingAssessments] = useState(false);
+  const [isCreatingAssessment, setIsCreatingAssessment] = useState(false);
   const saveTimeoutRef = useRef(null);
   const initialFormDataRef = useRef(null);
 
@@ -196,8 +202,8 @@ const JobEdit = () => {
   const publishMutation = useMutation({
     mutationFn: () => publishJob(jobId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      router.push('/admin/assessment-list?tab=jobs');
+      queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
+      router.push('/admin/jobs');
     },
   });
 
@@ -283,6 +289,91 @@ const JobEdit = () => {
     }
   };
 
+  // Fetch linked assessments for this job
+  const fetchLinkedAssessments = useCallback(async () => {
+    if (!jobId) return;
+    try {
+      const response = await axiosInstance.get(`/admin/jobs/${jobId}/assessments/`);
+      setLinkedAssessments(response.data.assessments || []);
+    } catch (error) {
+      console.error('Failed to fetch linked assessments:', error);
+    }
+  }, [jobId]);
+
+  // Fetch assessments when job loads
+  useEffect(() => {
+    if (job) {
+      fetchLinkedAssessments();
+    }
+  }, [job, fetchLinkedAssessments]);
+
+  // Open assessment linking modal
+  const handleOpenAssessmentModal = async () => {
+    setShowAssessmentModal(true);
+    setIsLoadingAssessments(true);
+    try {
+      const result = await getAssessments(1, 100);
+      // Filter out already linked assessments
+      const linkedIds = linkedAssessments.map(a => a.id);
+      const available = result.data.filter(a => !linkedIds.includes(a.id) && !a.jobId);
+      setAvailableAssessments(available);
+    } catch (error) {
+      console.error('Failed to fetch assessments:', error);
+    } finally {
+      setIsLoadingAssessments(false);
+    }
+  };
+
+  // Link an existing assessment to this job
+  const handleLinkAssessment = async (assessmentId) => {
+    try {
+      await axiosInstance.patch(`/admin/assessments/${assessmentId}/`, {
+        job: jobId,
+      });
+      await fetchLinkedAssessments();
+      setShowAssessmentModal(false);
+    } catch (error) {
+      console.error('Failed to link assessment:', error);
+      alert('Failed to link assessment. Please try again.');
+    }
+  };
+
+  // Unlink an assessment from this job
+  const handleUnlinkAssessment = async (assessmentId) => {
+    if (!confirm('Are you sure you want to unlink this assessment from the job?')) return;
+    try {
+      await axiosInstance.patch(`/admin/assessments/${assessmentId}/`, {
+        job: null,
+      });
+      await fetchLinkedAssessments();
+    } catch (error) {
+      console.error('Failed to unlink assessment:', error);
+      alert('Failed to unlink assessment. Please try again.');
+    }
+  };
+
+  // Create a new assessment for this job
+  const handleCreateAssessment = async () => {
+    setIsCreatingAssessment(true);
+    try {
+      const newAssessment = await createAssessment({
+        title: `Assessment for ${formData.title || 'New Job'}`,
+        description: `Assessment linked to job: ${formData.title}`,
+        duration: 60,
+        jobId: jobId,
+      });
+      await fetchLinkedAssessments();
+      setShowAssessmentModal(false);
+      // Navigate to assessment edit page
+      router.push(`/admin/create-assessment?id=${newAssessment.id}`);
+    } catch (error) {
+      console.error('Failed to create assessment:', error);
+      alert('Failed to create assessment. Please try again.');
+    } finally {
+      setIsCreatingAssessment(false);
+    }
+  };
+
   if (!jobId) {
     return (
       <AdminLayout title="Job Edit">
@@ -310,7 +401,7 @@ const JobEdit = () => {
       <div className="mb-6 flex justify-between items-center sticky top-0 bg-gray-900 z-10 py-4 border-b border-white/10">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push('/admin/assessment-list?tab=jobs')}
+            onClick={() => router.push('/admin/jobs')}
             className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
           >
             <FiArrowLeft className="w-5 h-5" />
@@ -479,59 +570,61 @@ const JobEdit = () => {
           </div>
         </div>
 
-        {/* Location Details */}
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-2 text-white">Country</label>
-            <Select
-              value={selectedCountry}
-              onChange={(option) => {
-                setSelectedCountry(option);
-                setSelectedState(null);
-                setSelectedCity(null);
-                handleFieldChange('location_country', option ? option.label : '');
-                handleFieldChange('location_state', '');
-                handleFieldChange('location_city', '');
-              }}
-              options={countries}
-              styles={selectStyles}
-              isClearable
-              placeholder="Select country..."
-            />
+        {/* Location Details - Only show for hybrid/onsite */}
+        {formData.location_type !== 'remote' && (
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2 text-white">Country</label>
+              <Select
+                value={selectedCountry}
+                onChange={(option) => {
+                  setSelectedCountry(option);
+                  setSelectedState(null);
+                  setSelectedCity(null);
+                  handleFieldChange('location_country', option ? option.label : '');
+                  handleFieldChange('location_state', '');
+                  handleFieldChange('location_city', '');
+                }}
+                options={countries}
+                styles={selectStyles}
+                isClearable
+                placeholder="Select country..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-white">State</label>
+              <Select
+                value={selectedState}
+                onChange={(option) => {
+                  setSelectedState(option);
+                  setSelectedCity(null);
+                  handleFieldChange('location_state', option ? option.label : '');
+                  handleFieldChange('location_city', '');
+                }}
+                options={states}
+                styles={selectStyles}
+                isClearable
+                isDisabled={!selectedCountry}
+                placeholder={selectedCountry ? "Select state..." : "Select country first"}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-white">City</label>
+              <Select
+                value={selectedCity}
+                onChange={(option) => {
+                  setSelectedCity(option);
+                  handleFieldChange('location_city', option ? option.value : '');
+                }}
+                options={cities}
+                styles={selectStyles}
+                isClearable
+                isDisabled={!selectedState}
+                placeholder={selectedState ? "Select city..." : "Select state first"}
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-2 text-white">State</label>
-            <Select
-              value={selectedState}
-              onChange={(option) => {
-                setSelectedState(option);
-                setSelectedCity(null);
-                handleFieldChange('location_state', option ? option.label : '');
-                handleFieldChange('location_city', '');
-              }}
-              options={states}
-              styles={selectStyles}
-              isClearable
-              isDisabled={!selectedCountry}
-              placeholder={selectedCountry ? "Select state..." : "Select country first"}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2 text-white">City</label>
-            <Select
-              value={selectedCity}
-              onChange={(option) => {
-                setSelectedCity(option);
-                handleFieldChange('location_city', option ? option.value : '');
-              }}
-              options={cities}
-              styles={selectStyles}
-              isClearable
-              isDisabled={!selectedState}
-              placeholder={selectedState ? "Select city..." : "Select state first"}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Salary Range */}
         <div>
@@ -566,7 +659,168 @@ const JobEdit = () => {
             </div>
           </div>
         </div>
+
+        {/* Linked Assessments Section */}
+        <div className="mt-8 pt-8 border-t border-white/10">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <FiFileText className="w-5 h-5 text-orange-400" />
+                Linked Assessments
+              </h2>
+              <p className="text-gray-400 text-sm mt-1">
+                Link assessments to this job for candidate evaluation
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenAssessmentModal}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500/20 text-orange-400 rounded-lg border border-orange-500/30 hover:bg-orange-500/30 transition-all font-semibold"
+            >
+              <FiLink className="w-4 h-4" />
+              Link Assessment
+            </button>
+          </div>
+
+          {linkedAssessments.length === 0 ? (
+            <div className="bg-white/5 border border-white/10 rounded-xl p-8 text-center">
+              <FiFileText className="w-12 h-12 mx-auto mb-3 text-gray-600" />
+              <p className="text-gray-400 mb-2">No assessments linked to this job</p>
+              <p className="text-gray-500 text-sm">
+                Link existing assessments or create a new one to evaluate candidates
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {linkedAssessments.map((assessment) => (
+                <div
+                  key={assessment.id}
+                  className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between hover:bg-white/10 transition-all"
+                >
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-white truncate">{assessment.name}</h4>
+                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-400">
+                      <span>{assessment.duration_minutes || 60} min</span>
+                      <span>•</span>
+                      <span>{assessment.question_count || 0} questions</span>
+                      <span>•</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        assessment.status === 'published' 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {assessment.status || 'draft'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/admin/create-assessment?id=${assessment.id}`)}
+                      className="p-2 hover:bg-white/10 rounded-lg transition-all"
+                      title="Edit assessment"
+                    >
+                      <FiExternalLink className="w-4 h-4 text-gray-400 hover:text-orange-400" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUnlinkAssessment(assessment.id)}
+                      className="p-2 hover:bg-red-500/20 rounded-lg transition-all"
+                      title="Unlink assessment"
+                    >
+                      <FiX className="w-4 h-4 text-gray-400 hover:text-red-400" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Assessment Linking Modal */}
+      {showAssessmentModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white">Link Assessment</h3>
+              <button
+                onClick={() => setShowAssessmentModal(false)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-all"
+              >
+                <FiX className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Create New Assessment Option */}
+            <button
+              onClick={handleCreateAssessment}
+              disabled={isCreatingAssessment}
+              className="w-full mb-4 p-4 bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-xl flex items-center justify-center gap-3 hover:from-orange-500/30 hover:to-red-500/30 transition-all disabled:opacity-50"
+            >
+              {isCreatingAssessment ? (
+                <>
+                  <FiLoader className="w-5 h-5 animate-spin text-orange-400" />
+                  <span className="font-semibold text-orange-400">Creating...</span>
+                </>
+              ) : (
+                <>
+                  <FiPlus className="w-5 h-5 text-orange-400" />
+                  <span className="font-semibold text-orange-400">Create New Assessment for This Job</span>
+                </>
+              )}
+            </button>
+
+            <div className="text-center text-gray-500 text-sm mb-4">— or link an existing assessment —</div>
+
+            {/* Available Assessments List */}
+            <div className="flex-1 overflow-y-auto">
+              {isLoadingAssessments ? (
+                <div className="text-center py-8">
+                  <FiLoader className="w-8 h-8 animate-spin mx-auto mb-2 text-orange-400" />
+                  <p className="text-gray-400">Loading assessments...</p>
+                </div>
+              ) : availableAssessments.length === 0 ? (
+                <div className="text-center py-8">
+                  <FiFileText className="w-12 h-12 mx-auto mb-3 text-gray-600" />
+                  <p className="text-gray-400">No available assessments to link</p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    All assessments are either already linked to jobs or linked to this job
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {availableAssessments.map((assessment) => (
+                    <button
+                      key={assessment.id}
+                      onClick={() => handleLinkAssessment(assessment.id)}
+                      className="w-full p-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between hover:bg-white/10 hover:border-orange-500/30 transition-all text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-white truncate">{assessment.title}</h4>
+                        <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+                          <span>{assessment.duration || 60} min</span>
+                          <span>•</span>
+                          <span>{assessment.questions || 0} questions</span>
+                          <span>•</span>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            assessment.status === 'published' 
+                              ? 'bg-green-500/20 text-green-400' 
+                              : 'bg-yellow-500/20 text-yellow-400'
+                          }`}>
+                            {assessment.status || 'draft'}
+                          </span>
+                        </div>
+                      </div>
+                      <FiLink className="w-5 h-5 text-orange-400 ml-4 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 };

@@ -5,15 +5,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getJobs, createDraftJob, deleteJob } from '../../api/admin';
 import AdminLayout from '../../components/AdminLayout';
+import { FiBriefcase, FiMapPin, FiClock, FiDollarSign, FiUsers, FiEdit2, FiTrash2, FiPlus, FiSearch, FiFilter } from 'react-icons/fi';
 
 const Jobs = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const { data: jobsData, isLoading, error } = useQuery({
     queryKey: ['adminJobs'],
-    queryFn: getJobs,
+    queryFn: () => getJobs(1, 100),
     retry: 1,
     refetchOnWindowFocus: false,
   });
@@ -28,16 +31,11 @@ const Jobs = () => {
 
   const handleCreateNewJob = async () => {
     try {
-      console.log('Creating draft job...');
       const result = await createDraftJob();
-      console.log('Draft job created:', result);
-      // Navigate to edit page
-      const editUrl = `/admin/jobs/edit?id=${result.id}`;
-      console.log('Navigating to:', editUrl);
-      window.location.href = editUrl;
+      router.push(`/admin/jobs/edit?id=${result.id}`);
     } catch (error) {
       console.error('Failed to create draft job:', error);
-      alert(`Failed to create job: ${error.response?.data?.message || error.message}`);
+      alert(`Failed to create job: ${error.response?.data?.error || error.response?.data?.message || error.message}`);
     }
   };
 
@@ -46,7 +44,7 @@ const Jobs = () => {
   };
 
   const handleDeleteClick = (e, jobId) => {
-    e.stopPropagation(); // Prevent card click
+    e.stopPropagation();
     setShowDeleteConfirm(jobId);
   };
 
@@ -56,22 +54,83 @@ const Jobs = () => {
     }
   };
 
+  // Filter jobs based on search and status
+  const filteredJobs = jobsData?.data?.filter(job => {
+    const matchesSearch = !searchQuery || 
+      job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.company?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  }) || [];
+
+  const getStatusBadge = (status) => {
+    const statusStyles = {
+      published: 'bg-green-500/20 text-green-400 border-green-500/30',
+      active: 'bg-green-500/20 text-green-400 border-green-500/30',
+      draft: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      closed: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+      archived: 'bg-red-500/20 text-red-400 border-red-500/30',
+    };
+    return statusStyles[status] || statusStyles.draft;
+  };
+
+  const getJobTypeLabel = (type) => {
+    const typeLabels = {
+      'full-time': 'Full Time',
+      'part-time': 'Part Time',
+      'contract': 'Contract',
+      'internship': 'Internship',
+      'freelance': 'Freelance',
+    };
+    return typeLabels[type] || type || 'Full Time';
+  };
+
   return (
     <AdminLayout title="Jobs">
-      <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold mb-2 text-white">Manage Jobs</h1>
-          <p className="text-gray-400">Create and manage job postings</p>
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold mb-2 text-white">Manage Jobs</h1>
+            <p className="text-gray-400">Create and manage job postings with competencies and assessments</p>
+          </div>
+          <button
+            onClick={handleCreateNewJob}
+            className="px-6 py-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-105 active:scale-95 flex items-center gap-2 self-start"
+          >
+            <FiPlus className="w-5 h-5" />
+            <span>Create New Job</span>
+          </button>
         </div>
-        <button
-          onClick={handleCreateNewJob}
-          className="px-6 py-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-700 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-800 transition-all shadow-xl hover:shadow-2xl hover:shadow-orange-500/40 transform hover:scale-105 active:scale-95 flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          <span>Create New Job</span>
-        </button>
+
+        {/* Search and Filter Bar */}
+        <div className="mt-6 flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search jobs by title or company..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50 transition-all"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <FiFilter className="w-5 h-5 text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-orange-500/50"
+            >
+              <option value="all">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="active">Active</option>
+              <option value="closed">Closed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -87,86 +146,112 @@ const Jobs = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
             <p className="text-gray-400">Loading jobs...</p>
           </div>
-        ) : jobsData?.data?.length === 0 ? (
+        ) : filteredJobs.length === 0 ? (
           <div className="text-center py-16">
-            <svg className="w-20 h-20 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            <h3 className="text-xl font-semibold text-white mb-2">No jobs yet</h3>
-            <p className="text-gray-400 mb-6">Get started by creating your first job posting</p>
-            <button
-              onClick={handleCreateNewJob}
-              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
-            >
-              Create Your First Job
-            </button>
+            <FiBriefcase className="w-20 h-20 mx-auto mb-4 text-gray-600" />
+            <h3 className="text-xl font-semibold text-white mb-2">
+              {searchQuery || statusFilter !== 'all' ? 'No jobs found' : 'No jobs yet'}
+            </h3>
+            <p className="text-gray-400 mb-6">
+              {searchQuery || statusFilter !== 'all' 
+                ? 'Try adjusting your search or filters'
+                : 'Get started by creating your first job posting'}
+            </p>
+            {!searchQuery && statusFilter === 'all' && (
+              <button
+                onClick={handleCreateNewJob}
+                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
+              >
+                Create Your First Job
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {jobsData?.data.map((job) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredJobs.map((job) => (
               <div
                 key={job.id}
                 onClick={() => handleJobClick(job.id)}
-                className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-xl p-6 hover:bg-white/10 hover:border-orange-500/30 hover:shadow-xl hover:shadow-orange-500/10 transition-all duration-300 cursor-pointer group"
+                className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-orange-500/30 hover:shadow-xl hover:shadow-orange-500/10 transition-all duration-300 cursor-pointer group"
               >
+                {/* Header */}
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-1 group-hover:text-orange-400 transition-colors">{job.title}</h3>
-                    <p className="text-gray-400 text-sm">{job.company}</p>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-bold mb-1 group-hover:text-orange-400 transition-colors truncate">
+                      {job.title || 'Untitled Job'}
+                    </h3>
+                    <p className="text-gray-400 text-sm truncate">{job.company || 'Job Title Not Set'}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    job.status === 'active' || job.status === 'published' ? 'bg-green-500/20 text-green-400' :
-                    job.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
-                    job.status === 'closed' ? 'bg-gray-500/20 text-gray-400' :
-                    'bg-red-500/20 text-red-400'
-                  }`}>
-                    {job.status || 'draft'}
+                  <span className={`ml-3 px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadge(job.status)}`}>
+                    {(job.status || 'draft').charAt(0).toUpperCase() + (job.status || 'draft').slice(1)}
                   </span>
                 </div>
 
-                <div className="space-y-2 mb-4">
+                {/* Details */}
+                <div className="space-y-3 mb-4">
                   <div className="flex items-center text-sm text-gray-400">
-                    <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {job.location || 'Remote'}
+                    <FiMapPin className="w-4 h-4 mr-3 flex-shrink-0 text-orange-400/70" />
+                    <span className="truncate">{job.location || 'Remote'}</span>
                   </div>
                   <div className="flex items-center text-sm text-gray-400">
-                    <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {job.type || 'Full-time'}
+                    <FiClock className="w-4 h-4 mr-3 flex-shrink-0 text-blue-400/70" />
+                    <span>{getJobTypeLabel(job.type)}</span>
                   </div>
                   <div className="flex items-center text-sm text-gray-400">
-                    <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {job.salary || 'Competitive'}
+                    <FiDollarSign className="w-4 h-4 mr-3 flex-shrink-0 text-green-400/70" />
+                    <span className="truncate">{job.salary || 'Not specified'}</span>
                   </div>
-                  {job.competencies && job.competencies.length > 0 && (
-                    <div className="flex items-start text-sm text-gray-400 mt-3">
-                      <svg className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-xs line-clamp-1">{job.competencies.join(', ')}</span>
-                    </div>
-                  )}
                 </div>
 
+                {/* Competencies */}
+                {job.competencies && job.competencies.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FiUsers className="w-4 h-4 text-purple-400/70" />
+                      <span className="text-xs text-gray-500 font-medium">Competencies</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {job.competencies.slice(0, 3).map((comp, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs text-gray-300"
+                        >
+                          {comp}
+                        </span>
+                      ))}
+                      {job.competencies.length > 3 && (
+                        <span className="px-2 py-1 bg-orange-500/10 border border-orange-500/20 rounded-lg text-xs text-orange-400">
+                          +{job.competencies.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
                 <div className="flex items-center justify-between pt-4 border-t border-white/10">
                   <span className="text-xs text-gray-500">
-                    Posted {new Date(job.postedAt).toLocaleDateString()}
+                    {job.postedAt ? new Date(job.postedAt).toLocaleDateString() : 'Draft'}
                   </span>
-                  <button
-                    onClick={(e) => handleDeleteClick(e, job.id)}
-                    className="p-2 hover:bg-red-500/20 rounded-lg transition-all group/delete"
-                    title="Delete job"
-                  >
-                    <svg className="w-4 h-4 text-gray-400 group-hover/delete:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleJobClick(job.id);
+                      }}
+                      className="p-2 hover:bg-white/10 rounded-lg transition-all"
+                      title="Edit job"
+                    >
+                      <FiEdit2 className="w-4 h-4 text-gray-400 hover:text-orange-400 transition-colors" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteClick(e, job.id)}
+                      className="p-2 hover:bg-red-500/20 rounded-lg transition-all"
+                      title="Delete job"
+                    >
+                      <FiTrash2 className="w-4 h-4 text-gray-400 hover:text-red-400 transition-colors" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

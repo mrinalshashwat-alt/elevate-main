@@ -13,23 +13,42 @@ interface JobTitle {
 }
 
 interface JobTitleSearchProps {
-  onSelect: (jobTitle: JobTitle) => void;
+  onSelect?: (jobTitle: JobTitle) => void;
+  onChange?: (jobTitleId: string | null, jobTitle: JobTitle | null) => void;
   value?: string;
+  placeholder?: string;
+  required?: boolean;
+  label?: string;
 }
 
-const JobTitleSearch: React.FC<JobTitleSearchProps> = ({ onSelect, value }) => {
+const JobTitleSearch: React.FC<JobTitleSearchProps> = ({ 
+  onSelect, 
+  onChange,
+  value, 
+  placeholder = "Search job title (e.g., Software Engineer, Data Analyst)",
+  required = false,
+  label = "Job Title"
+}) => {
   const [query, setQuery] = useState(value || '');
   const [results, setResults] = useState<JobTitle[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isSelected, setIsSelected] = useState(!!value); // Track if a value has been selected
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
     if (value) {
       setQuery(value);
+      setIsSelected(true); // Mark as selected when value is set from parent
     }
   }, [value]);
 
   useEffect(() => {
+    // Only search if user is actively typing (not when value is pre-filled)
+    if (!isFocused || isSelected) {
+      return;
+    }
+
     const timer = setTimeout(async () => {
       if (query.length < 2) {
         setResults([]);
@@ -52,19 +71,61 @@ const JobTitleSearch: React.FC<JobTitleSearchProps> = ({ onSelect, value }) => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, isFocused, isSelected]);
 
   const handleSelect = (jobTitle: JobTitle) => {
     setQuery(jobTitle.name);
     setShowDropdown(false);
-    onSelect(jobTitle);
+    setIsSelected(true);
+    // Support both callback styles
+    if (onSelect) {
+      onSelect(jobTitle);
+    }
+    if (onChange) {
+      onChange(jobTitle.id, jobTitle);
+    }
+  };
+  
+  const handleClear = () => {
+    setQuery('');
+    setIsSelected(false);
+    setResults([]);
+    if (onChange) {
+      onChange(null, null);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setQuery(newValue);
+    // If user clears or modifies the input, mark as not selected to allow new search
+    if (isSelected && newValue !== query) {
+      setIsSelected(false);
+    }
+  };
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    // Only show dropdown if not already selected and there are results
+    if (!isSelected && query.length >= 2 && results.length > 0) {
+      setShowDropdown(true);
+    }
+  };
+
+  const handleBlur = () => {
+    // Delay to allow click on dropdown items
+    setTimeout(() => {
+      setIsFocused(false);
+    }, 200);
   };
 
   return (
     <div className="relative">
-      <label className="block text-sm font-semibold text-gray-300 mb-2">
-        Job Title <span className="text-red-400">*</span>
-      </label>
+      {label && (
+        <label className="block text-sm font-semibold text-gray-300 mb-2">
+          {label} {required && <span className="text-red-400">*</span>}
+        </label>
+      )}
 
       <div className="relative">
         <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -72,11 +133,12 @@ const JobTitleSearch: React.FC<JobTitleSearchProps> = ({ onSelect, value }) => {
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => query.length >= 2 && results.length > 0 && setShowDropdown(true)}
-          placeholder="Search job title (e.g., Software Engineer, Data Analyst)"
+          onChange={handleInputChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder}
           className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all"
-          required
+          required={required}
         />
 
         {loading && (
