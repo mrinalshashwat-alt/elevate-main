@@ -5,7 +5,7 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createAssessment, getJobs } from '../../api/admin';
-import { jobsStorage, assessmentsStorage } from '../../lib/localStorage';
+import { jobsStorage, assessmentsStorage, tempQuestionsStorage, tempAssessmentDataStorage } from '../../lib/localStorage';
 import AdminLayout from '../../components/AdminLayout';
 
 // Custom glass popover select component matching AIMockInterview style
@@ -115,7 +115,7 @@ const CreateAssessment = () => {
   const [allQuestions, setAllQuestions] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Auto-select job from query parameter
+  // Auto-select job from query parameter, load temp questions, and restore form data
   useEffect(() => {
     const jobId = searchParams.get('jobId');
     if (jobId && jobsData?.data) {
@@ -127,6 +127,32 @@ const CreateAssessment = () => {
           title: job.title, // Auto-fill title from job
         }));
       }
+    }
+    
+    // Load saved assessment form data from localStorage
+    const savedFormData = tempAssessmentDataStorage.get();
+    if (savedFormData) {
+      setFormData(prev => ({
+        ...prev,
+        ...savedFormData,
+        // Don't override jobId if it's set from URL
+        jobId: prev.jobId || savedFormData.jobId,
+      }));
+      // Clear after loading
+      tempAssessmentDataStorage.clear();
+    }
+    
+    // Load questions from localStorage when returning from create-questions page
+    const tempQuestions = tempQuestionsStorage.getAll();
+    if (tempQuestions.length > 0) {
+      // Merge with existing questions (avoid duplicates by ID)
+      setAllQuestions(prev => {
+        const existingIds = new Set(prev.map(q => q.id));
+        const newQuestions = tempQuestions.filter(q => !existingIds.has(q.id));
+        return [...prev, ...newQuestions];
+      });
+      // Clear temp questions after loading
+      tempQuestionsStorage.clear();
     }
   }, [searchParams, jobsData]);
 
@@ -233,6 +259,9 @@ const CreateAssessment = () => {
       }
     },
     onSuccess: () => {
+      // Clear temp questions and form data after successful creation
+      tempQuestionsStorage.clear();
+      tempAssessmentDataStorage.clear();
       queryClient.invalidateQueries({ queryKey: ['adminAssessments'] });
       queryClient.invalidateQueries({ queryKey: ['adminJobs'] });
       router.push('/admin/assessment-list');
@@ -275,6 +304,9 @@ const CreateAssessment = () => {
       jobId: formData.jobId, // Ensure jobId is included
     };
     
+    // Clear temp questions and form data before saving
+    tempQuestionsStorage.clear();
+    tempAssessmentDataStorage.clear();
     createMutation.mutate(assessmentData);
   };
 
@@ -413,52 +445,30 @@ const CreateAssessment = () => {
               {totalQuestions > 0 && (
                 <div>
                   <label className="block text-sm mb-3 text-gray-300">Add Questions</label>
-                  <div className="grid grid-cols-3 gap-6">
-                    {/* CSV Upload */}
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-orange-500/50 transition-all">
-                      <h3 className="font-semibold text-white mb-4">Drop CSV/PDF file</h3>
-                      <label className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-orange-500/50 transition-colors cursor-pointer block">
-                        <input
-                          type="file"
-                          accept=".csv,.pdf"
-                          onChange={handleCSVUpload}
-                          className="hidden"
-                        />
-                        <svg className="w-12 h-12 mx-auto mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <p className="text-gray-400 mb-2">Drag &amp; drop CSV/PDF here</p>
-                        <p className="text-xs text-gray-500">Upload a .csv or .pdf with questions</p>
-                      </label>
-                    </div>
-
-                    {/* AI Generate */}
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-orange-500/50 transition-all">
-                      <h3 className="font-semibold text-white mb-4">Generate Using AI</h3>
-                      <button
-                        type="button"
-                        onClick={() => setShowAIModal(true)}
-                        className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                        </svg>
-                        Generate Now
-                      </button>
-                    </div>
-
-                    {/* Manual Write */}
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:border-orange-500/50 transition-all">
-                      <h3 className="font-semibold text-white mb-4">Write Manually</h3>
-                      <button
-                        type="button"
-                        onClick={() => setShowManualModal(true)}
-                        className="w-full py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
-                      >
-                        Start Writing
-                      </button>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Save current form data before navigating
+                      tempAssessmentDataStorage.save({
+                        title: formData.title,
+                        description: formData.description,
+                        duration: formData.duration,
+                        jobId: formData.jobId,
+                        status: formData.status,
+                        questionTypes: formData.questionTypes,
+                      });
+                      router.push('/admin/create-questions');
+                    }}
+                    className="w-full py-4 bg-gradient-to-r from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-xl font-semibold text-orange-400 hover:from-orange-500/30 hover:to-orange-600/30 transition-all flex items-center justify-center gap-3"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Go to Create Questions Page</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
                 </div>
               )}
 
@@ -801,6 +811,19 @@ const CreateAssessment = () => {
                     className="flex-1 px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white hover:bg-white/20 transition-all"
                   >
                     Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowManualModal(false);
+                      router.push('/admin/create-questions');
+                    }}
+                    className="px-6 py-3 bg-gradient-to-r from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-xl font-semibold text-orange-400 hover:from-orange-500/30 hover:to-orange-600/30 transition-all flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Open Create Question Page
                   </button>
                   <button
                     onClick={() => {

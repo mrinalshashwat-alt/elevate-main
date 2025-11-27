@@ -110,21 +110,19 @@ const AdminLayoutContent = ({ children, title, breadcrumbs = [], stats }) => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex">
+    <div className="min-h-screen flex" style={{ backgroundColor: '#060202' }}>
       {/* Left Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-black/40 backdrop-blur-xl border-r border-orange-500/20 sticky top-0 h-screen">
+      <aside className="hidden lg:flex flex-col w-64 border-r border-white/5 sticky top-0 h-screen" style={{ backgroundColor: '#060202' }}>
         {/* Logo */}
-        <div className="p-6 border-b border-orange-500/20">
-          <div className="flex items-center space-x-3">
+        <div className="p-6 border-b border-white/5">
+          <div className="flex items-center justify-start">
             <img 
               src="/logo.jpg" 
               alt="Elevate Logo" 
-              className="w-10 h-10 object-contain rounded-lg border border-orange-500/20"
+              className="w-2/5 h-auto max-h-6 object-contain"
             />
-            <span className="text-xl font-bold text-white">Elevate</span>
           </div>
         </div>
 
@@ -139,10 +137,10 @@ const AdminLayoutContent = ({ children, title, breadcrumbs = [], stats }) => {
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-sm font-semibold ${
                   active
                     ? 'bg-orange-500/20 text-white border border-orange-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/10 border border-transparent'
+                    : 'text-white/60 hover:text-white hover:bg-white/10 border border-transparent'
                 }`}
               >
-                <svg className={`w-5 h-5 ${active ? 'text-white' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-5 h-5 ${active ? 'text-orange-500' : 'text-orange-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon} />
                 </svg>
                 <span>{item.label}</span>
@@ -155,64 +153,20 @@ const AdminLayoutContent = ({ children, title, breadcrumbs = [], stats }) => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="bg-black/80 backdrop-blur-xl border-b border-orange-500/20 sticky top-0 z-50">
+        <header className="border-b border-white/5 sticky top-0 z-50" style={{ backgroundColor: '#060202' }}>
           <div className="px-6 py-4">
             <div className="flex items-center justify-between">
-              {/* Left: System Status */}
+              {/* Left: Network Status */}
               <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-green-400 text-sm font-semibold">System Online</span>
+                <span className="text-green-400 text-sm font-semibold">Network Status</span>
               </div>
 
-              {/* Center: Search Bar */}
-              <div className="flex-1 max-w-2xl mx-8">
-                <div className="relative">
-                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="Search platform..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Right: Actions & User */}
+              {/* Right: Logout */}
               <div className="flex items-center space-x-3">
-                {/* Notifications */}
-                <button className="relative p-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-orange-500/30 transition-all">
-                  <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                  <div className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></div>
-                </button>
-
-                {/* Settings */}
-                <button className="p-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-orange-500/30 transition-all">
-                  <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-
-                {/* User Profile */}
-                <div className="flex items-center space-x-3 px-3 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-orange-500/30 transition-all cursor-pointer">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/30 border-2 border-orange-500/30 flex items-center justify-center">
-                    <div className="w-full h-full rounded-full bg-gradient-to-br from-orange-400/20 to-purple-400/20"></div>
-                  </div>
-                  <div className="hidden xl:block">
-                    <div className="text-sm font-bold text-white">{user?.name || 'Admin User'}</div>
-                    <div className="text-xs text-gray-400">Administrator</div>
-                  </div>
-                </div>
-
-                {/* Logout */}
                 <button
                   onClick={handleLogout}
-                  className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-orange-500/30 rounded-lg transition-all text-sm font-semibold text-gray-300 hover:text-orange-400"
+                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg transition-all text-sm font-semibold text-red-400 hover:text-red-300"
                 >
                   Logout
                 </button>
@@ -247,16 +201,16 @@ const AdminLayoutContent = ({ children, title, breadcrumbs = [], stats }) => {
             initial={{ opacity: 0, x: -300 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -300 }}
-            className="lg:hidden fixed inset-y-0 left-0 w-64 bg-black/95 backdrop-blur-xl border-r border-orange-500/20 z-40 overflow-y-auto"
+            className="lg:hidden fixed inset-y-0 left-0 w-64 border-r border-white/5 z-40 overflow-y-auto"
+            style={{ backgroundColor: '#060202' }}
           >
-              <div className="p-6 border-b border-orange-500/20">
-                <div className="flex items-center space-x-3 mb-6">
+              <div className="p-6 border-b border-white/5">
+                <div className="flex items-center justify-start mb-6">
                   <img 
                     src="/logo.jpg" 
                     alt="Elevate Logo" 
-                    className="w-10 h-10 object-contain rounded-lg border border-orange-500/20"
+                    className="w-2/5 h-auto max-h-6 object-contain"
                   />
-                  <span className="text-xl font-bold text-white">Elevate</span>
                 </div>
               </div>
             <div className="p-4 space-y-2">
@@ -269,10 +223,10 @@ const AdminLayoutContent = ({ children, title, breadcrumbs = [], stats }) => {
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-sm font-semibold ${
                       active
                         ? 'bg-orange-500/20 text-white border border-orange-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/10 border border-transparent'
+                        : 'text-white/60 hover:text-white hover:bg-white/10 border border-transparent'
                     }`}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-5 h-5 ${active ? 'text-orange-500' : 'text-orange-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon} />
                     </svg>
                     <span>{item.label}</span>
@@ -290,7 +244,7 @@ const AdminLayoutContent = ({ children, title, breadcrumbs = [], stats }) => {
 const AdminLayout = ({ children, title, breadcrumbs = [], stats }) => {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center" style={{ backgroundColor: '#060202' }}>
         <div className="text-center space-y-6">
           <div className="flex gap-2 justify-center">
             <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce"></div>

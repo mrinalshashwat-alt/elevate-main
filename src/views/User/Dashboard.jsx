@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -13,6 +13,8 @@ const UserDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [timeRange, setTimeRange] = useState('3m');
+  const [hoveredTimeline, setHoveredTimeline] = useState(null);
   const router = useRouter();
   const { user, logout } = useAuth();
 
@@ -63,14 +65,14 @@ const UserDashboard = () => {
   const navigationItems = {
     main: [
       { id: 'dashboard', label: 'Dashboard', path: '/user/dashboard', icon: FiHome, active: true },
-      { id: 'overview', label: 'Overview', path: '/user/dashboard', icon: FiEye, active: false },
+      { id: 'overview', label: 'Overview', path: '/user/overview', icon: FiEye, active: false },
     ],
     workspace: [
       { id: 'learning', label: 'Learning', path: '/user/courses', icon: FiBook, active: false },
       { id: 'activities', label: 'Activities', path: '/user/dashboard', icon: FiActivity, active: false },
     ],
     system: [
-      { id: 'settings', label: 'Settings', path: '/user/dashboard', icon: FiSettings, active: false },
+      { id: 'settings', label: 'Settings', path: '/user/settings', icon: FiSettings, active: false },
     ]
   };
 
@@ -176,17 +178,38 @@ const UserDashboard = () => {
     }
   ];
 
-  const skillProgress = [
-    { name: 'JavaScript', progress: 85, color: 'orange', level: 'Expert' },
-    { name: 'React', progress: 78, color: 'blue', level: 'Advanced' },
-    { name: 'Node.js', progress: 65, color: 'green', level: 'Advanced' },
-    { name: 'Python', progress: 45, color: 'purple', level: 'Intermediate' },
-    { name: 'Communication', progress: 92, color: 'orange', level: 'Expert' }
-  ];
+  const skillProgress = useMemo(() => [
+    { name: 'JavaScript', progress: 85, previous: 80, level: 'Expert', color: 'green' },
+    { name: 'React', progress: 78, previous: 70, level: 'Advanced', color: 'orange' },
+    { name: 'Node.js', progress: 65, previous: 60, level: 'Advanced', color: 'orange' },
+    { name: 'Python', progress: 45, previous: 50, level: 'Intermediate', color: 'yellow' },
+    { name: 'Communication', progress: 92, previous: 90, level: 'Expert', color: 'green' }
+  ], []);
+
+  // Generate timeline data - aggregate by days for more detail
+  const timelineData = useMemo(() => {
+    const daysToShow = timeRange === '1m' ? 30 : timeRange === '3m' ? 90 : timeRange === '6m' ? 180 : 365;
+    const data = [];
+    const labels = [];
+    const now = new Date();
+    
+    for (let i = daysToShow - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - i);
+      labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+      
+      // Generate daily activity data
+      const baseActivity = 10 + Math.sin(i / 7) * 5; // Weekly pattern
+      const variation = Math.random() * 3 - 1.5;
+      data.push(Math.max(0, baseActivity + variation));
+    }
+    
+    return { data, labels };
+  }, [timeRange]);
 
   if (!mounted || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#060202' }}>
         <div className="text-center space-y-6">
           <div className="flex gap-2 justify-center">
             <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce"></div>
@@ -200,14 +223,18 @@ const UserDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex">
+    <div className="min-h-screen text-white flex" style={{ backgroundColor: '#060202' }}>
       {/* Left Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-black/40 backdrop-blur-xl border-r border-orange-500/20 sticky top-0 h-screen">
+      <aside className="hidden lg:flex flex-col w-64 border-r border-white/5 sticky top-0 h-screen" style={{ backgroundColor: '#060202' }}>
         {/* Logo */}
-        <div className="p-6 border-b border-orange-500/20">
-          <button className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl text-white font-bold text-lg hover:from-orange-600 hover:to-orange-700 transition-all">
-            Elevate
-          </button>
+        <div className="p-6 border-b border-white/5">
+          <div className="flex items-center justify-start">
+            <img 
+              src="/logo.jpg" 
+              alt="Elevate Logo" 
+              className="w-2/5 h-auto max-h-6 object-contain"
+            />
+          </div>
         </div>
 
         {/* Navigation */}
@@ -225,11 +252,11 @@ const UserDashboard = () => {
                     onClick={() => router.push(item.path)}
                     className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all text-sm font-semibold ${
                       item.active
-                        ? 'bg-blue-500/20 text-white border border-blue-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/10 border border-transparent'
+                        ? 'bg-orange-500/20 text-white border border-orange-500/30'
+                        : 'text-white/60 hover:text-white hover:bg-white/10 border border-transparent'
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-5 h-5 text-orange-500" />
                     <span>{item.label}</span>
                   </button>
                 );
@@ -250,11 +277,11 @@ const UserDashboard = () => {
                     onClick={() => router.push(item.path)}
                     className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all text-sm font-semibold ${
                       item.active
-                        ? 'bg-blue-500/20 text-white border border-blue-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/10 border border-transparent'
+                        ? 'bg-orange-500/20 text-white border border-orange-500/30'
+                        : 'text-white/60 hover:text-white hover:bg-white/10 border border-transparent'
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-5 h-5 text-orange-500" />
                     <span>{item.label}</span>
                   </button>
                 );
@@ -275,11 +302,11 @@ const UserDashboard = () => {
                     onClick={() => router.push(item.path)}
                     className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all text-sm font-semibold ${
                       item.active
-                        ? 'bg-blue-500/20 text-white border border-blue-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/10 border border-transparent'
+                        ? 'bg-orange-500/20 text-white border border-orange-500/30'
+                        : 'text-white/60 hover:text-white hover:bg-white/10 border border-transparent'
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-5 h-5 text-orange-500" />
                     <span>{item.label}</span>
                   </button>
                 );
@@ -288,78 +315,32 @@ const UserDashboard = () => {
           </div>
         </div>
 
-        {/* User Profile Card */}
-        <div className="p-4 border-t border-orange-500/20">
-          <div className="premium-glass rounded-xl p-4">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500/30 to-purple-500/30 border-2 border-orange-500/30 flex items-center justify-center">
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-orange-400/20 to-purple-400/20 flex items-center justify-center text-lg font-bold">
-                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="font-bold text-sm text-white">{user?.name || 'User'}</div>
-                <div className="text-xs text-orange-400 font-semibold">Premium Member</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-green-400 font-semibold">Online</span>
-            </div>
-          </div>
+        {/* Logout Button */}
+        <div className="p-4 border-t border-white/5">
+          <button
+            onClick={handleLogout}
+            className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg transition-all text-sm font-semibold text-red-400 hover:text-red-300 flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="bg-black/80 backdrop-blur-xl border-b border-orange-500/20 sticky top-0 z-50">
+        <header className="border-b border-white/5 sticky top-0 z-50" style={{ backgroundColor: '#060202' }}>
           <div className="px-6 py-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between">
               {/* Left: Title and Date */}
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-bold text-white">Dashboard</h1>
-                  <span className="text-gray-400">•</span>
-                  <span className="text-sm text-gray-400">{formatDate(currentTime)}</span>
-                </div>
-              </div>
-
-              {/* Center: Search Bar */}
-              <div className="flex-1 max-w-2xl mx-8">
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Q Search in dashboard..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50 focus:bg-white/10 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Right: Actions */}
-              <div className="flex items-center space-x-3">
-                <button className="p-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-orange-500/30 transition-all relative">
-                  <FiBell className="w-5 h-5 text-gray-300" />
-                  <div className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full"></div>
-                </button>
-                <button className="p-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-orange-500/30 transition-all">
-                  <FiSettings className="w-5 h-5 text-gray-300" />
-                </button>
-                <div className="flex items-center space-x-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg">
-                  <FiClock className="w-4 h-4 text-orange-400" />
-                  <span className="text-sm font-semibold text-orange-400">{formatTime(currentTime)}</span>
-                </div>
-                <div className="flex items-center space-x-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-orange-500/30 transition-all cursor-pointer">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500/30 to-purple-500/30 border-2 border-orange-500/30 flex items-center justify-center">
-                    <div className="w-full h-full rounded-full bg-gradient-to-br from-orange-400/20 to-purple-400/20 flex items-center justify-center text-xs font-bold">
-                      {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                    </div>
-                  </div>
-                  <span className="text-sm font-semibold text-white">{user?.name || 'User'}</span>
-                  <FiChevronDown className="w-4 h-4 text-gray-400" />
+                  <span className="text-white/40">•</span>
+                  <span className="text-sm text-white/60">{formatDate(currentTime)}</span>
                 </div>
               </div>
             </div>
@@ -370,67 +351,111 @@ const UserDashboard = () => {
         <main className="flex-1 overflow-y-auto px-6 py-6">
           {/* Welcome Section */}
           <div className="mb-8">
-            <div className="premium-glass rounded-2xl p-8 mb-6">
-              <h2 className="text-3xl font-bold text-white mb-2">Welcome back, {user?.name?.split(' ')[0] || 'User'}! 👋</h2>
-              <p className="text-gray-400">Ready to continue your learning journey? Let's make today productive.</p>
-            </div>
+            <motion.div 
+              className="rounded-lg p-6 border border-white/10 relative overflow-hidden mb-6" 
+              style={{ 
+                backgroundColor: '#000000',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                transformStyle: 'preserve-3d'
+              }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+              <div className="relative z-10">
+                <h2 className="text-3xl font-bold text-white mb-2">Welcome back, {user?.name?.split(' ')[0] || 'User'}!</h2>
+                <p className="text-white/60">Ready to continue your learning journey? Let's make today productive.</p>
+              </div>
+            </motion.div>
 
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <motion.div 
-                className="premium-glass rounded-2xl p-6"
+                className="rounded-lg p-6 border border-white/10 relative overflow-hidden"
+                style={{ 
+                  backgroundColor: '#000000',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  transformStyle: 'preserve-3d'
+                }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Courses</h3>
-                  <FiBook className="w-5 h-5 text-blue-400" />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider">Total Courses</h3>
+                    <FiBook className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <p className="text-4xl font-bold text-white mb-1">{stats?.totalCourses || 12}</p>
+                  <p className="text-sm text-green-500">+2 this week</p>
                 </div>
-                <p className="text-4xl font-bold text-white mb-1">{stats?.totalCourses || 12}</p>
-                <p className="text-sm text-blue-300/80">+2 this week</p>
               </motion.div>
 
               <motion.div 
-                className="premium-glass rounded-2xl p-6"
+                className="rounded-lg p-6 border border-white/10 relative overflow-hidden"
+                style={{ 
+                  backgroundColor: '#000000',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  transformStyle: 'preserve-3d'
+                }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Completed</h3>
-                  <FiCheckCircle className="w-5 h-5 text-green-400" />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider">Completed</h3>
+                    <FiCheckCircle className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <p className="text-4xl font-bold text-white mb-1">{stats?.completedCourses || 5}</p>
+                  <p className="text-sm text-green-500">67% completion rate</p>
                 </div>
-                <p className="text-4xl font-bold text-white mb-1">{stats?.completedCourses || 5}</p>
-                <p className="text-sm text-green-300/80">67% completion rate</p>
               </motion.div>
 
               <motion.div 
-                className="premium-glass rounded-2xl p-6"
+                className="rounded-lg p-6 border border-white/10 relative overflow-hidden"
+                style={{ 
+                  backgroundColor: '#000000',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  transformStyle: 'preserve-3d'
+                }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Interviews</h3>
-                  <FiVideo className="w-5 h-5 text-orange-400" />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider">Interviews</h3>
+                    <FiVideo className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <p className="text-4xl font-bold text-white mb-1">{stats?.upcomingInterviews || 3}</p>
+                  <p className="text-sm text-green-500">Next: Tomorrow</p>
                 </div>
-                <p className="text-4xl font-bold text-white mb-1">{stats?.upcomingInterviews || 3}</p>
-                <p className="text-sm text-orange-300/80">Next: Tomorrow</p>
               </motion.div>
 
               <motion.div 
-                className="premium-glass rounded-2xl p-6"
+                className="rounded-lg p-6 border border-white/10 relative overflow-hidden"
+                style={{ 
+                  backgroundColor: '#000000',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  transformStyle: 'preserve-3d'
+                }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Skill Score</h3>
-                  <FiTrendingUp className="w-5 h-5 text-purple-400" />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider">Skill Score</h3>
+                    <FiTrendingUp className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <p className="text-4xl font-bold text-white mb-1">{stats?.skillScore || 78}%</p>
+                  <p className="text-sm text-green-500">+5 this month</p>
                 </div>
-                <p className="text-4xl font-bold text-white mb-1">{stats?.skillScore || 78}%</p>
-                <p className="text-sm text-purple-300/80">+5 this month</p>
               </motion.div>
             </div>
           </div>
@@ -448,19 +473,27 @@ const UserDashboard = () => {
                   <motion.button
                     key={idx}
                     onClick={action.action}
-                    className="group premium-glass rounded-xl p-5 text-left hover:scale-105 transition-all duration-300 relative overflow-hidden"
+                    className="group rounded-lg p-5 text-left hover:scale-105 transition-all duration-300 relative overflow-hidden border border-white/10"
+                    style={{ 
+                      backgroundColor: '#000000',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                      transformStyle: 'preserve-3d'
+                    }}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 + idx * 0.1 }}
                   >
-                    <div className={`mb-4 ${action.color === 'blue' ? 'text-blue-400' : action.color === 'orange' ? 'text-orange-400' : 'text-green-400'}`}>
-                      {action.icon}
-                    </div>
-                    <h3 className="text-base font-bold mb-1 text-white">{action.title}</h3>
-                    <p className="text-sm text-gray-400 mb-3">{action.description}</p>
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs font-semibold ${action.color === 'blue' ? 'text-blue-300' : action.color === 'orange' ? 'text-orange-300' : 'text-green-300'}`}>{action.stats}</span>
-                      <span className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">Start →</span>
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                    <div className="relative z-10">
+                      <div className="mb-4 text-orange-500">
+                        {action.icon}
+                      </div>
+                      <h3 className="text-base font-bold mb-1 text-white">{action.title}</h3>
+                      <p className="text-sm text-white/60 mb-3">{action.description}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-green-500">{action.stats}</span>
+                        <span className="text-xs text-white/40 group-hover:text-white/60 transition-colors">Start →</span>
+                      </div>
                     </div>
                   </motion.button>
                 ))}
@@ -477,11 +510,18 @@ const UserDashboard = () => {
                 {upcomingEvents.map((event, idx) => (
                   <motion.div 
                     key={event.id} 
-                    className="premium-glass rounded-xl p-4 hover:scale-105 transition-all duration-300"
+                    className="rounded-lg p-4 hover:scale-105 transition-all duration-300 border border-white/10 relative overflow-hidden"
+                    style={{ 
+                      backgroundColor: '#000000',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                      transformStyle: 'preserve-3d'
+                    }}
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.6 + idx * 0.1 }}
                   >
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                    <div className="relative z-10">
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="font-bold text-sm text-white leading-tight">{event.title}</h3>
                       <span className={`px-2 py-0.5 rounded text-xs font-bold ${
@@ -492,8 +532,9 @@ const UserDashboard = () => {
                         {event.priority}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-400 mb-2">{event.time}</p>
-                    <span className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{event.type.replace('-', ' ')}</span>
+                    <p className="text-sm text-white/60 mb-2">{event.time}</p>
+                    <span className="text-xs text-white/40 uppercase tracking-wide font-semibold">{event.type.replace('-', ' ')}</span>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -502,98 +543,281 @@ const UserDashboard = () => {
 
           {/* Bottom Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Timeline - Recent Activities */}
+            {/* Timeline - Advanced Activity Chart */}
             <div>
-              <div className="mb-4">
-                <h2 className="text-xl font-bold text-white mb-1">Timeline</h2>
-                <p className="text-sm text-gray-400">Recent activities</p>
-              </div>
-              <div className="premium-glass rounded-2xl p-6">
-                <div className="space-y-4">
-                  {recentActivities.map((activity, idx) => (
-                    <motion.div 
-                      key={activity.id} 
-                      className="flex items-start space-x-4 relative"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.7 + idx * 0.1 }}
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-white mb-1">Timeline</h2>
+                  <p className="text-sm text-white/60">Activity over time</p>
+                </div>
+                {/* Time Range Selector */}
+                <div className="flex items-center gap-1">
+                  {['1m', '3m', '6m', '1y'].map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => setTimeRange(range)}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                        timeRange === range
+                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                          : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                      }`}
                     >
-                      {/* Timeline line */}
-                      {idx < recentActivities.length - 1 && (
-                        <div className="absolute left-4 top-12 w-0.5 h-full bg-gray-700"></div>
-                      )}
-                      {/* Icon */}
-                      <div className="relative z-10 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-lg">
-                        {activity.icon}
-                      </div>
-                      {/* Content */}
-                      <div className="flex-1">
-                        <h3 className="font-bold text-sm mb-1 text-white">{activity.title}</h3>
-                        <p className="text-sm text-gray-400 mb-2">{activity.description}</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-500">{activity.time}</span>
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                            activity.status === 'completed' 
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-                              : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                          }`}>
-                            {activity.status}
-                          </span>
-                        </div>
-                      </div>
-                    </motion.div>
+                      {range}
+                    </button>
                   ))}
                 </div>
               </div>
+              <motion.div 
+                className="rounded-lg p-6 border border-white/10 relative overflow-hidden" 
+                style={{ 
+                  backgroundColor: '#000000',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  transformStyle: 'preserve-3d'
+                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                <div className="relative z-10">
+                  {/* Advanced Line Chart with Area - Spread Out */}
+                  <div className="h-64 relative mb-4 overflow-x-auto">
+                    <svg className="w-full h-full min-w-full" viewBox={`0 0 ${Math.max(timelineData.data.length * 8, 800)} 200`} preserveAspectRatio="none" style={{ minWidth: `${timelineData.data.length * 8}px` }}>
+                      <defs>
+                        <linearGradient id="timelineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#f97316" stopOpacity="0.4" />
+                          <stop offset="50%" stopColor="#f97316" stopOpacity="0.2" />
+                          <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {/* Grid lines */}
+                      {[0, 25, 50, 75, 100].map((y) => (
+                        <line
+                          key={y}
+                          x1="0"
+                          y1={200 - (y * 2)}
+                          x2={Math.max(timelineData.data.length * 8, 800)}
+                          y2={200 - (y * 2)}
+                          stroke="rgba(255,255,255,0.05)"
+                          strokeWidth="1"
+                        />
+                      ))}
+                      {/* Area fill */}
+                      <motion.path
+                        d={`M 0,200 ${timelineData.data.map((val, i) => {
+                          const maxVal = Math.max(...timelineData.data);
+                          const y = 200 - (val / maxVal) * 200;
+                          return `L ${i * 8 + 4},${y}`;
+                        }).join(' ')} L ${(timelineData.data.length - 1) * 8 + 4},200 Z`}
+                        fill="url(#timelineGradient)"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 1.2 }}
+                      />
+                      {/* Smooth line */}
+                      <motion.polyline
+                        points={timelineData.data.map((val, i) => {
+                          const maxVal = Math.max(...timelineData.data);
+                          const y = 200 - (val / maxVal) * 200;
+                          return `${i * 8 + 4},${y}`;
+                        }).join(' ')}
+                        fill="none"
+                        stroke="#f97316"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 2, ease: "easeInOut" }}
+                      />
+                      {/* Data points */}
+                      {timelineData.data.map((val, i) => {
+                        if (i % Math.ceil(timelineData.data.length / 15) !== 0 && i !== timelineData.data.length - 1) return null;
+                        const maxVal = Math.max(...timelineData.data);
+                        const y = 200 - (val / maxVal) * 200;
+                        const isHovered = hoveredTimeline === i;
+                        return (
+                          <g key={i}>
+                            <motion.circle
+                              cx={i * 8 + 4}
+                              cy={y}
+                              r={isHovered ? 7 : 5}
+                              fill="#f97316"
+                              stroke="#000"
+                              strokeWidth="2"
+                              onMouseEnter={() => setHoveredTimeline(i)}
+                              onMouseLeave={() => setHoveredTimeline(null)}
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ delay: i * 0.01, type: "spring" }}
+                            />
+                            {isHovered && (
+                              <motion.g
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                              >
+                                <rect
+                                  x={i * 8 + 4 - 40}
+                                  y={y - 45}
+                                  width="80"
+                                  height="40"
+                                  fill="rgba(0,0,0,0.95)"
+                                  rx="6"
+                                  stroke="rgba(255,255,255,0.2)"
+                                />
+                                <text
+                                  x={i * 8 + 4}
+                                  y={y - 28}
+                                  textAnchor="middle"
+                                  fill="#fff"
+                                  fontSize="11"
+                                  fontWeight="bold"
+                                >
+                                  {Math.round(val)} activities
+                                </text>
+                                <text
+                                  x={i * 8 + 4}
+                                  y={y - 14}
+                                  textAnchor="middle"
+                                  fill="#fff"
+                                  fontSize="9"
+                                  opacity="0.7"
+                                >
+                                  {timelineData.labels[i]}
+                                </text>
+                              </motion.g>
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/5">
+                    <div>
+                      <p className="text-xs text-white/60 mb-1">Total</p>
+                      <p className="text-lg font-bold text-green-500">{Math.round(timelineData.data.reduce((a, b) => a + b, 0))}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-white/60 mb-1">Daily Avg</p>
+                      <p className="text-lg font-bold text-green-500">{Math.round(timelineData.data.reduce((a, b) => a + b, 0) / timelineData.data.length)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-white/60 mb-1">Peak Day</p>
+                      <p className="text-lg font-bold text-green-500">{Math.round(Math.max(...timelineData.data))}</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
 
-            {/* Skill Progress */}
+            {/* Skill Progress - Enhanced Visualization */}
             <div>
               <div className="mb-4">
-                <h2 className="text-xl font-bold text-white mb-1">Skill Progress</h2>
-                <p className="text-sm text-gray-400">Track your development</p>
+                <h2 className="text-xl font-semibold text-white mb-1">Skill Progress</h2>
+                <p className="text-sm text-white/60">Track your development</p>
               </div>
-              <div className="premium-glass rounded-2xl p-6">
-                <div className="space-y-4">
+              <motion.div 
+                className="rounded-lg p-6 border border-white/10 relative overflow-hidden" 
+                style={{ 
+                  backgroundColor: '#000000',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  transformStyle: 'preserve-3d'
+                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                <div className="relative z-10 space-y-5">
                   {skillProgress.map((skill, index) => {
                     const getColorClasses = (color) => {
                       const colors = {
-                        orange: { gradient: 'from-orange-500 to-orange-600', bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400' },
-                        blue: { gradient: 'from-blue-500 to-blue-600', bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400' },
-                        green: { gradient: 'from-green-500 to-green-600', bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400' },
-                        purple: { gradient: 'from-purple-500 to-purple-600', bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400' }
+                        green: { gradient: 'from-green-500 to-green-600', bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', badge: 'bg-green-500/20 text-green-400 border-green-500/30' },
+                        orange: { gradient: 'from-orange-500 to-orange-600', bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400', badge: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+                        yellow: { gradient: 'from-yellow-500 to-yellow-600', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', badge: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+                        blue: { gradient: 'from-blue-500 to-blue-600', bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30' }
                       };
                       return colors[color] || colors.blue;
                     };
                     
                     const color = getColorClasses(skill.color);
+                    const change = skill.progress - skill.previous;
+                    const changePercent = skill.previous > 0 ? ((change / skill.previous) * 100).toFixed(1) : 0;
                     
                     return (
                       <motion.div 
                         key={index} 
-                        className="group"
+                        className="group relative"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.8 + index * 0.1 }}
+                        transition={{ delay: 0.9 + index * 0.1 }}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-sm text-white">{skill.name}</span>
-                          <span className={`text-sm font-bold ${color.text}`}>{skill.level}</span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-sm text-white">{skill.name}</span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold border ${color.badge}`}>
+                              {skill.level}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {change !== 0 && (
+                              <span className={`text-xs font-bold flex items-center gap-1 ${change > 0 ? 'text-green-500' : 'text-red-400'}`}>
+                                {change > 0 ? '↑' : '↓'} {Math.abs(change)}%
+                              </span>
+                            )}
+                            <span className="text-sm font-bold text-white">{skill.progress}%</span>
+                          </div>
                         </div>
-                        <div className={`w-full ${color.bg} rounded-full h-2.5 mb-2 overflow-hidden border ${color.border}`}>
+                        {/* Previous progress indicator */}
+                        <div className="relative w-full h-4 rounded-full overflow-hidden border border-white/5 mb-1">
+                          <div 
+                            className="absolute inset-0 bg-white/5"
+                            style={{ width: `${skill.previous}%` }}
+                          />
+                          {/* Current progress bar */}
                           <motion.div 
-                            className={`h-full bg-gradient-to-r ${color.gradient} rounded-full`}
+                            className={`h-full bg-gradient-to-r ${color.gradient} rounded-full relative`}
                             initial={{ width: 0 }}
                             animate={{ width: `${skill.progress}%` }}
-                            transition={{ duration: 1, delay: 0.9 + index * 0.1 }}
-                          ></motion.div>
+                            transition={{ duration: 1, delay: 1 + index * 0.1 }}
+                            style={{
+                              boxShadow: '0 0 10px rgba(249, 115, 22, 0.3)',
+                            }}
+                          />
                         </div>
-                        <div className="text-xs text-gray-400 font-semibold">{skill.progress}%</div>
+                        {/* Growth indicator */}
+                        {change > 0 && (
+                          <motion.div
+                            className="absolute -right-2 -top-2 w-3 h-3 bg-green-500 rounded-full"
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                          />
+                        )}
                       </motion.div>
                     );
                   })}
+                  {/* Overall Stats */}
+                  <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-white/5">
+                    <div>
+                      <p className="text-xs text-white/60 mb-1">Avg Progress</p>
+                      <p className="text-lg font-bold text-green-500">
+                        {Math.round(skillProgress.reduce((a, b) => a + b.progress, 0) / skillProgress.length)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-white/60 mb-1">Total Growth</p>
+                      <p className="text-lg font-bold text-green-500">
+                        +{skillProgress.reduce((a, b) => a + (b.progress - b.previous), 0)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-white/60 mb-1">Skills Tracked</p>
+                      <p className="text-lg font-bold text-green-500">{skillProgress.length}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </motion.div>
             </div>
           </div>
         </main>

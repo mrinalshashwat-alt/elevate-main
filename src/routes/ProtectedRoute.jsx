@@ -8,10 +8,6 @@ const ProtectedRoute = ({ children, requiredRole = 'user' }) => {
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
 
-  if (requiredRole === 'admin') {
-    return <>{children}</>;
-  }
-
   useEffect(() => {
     if (isLoading) return;
 
@@ -37,7 +33,7 @@ const ProtectedRoute = ({ children, requiredRole = 'user' }) => {
     return null;
   }
 
-  if (requiredRole && user?.role !== requiredRole) {
+  if (requiredRole && (!user?.role || user.role !== requiredRole)) {
     return null;
   }
 

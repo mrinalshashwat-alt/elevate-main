@@ -1,6 +1,8 @@
 const STORAGE_KEYS = {
   JOBS: 'elevate_admin_jobs',
   ASSESSMENTS: 'elevate_admin_assessments',
+  TEMP_QUESTIONS: 'elevate_temp_questions',
+  TEMP_ASSESSMENT_DATA: 'elevate_temp_assessment_data',
 };
 
 export const jobsStorage = {
@@ -103,5 +105,65 @@ export const assessmentsStorage = {
   getById: (assessmentId) => {
     const assessments = assessmentsStorage.getAll();
     return assessments.find(a => a.id === assessmentId);
+  },
+};
+
+export const tempQuestionsStorage = {
+  save: (questions) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.TEMP_QUESTIONS, JSON.stringify(questions));
+      return questions;
+    } catch (error) {
+      console.error('Error saving temp questions to localStorage:', error);
+      throw error;
+    }
+  },
+
+  getAll: () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.TEMP_QUESTIONS);
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error reading temp questions from localStorage:', error);
+      return [];
+    }
+  },
+
+  clear: () => {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.TEMP_QUESTIONS);
+    } catch (error) {
+      console.error('Error clearing temp questions from localStorage:', error);
+    }
+  },
+};
+
+export const tempAssessmentDataStorage = {
+  save: (data) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.TEMP_ASSESSMENT_DATA, JSON.stringify(data));
+      return data;
+    } catch (error) {
+      console.error('Error saving temp assessment data to localStorage:', error);
+      throw error;
+    }
+  },
+
+  get: () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.TEMP_ASSESSMENT_DATA);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading temp assessment data from localStorage:', error);
+      return null;
+    }
+  },
+
+  clear: () => {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.TEMP_ASSESSMENT_DATA);
+    } catch (error) {
+      console.error('Error clearing temp assessment data from localStorage:', error);
+    }
   },
 };
