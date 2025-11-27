@@ -175,6 +175,17 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
+    // During build/SSR, return a safe default instead of throwing
+    if (typeof window === 'undefined') {
+      return {
+        user: null,
+        isLoading: true,
+        isAuthenticated: false,
+        login: async () => {},
+        register: async () => {},
+        logout: async () => {},
+      };
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

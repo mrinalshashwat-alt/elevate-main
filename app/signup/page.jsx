@@ -1,15 +1,18 @@
-import dynamic from 'next/dynamic';
+'use client';
 
-const Signup = dynamic(() => import('../../src/pages/Auth/Signup'), {
+import nextDynamic from 'next/dynamic';
+
+const Signup = nextDynamic(() => import('../../src/components/Auth/Signup'), {
   ssr: false,
+  loading: () => (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="text-white">Loading...</div>
+    </div>
+  ),
 });
 
+// Force dynamic rendering - prevent static generation
 export const dynamic = 'force-dynamic';
-
-export const metadata = {
-  title: 'Sign Up • ElevateCareer',
-  description: 'Create your ElevateCareer account and unlock AI-powered career tools.',
-};
 
 export default function SignupPage() {
   return <Signup />;
