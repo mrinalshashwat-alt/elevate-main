@@ -2255,7 +2255,7 @@ func main() {
                           onClick={handleStopRecording}
                           className="flex items-center space-x-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
                         >
-                          <FiStop />
+                          <FiSquare />
                           <span>Stop</span>
                         </button>
                       )}

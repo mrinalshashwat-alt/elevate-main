@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import ProtectedRoute from '../../../src/routes/ProtectedRoute';
 
-const AdminDashboard = dynamic(() => import('../../../src/pages/Admin/Dashboard'), { ssr: false });
+const AdminDashboard = dynamic(() => import('../../../src/views/Admin/Dashboard'), { ssr: false });
 
 export default function AdminDashboardPage() {
   return (
