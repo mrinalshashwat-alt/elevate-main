@@ -22,23 +22,6 @@ const AdminDashboard = () => {
     gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
   });
 
-  if (isLoading) {
-    return (
-      <AdminLayout title="Dashboard">
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center space-y-6">
-            <div className="flex gap-2 justify-center">
-              <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce"></div>
-              <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-              <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
-            </div>
-            <p className="text-gray-400">Loading dashboard...</p>
-          </div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
   // Mock data for charts
   const userGrowthData = [45, 52, 48, 61, 55, 67, 72, 68, 75, 82, 78, 85];
   const jobPostingsData = [12, 15, 18, 14, 22, 20, 25, 23, 28, 30, 27, 32];
@@ -91,6 +74,23 @@ const AdminDashboard = () => {
   const maxCount = useMemo(() => {
     return Math.max(...assessmentDailyData.map(d => d.count), 1);
   }, [assessmentDailyData]);
+
+  if (isLoading) {
+    return (
+      <AdminLayout title="Dashboard">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center space-y-6">
+            <div className="flex gap-2 justify-center">
+              <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce"></div>
+              <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+              <div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+            </div>
+            <p className="text-gray-400">Loading dashboard...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   const getColorIntensity = (count) => {
     if (count === 0) return 'bg-white/5';

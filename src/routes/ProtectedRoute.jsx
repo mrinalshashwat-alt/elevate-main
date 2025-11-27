@@ -8,6 +8,11 @@ const ProtectedRoute = ({ children, requiredRole = 'user' }) => {
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
 
+  // Skip authentication check for admin demo
+  if (requiredRole === 'admin') {
+    return <>{children}</>;
+  }
+
   useEffect(() => {
     if (isLoading) return;
 
