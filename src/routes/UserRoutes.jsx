@@ -3,8 +3,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
-
-// User Pages
 import UserDashboard from '../pages/User/Dashboard';
 import MockPrep from '../pages/User/MockPrep';
 import Agents from '../pages/User/Agents';

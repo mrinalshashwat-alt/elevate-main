@@ -3,13 +3,12 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
-
-// Admin Pages
 import AdminDashboard from '../pages/Admin/Dashboard';
 import ManageUsers from '../pages/Admin/ManageUsers';
 import Jobs from '../pages/Admin/Jobs';
 import CreateAssessment from '../pages/Admin/CreateAssessment';
 import AssessmentList from '../pages/Admin/AssessmentList';
+import AssessmentView from '../pages/Admin/AssessmentView';
 
 const AdminRoutes = () => {
   return (
@@ -51,6 +50,14 @@ const AdminRoutes = () => {
         element={
           <ProtectedRoute requiredRole="admin">
             <AssessmentList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/assessment-view"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AssessmentView />
           </ProtectedRoute>
         }
       />

@@ -53,6 +53,9 @@ export interface Assessment {
   questions: number;
   createdAt: string;
   status: 'draft' | 'published' | 'archived';
+  jobId?: string;
+  jobTitle?: string;
+  questionTypes?: Array<{ type: string; count: number }>;
 }
 
 // Job types
@@ -65,6 +68,7 @@ export interface Job {
   salary: string;
   postedAt: string;
   status: 'active' | 'closed';
+  competencies?: string[];
 }
 
 // Admin User Management types

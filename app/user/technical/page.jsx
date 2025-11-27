@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import ProtectedRoute from '../../../src/routes/ProtectedRoute';
 
-const Technical = dynamic(() => import('../../../src/pages/User/Technical'), { ssr: false });
+const Technical = dynamic(() => import('../../../src/views/User/Technical'), { ssr: false });
 
 export default function TechnicalPage() {
   return (

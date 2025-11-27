@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import ProtectedRoute from '../../../src/routes/ProtectedRoute';
 
-const Agents = dynamic(() => import('../../../src/pages/User/Agents'), { ssr: false });
+const Agents = dynamic(() => import('../../../src/views/User/Agents'), { ssr: false });
 
 export default function AgentsPage() {
   return (

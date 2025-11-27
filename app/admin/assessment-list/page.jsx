@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import ProtectedRoute from '../../../src/routes/ProtectedRoute';
 
-const AssessmentList = dynamic(() => import('../../../src/pages/Admin/AssessmentList'), { ssr: false });
+const AssessmentList = dynamic(() => import('../../../src/views/Admin/AssessmentList'), { ssr: false });
 
 export default function AssessmentListPage() {
   return (
