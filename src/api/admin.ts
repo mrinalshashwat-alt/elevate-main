@@ -445,13 +445,26 @@ export const improveJobDescription = async (jobId: string, description: string):
 // Assessment Draft & Edit APIs
 // =====================================================
 
+export interface AssessmentCompetencyResource {
+  id: string;
+  competency_id: string;
+  competency_name: string;
+  competency_description?: string;
+  competency_category: string;
+  is_inherited: boolean;
+  created_at: string;
+}
+
 export interface AssessmentDetailResource {
   id: string;
   name: string;
   description: string;
   instructions: string;
   job?: string | null;
-  job_title?: string | null;
+  job_id?: string | null;
+  job_title?: string | null;  // This is the job's title text when job is linked
+  job_title_id?: string | null;  // This is the JobTitle (role) UUID
+  job_title_name?: string | null;  // This is the JobTitle (role) name
   start_at: string;
   end_at: string;
   duration_minutes: number;
@@ -460,6 +473,8 @@ export interface AssessmentDetailResource {
   unique_link_token: string;
   question_distribution?: Record<string, number>;
   total_marks?: number;
+  competencies?: AssessmentCompetencyResource[];
+  competency_count?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -660,6 +675,85 @@ export const generateAIQuestionsBulk = async (params: {
   errors: any[];
 }> => {
   const { data } = await axiosInstance.post('/admin/questions/generate_ai_bulk/', params);
+  return data;
+};
+
+// =====================================================
+// Assessment Competency APIs
+// =====================================================
+
+export interface AssessmentCompetencyResource {
+  id: string;
+  competency_id: string;
+  competency_name: string;
+  competency_description: string;
+  competency_category: string;
+  is_inherited: boolean;
+  created_at: string;
+}
+
+/**
+ * Add a competency to an assessment
+ */
+export const addAssessmentCompetency = async (
+  assessmentId: string,
+  competencyId: string,
+  isInherited = false
+): Promise<AssessmentCompetencyResource> => {
+  const { data } = await axiosInstance.post(
+    `/admin/assessments/${assessmentId}/add_competency/`,
+    {
+      competency_id: competencyId,
+      is_inherited: isInherited,
+    }
+  );
+  return data;
+};
+
+/**
+ * Remove a competency from an assessment
+ */
+export const removeAssessmentCompetency = async (
+  assessmentId: string,
+  competencyId: string
+): Promise<void> => {
+  await axiosInstance.delete(
+    `/admin/assessments/${assessmentId}/remove_competency/${competencyId}/`
+  );
+};
+
+/**
+ * Sync competencies from linked job (if any)
+ */
+export const syncJobCompetencies = async (assessmentId: string): Promise<{
+  success: boolean;
+  synced_count: number;
+  deleted_count?: number;
+  message: string;
+}> => {
+  const { data } = await axiosInstance.post(
+    `/admin/assessments/${assessmentId}/sync_job_competencies/`
+  );
+  return data;
+};
+
+/**
+ * Sync competencies from a role/job title (replaces all existing competencies)
+ */
+export const syncRoleCompetencies = async (
+  assessmentId: string,
+  jobTitleId: string
+): Promise<{
+  success: boolean;
+  synced_count: number;
+  deleted_count?: number;
+  job_title_name?: string;
+  message: string;
+}> => {
+  const { data } = await axiosInstance.post(
+    `/admin/assessments/${assessmentId}/sync_role_competencies/`,
+    { job_title_id: jobTitleId }
+  );
   return data;
 };
 

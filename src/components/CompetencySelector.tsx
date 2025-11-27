@@ -28,30 +28,9 @@ const CompetencySelector: React.FC<CompetencySelectorProps> = ({
 
   const MAX_COMPETENCIES = 10;
 
-  // Auto-load competencies when job title is selected
-  useEffect(() => {
-    if (jobTitleId && selectedCompetencies.length === 0) {
-      loadJobTitleCompetencies(jobTitleId);
-    }
-  }, [jobTitleId]);
-
-  const loadJobTitleCompetencies = async (jobTitleId: string) => {
-    setLoading(true);
-    try {
-      const response = await axiosInstance.get(`/competencies/job-titles/${jobTitleId}/competencies/`);
-      const competencies = response.data.competencies.map((jc: any) => ({
-        id: jc.competency_id,
-        name: jc.competency_name,
-        category: jc.competency_category,
-        description: jc.competency_description || '',
-      }));
-      onCompetenciesChange(competencies.slice(0, MAX_COMPETENCIES));
-    } catch (error) {
-      console.error('Failed to load competencies:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // NOTE: We no longer auto-load competencies when jobTitleId changes
+  // User must explicitly click "Sync Competencies from Role" button
+  // This provides consistent UX with the Job flow which also requires explicit sync
 
   // Search for additional competencies
   useEffect(() => {

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FiSave, FiArrowLeft, FiPlus, FiTrash2, FiCpu,
   FiFileText, FiCode, FiVideo, FiCheckCircle, FiClock, FiSettings,
-  FiChevronDown, FiCopy, FiBriefcase
+  FiChevronDown, FiCopy, FiBriefcase, FiLink, FiRefreshCw
 } from 'react-icons/fi';
 import {
   getAssessment,
@@ -19,9 +19,14 @@ import {
   getQuestionTemplates,
   addTemplateToAssessment,
   getJobs,
+  addAssessmentCompetency,
+  removeAssessmentCompetency,
+  syncJobCompetencies,
+  syncRoleCompetencies,
 } from '../../api/admin';
 import AdminLayout from '../../components/AdminLayout';
 import JobTitleSearch from '../../components/JobTitleSearch';
+import CompetencySelector from '../../components/CompetencySelector';
 
 // Difficulty options
 const DIFFICULTY_OPTIONS = [
@@ -139,6 +144,502 @@ const AIGeneratingOverlay = ({ isVisible, questionCount }) => {
   );
 };
 
+// Intuitive Bulk Generation Modal
+const BulkGenerationModal = ({ 
+  isOpen, 
+  onClose, 
+  onGenerate, 
+  selectedJobTitleId, 
+  selectedJobId, 
+  selectedCompetencies 
+}) => {
+  // Question type toggles
+  const [enabledTypes, setEnabledTypes] = useState({
+    mcq: true,
+    coding: true,
+    video: false,
+    essay: false,
+    case_study: false,
+  });
+  
+  // MCQ / Aptitude config (with difficulty distribution)
+  const [mcqConfig, setMcqConfig] = useState({
+    total: 10,
+    distribution: {
+      very_easy: 1,
+      easy: 2,
+      medium: 4,
+      hard: 2,
+      very_hard: 1,
+    }
+  });
+  
+  // Coding config (DSA only with difficulty)
+  const [codingConfig, setCodingConfig] = useState({
+    easy: 1,
+    medium: 1,
+    hard: 0,
+  });
+  
+  // Subjective types (no difficulty)
+  const [videoCount, setVideoCount] = useState(2);
+  const [essayCount, setEssayCount] = useState(1);
+  const [caseStudyCount, setCaseStudyCount] = useState(1);
+  
+  // Preset handlers for MCQ
+  const applyMcqPreset = (preset) => {
+    const total = mcqConfig.total;
+    let distribution;
+    
+    switch (preset) {
+      case 'balanced':
+        distribution = {
+          very_easy: Math.round(total * 0.1),
+          easy: Math.round(total * 0.2),
+          medium: Math.round(total * 0.4),
+          hard: Math.round(total * 0.2),
+          very_hard: Math.round(total * 0.1),
+        };
+        break;
+      case 'easy':
+        distribution = {
+          very_easy: Math.round(total * 0.2),
+          easy: Math.round(total * 0.4),
+          medium: Math.round(total * 0.3),
+          hard: Math.round(total * 0.1),
+          very_hard: 0,
+        };
+        break;
+      case 'hard':
+        distribution = {
+          very_easy: 0,
+          easy: Math.round(total * 0.1),
+          medium: Math.round(total * 0.3),
+          hard: Math.round(total * 0.4),
+          very_hard: Math.round(total * 0.2),
+        };
+        break;
+      default:
+        return;
+    }
+    
+    // Adjust to match total exactly
+    const sum = Object.values(distribution).reduce((a, b) => a + b, 0);
+    if (sum !== total) {
+      distribution.medium += (total - sum);
+    }
+    
+    setMcqConfig({ ...mcqConfig, distribution });
+  };
+  
+  // Update MCQ total and redistribute
+  const updateMcqTotal = (newTotal) => {
+    const oldTotal = mcqConfig.total;
+    if (oldTotal === 0) {
+      setMcqConfig({
+        total: newTotal,
+        distribution: {
+          very_easy: Math.round(newTotal * 0.1),
+          easy: Math.round(newTotal * 0.2),
+          medium: Math.round(newTotal * 0.4),
+          hard: Math.round(newTotal * 0.2),
+          very_hard: Math.round(newTotal * 0.1),
+        }
+      });
+      return;
+    }
+    
+    const ratio = newTotal / oldTotal;
+    const newDistribution = {};
+    let sum = 0;
+    
+    Object.keys(mcqConfig.distribution).forEach((key, index, arr) => {
+      if (index === arr.length - 1) {
+        // Last item gets the remainder
+        newDistribution[key] = Math.max(0, newTotal - sum);
+      } else {
+        newDistribution[key] = Math.max(0, Math.round(mcqConfig.distribution[key] * ratio));
+        sum += newDistribution[key];
+      }
+    });
+    
+    setMcqConfig({ total: newTotal, distribution: newDistribution });
+  };
+  
+  // Calculate totals
+  const getTotalQuestions = () => {
+    let total = 0;
+    if (enabledTypes.mcq) total += mcqConfig.total;
+    if (enabledTypes.coding) total += codingConfig.easy + codingConfig.medium + codingConfig.hard;
+    if (enabledTypes.video) total += videoCount;
+    if (enabledTypes.essay) total += essayCount;
+    if (enabledTypes.case_study) total += caseStudyCount;
+    return total;
+  };
+  
+  const getMcqDistributionSum = () => {
+    return Object.values(mcqConfig.distribution).reduce((a, b) => a + b, 0);
+  };
+  
+  const handleGenerate = () => {
+    const config = {
+      mcq: enabledTypes.mcq ? {
+        enabled: true,
+        distribution: mcqConfig.distribution
+      } : { enabled: false },
+      coding: enabledTypes.coding ? {
+        enabled: true,
+        easy: codingConfig.easy,
+        medium: codingConfig.medium,
+        hard: codingConfig.hard,
+      } : { enabled: false },
+      video: enabledTypes.video ? { enabled: true, count: videoCount } : { enabled: false },
+      essay: enabledTypes.essay ? { enabled: true, count: essayCount } : { enabled: false },
+      case_study: enabledTypes.case_study ? { enabled: true, count: caseStudyCount } : { enabled: false },
+    };
+    
+    onGenerate(config);
+  };
+  
+  if (!isOpen) return null;
+  
+  const canGenerate = (selectedJobTitleId || selectedJobId) && selectedCompetencies.length > 0 && getTotalQuestions() > 0;
+  const mcqDistributionValid = getMcqDistributionSum() === mcqConfig.total;
+  
+  return (
+    <motion.div
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="bg-gradient-to-br from-gray-900 to-black border border-purple-500/30 rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+              <FiCpu className="w-6 h-6 text-purple-400" />
+              AI Question Generator
+            </h3>
+            <p className="text-gray-400 text-sm mt-1">
+              Configure the types and difficulty of questions you want to generate
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold text-purple-400">{getTotalQuestions()}</div>
+            <div className="text-xs text-gray-500">Total Questions</div>
+          </div>
+        </div>
+        
+        {/* Warnings */}
+        {(!selectedJobTitleId && !selectedJobId) && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4 text-yellow-400 text-sm flex items-center gap-2">
+            <span>⚠️</span>
+            <span>Select a Role or Job in the Details tab first</span>
+          </div>
+        )}
+        {selectedCompetencies.length === 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4 text-yellow-400 text-sm flex items-center gap-2">
+            <span>⚠️</span>
+            <span>Sync competencies first to generate relevant questions</span>
+          </div>
+        )}
+        
+        <div className="space-y-4">
+          {/* MCQ / Aptitude Section */}
+          <div className={`rounded-xl border transition-all ${enabledTypes.mcq ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/10'}`}>
+            <div 
+              className="p-4 flex items-center justify-between cursor-pointer"
+              onClick={() => setEnabledTypes({ ...enabledTypes, mcq: !enabledTypes.mcq })}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${enabledTypes.mcq ? 'bg-green-500/20' : 'bg-white/10'}`}>
+                  <FiCheckCircle className={`w-5 h-5 ${enabledTypes.mcq ? 'text-green-400' : 'text-gray-500'}`} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white">MCQ / Aptitude</h4>
+                  <p className="text-xs text-gray-400">Multiple choice questions with difficulty levels</p>
+                </div>
+              </div>
+              <div className={`w-12 h-6 rounded-full transition-colors ${enabledTypes.mcq ? 'bg-green-500' : 'bg-gray-600'}`}>
+                <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform mt-0.5 ${enabledTypes.mcq ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </div>
+            </div>
+            
+            {enabledTypes.mcq && (
+              <div className="px-4 pb-4 space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm text-gray-300 mb-1">Total MCQs</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      value={mcqConfig.total}
+                      onChange={(e) => updateMcqTotal(parseInt(e.target.value) || 0)}
+                      className="w-full px-4 py-2 bg-black/50 border border-white/20 rounded-lg text-white"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-6">
+                    <button
+                      onClick={() => applyMcqPreset('easy')}
+                      className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 rounded-lg text-green-400 text-xs"
+                    >
+                      Easy Heavy
+                    </button>
+                    <button
+                      onClick={() => applyMcqPreset('balanced')}
+                      className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg text-blue-400 text-xs"
+                    >
+                      Balanced
+                    </button>
+                    <button
+                      onClick={() => applyMcqPreset('hard')}
+                      className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-400 text-xs"
+                    >
+                      Hard Heavy
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm text-gray-300 mb-2">
+                    Difficulty Distribution 
+                    {!mcqDistributionValid && (
+                      <span className="text-red-400 ml-2">(Sum: {getMcqDistributionSum()}, should be {mcqConfig.total})</span>
+                    )}
+                  </label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[
+                      { key: 'very_easy', label: 'V.Easy', color: 'emerald' },
+                      { key: 'easy', label: 'Easy', color: 'green' },
+                      { key: 'medium', label: 'Medium', color: 'yellow' },
+                      { key: 'hard', label: 'Hard', color: 'orange' },
+                      { key: 'very_hard', label: 'V.Hard', color: 'red' },
+                    ].map(({ key, label, color }) => (
+                      <div key={key} className="text-center">
+                        <input
+                          type="number"
+                          min={0}
+                          max={mcqConfig.total}
+                          value={mcqConfig.distribution[key]}
+                          onChange={(e) => setMcqConfig({
+                            ...mcqConfig,
+                            distribution: {
+                              ...mcqConfig.distribution,
+                              [key]: parseInt(e.target.value) || 0
+                            }
+                          })}
+                          className={`w-full px-2 py-2 bg-${color}-500/10 border border-${color}-500/30 rounded-lg text-white text-center`}
+                          style={{ 
+                            backgroundColor: `rgba(${color === 'emerald' ? '16,185,129' : color === 'green' ? '34,197,94' : color === 'yellow' ? '234,179,8' : color === 'orange' ? '249,115,22' : '239,68,68'}, 0.1)`,
+                            borderColor: `rgba(${color === 'emerald' ? '16,185,129' : color === 'green' ? '34,197,94' : color === 'yellow' ? '234,179,8' : color === 'orange' ? '249,115,22' : '239,68,68'}, 0.3)`
+                          }}
+                        />
+                        <span className="text-xs text-gray-400 mt-1 block">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Coding Section (DSA Only) */}
+          <div className={`rounded-xl border transition-all ${enabledTypes.coding ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white/5 border-white/10'}`}>
+            <div 
+              className="p-4 flex items-center justify-between cursor-pointer"
+              onClick={() => setEnabledTypes({ ...enabledTypes, coding: !enabledTypes.coding })}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${enabledTypes.coding ? 'bg-blue-500/20' : 'bg-white/10'}`}>
+                  <FiCode className={`w-5 h-5 ${enabledTypes.coding ? 'text-blue-400' : 'text-gray-500'}`} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white">Coding (DSA/Algorithms)</h4>
+                  <p className="text-xs text-gray-400">Data structures & algorithms problems (Judge0 sandbox)</p>
+                </div>
+              </div>
+              <div className={`w-12 h-6 rounded-full transition-colors ${enabledTypes.coding ? 'bg-blue-500' : 'bg-gray-600'}`}>
+                <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform mt-0.5 ${enabledTypes.coding ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </div>
+            </div>
+            
+            {enabledTypes.coding && (
+              <div className="px-4 pb-4">
+                <label className="block text-sm text-gray-300 mb-2">Questions per Difficulty</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { key: 'easy', label: 'Easy', color: 'green' },
+                    { key: 'medium', label: 'Medium', color: 'yellow' },
+                    { key: 'hard', label: 'Hard', color: 'red' },
+                  ].map(({ key, label, color }) => (
+                    <div key={key}>
+                      <input
+                        type="number"
+                        min={0}
+                        max={5}
+                        value={codingConfig[key]}
+                        onChange={(e) => setCodingConfig({
+                          ...codingConfig,
+                          [key]: parseInt(e.target.value) || 0
+                        })}
+                        className="w-full px-4 py-2 bg-black/50 border border-white/20 rounded-lg text-white text-center"
+                      />
+                      <span className={`text-xs text-${color}-400 mt-1 block text-center`}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Total: {codingConfig.easy + codingConfig.medium + codingConfig.hard} coding questions
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Video Questions */}
+          <div className={`rounded-xl border transition-all ${enabledTypes.video ? 'bg-purple-500/10 border-purple-500/30' : 'bg-white/5 border-white/10'}`}>
+            <div 
+              className="p-4 flex items-center justify-between cursor-pointer"
+              onClick={() => setEnabledTypes({ ...enabledTypes, video: !enabledTypes.video })}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${enabledTypes.video ? 'bg-purple-500/20' : 'bg-white/10'}`}>
+                  <FiVideo className={`w-5 h-5 ${enabledTypes.video ? 'text-purple-400' : 'text-gray-500'}`} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white">Video Questions</h4>
+                  <p className="text-xs text-gray-400">Behavioral & communication assessment (no difficulty)</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {enabledTypes.video && (
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={videoCount}
+                    onChange={(e) => setVideoCount(parseInt(e.target.value) || 1)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-16 px-2 py-1 bg-black/50 border border-white/20 rounded-lg text-white text-center text-sm"
+                  />
+                )}
+                <div className={`w-12 h-6 rounded-full transition-colors ${enabledTypes.video ? 'bg-purple-500' : 'bg-gray-600'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform mt-0.5 ${enabledTypes.video ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Essay Questions */}
+          <div className={`rounded-xl border transition-all ${enabledTypes.essay ? 'bg-amber-500/10 border-amber-500/30' : 'bg-white/5 border-white/10'}`}>
+            <div 
+              className="p-4 flex items-center justify-between cursor-pointer"
+              onClick={() => setEnabledTypes({ ...enabledTypes, essay: !enabledTypes.essay })}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${enabledTypes.essay ? 'bg-amber-500/20' : 'bg-white/10'}`}>
+                  <FiFileText className={`w-5 h-5 ${enabledTypes.essay ? 'text-amber-400' : 'text-gray-500'}`} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white">Essay Questions</h4>
+                  <p className="text-xs text-gray-400">Long-form written responses (no difficulty)</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {enabledTypes.essay && (
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={essayCount}
+                    onChange={(e) => setEssayCount(parseInt(e.target.value) || 1)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-16 px-2 py-1 bg-black/50 border border-white/20 rounded-lg text-white text-center text-sm"
+                  />
+                )}
+                <div className={`w-12 h-6 rounded-full transition-colors ${enabledTypes.essay ? 'bg-amber-500' : 'bg-gray-600'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform mt-0.5 ${enabledTypes.essay ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Case Study */}
+          <div className={`rounded-xl border transition-all ${enabledTypes.case_study ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-white/5 border-white/10'}`}>
+            <div 
+              className="p-4 flex items-center justify-between cursor-pointer"
+              onClick={() => setEnabledTypes({ ...enabledTypes, case_study: !enabledTypes.case_study })}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${enabledTypes.case_study ? 'bg-cyan-500/20' : 'bg-white/10'}`}>
+                  <FiBriefcase className={`w-5 h-5 ${enabledTypes.case_study ? 'text-cyan-400' : 'text-gray-500'}`} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white">Case Study</h4>
+                  <p className="text-xs text-gray-400">Comprehensive problem-solving scenarios (no difficulty)</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {enabledTypes.case_study && (
+                  <input
+                    type="number"
+                    min={1}
+                    max={3}
+                    value={caseStudyCount}
+                    onChange={(e) => setCaseStudyCount(parseInt(e.target.value) || 1)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-16 px-2 py-1 bg-black/50 border border-white/20 rounded-lg text-white text-center text-sm"
+                  />
+                )}
+                <div className={`w-12 h-6 rounded-full transition-colors ${enabledTypes.case_study ? 'bg-cyan-500' : 'bg-gray-600'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform mt-0.5 ${enabledTypes.case_study ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Summary & Actions */}
+        <div className="mt-6 pt-4 border-t border-white/10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm text-gray-400">
+              {enabledTypes.mcq && <span className="mr-3">MCQ: {mcqConfig.total}</span>}
+              {enabledTypes.coding && <span className="mr-3">Coding: {codingConfig.easy + codingConfig.medium + codingConfig.hard}</span>}
+              {enabledTypes.video && <span className="mr-3">Video: {videoCount}</span>}
+              {enabledTypes.essay && <span className="mr-3">Essay: {essayCount}</span>}
+              {enabledTypes.case_study && <span className="mr-3">Case Study: {caseStudyCount}</span>}
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 bg-white/10 hover:bg-white/15 rounded-xl text-white font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={!canGenerate || (enabledTypes.mcq && !mcqDistributionValid)}
+              className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg hover:shadow-purple-500/25"
+            >
+              <FiCpu className="w-4 h-4 inline mr-2" />
+              Generate {getTotalQuestions()} Questions
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const AssessmentEdit = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -147,17 +648,20 @@ const AssessmentEdit = () => {
   
   const [activeTab, setActiveTab] = useState('details');
   const [lastSaved, setLastSaved] = useState(null);
+  const [linkType, setLinkType] = useState('role'); // 'role' or 'job'
   const [selectedRoleName, setSelectedRoleName] = useState('');
   const [selectedJobTitleId, setSelectedJobTitleId] = useState(null);
+  const [selectedJobId, setSelectedJobId] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingCount, setGeneratingCount] = useState(0);
+  const [selectedCompetencies, setSelectedCompetencies] = useState([]);
+  const [isSyncingCompetencies, setIsSyncingCompetencies] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     instructions: '',
-    job_title: null,
     duration_minutes: 60,
     start_at: '',
     end_at: '',
@@ -205,6 +709,12 @@ const AssessmentEdit = () => {
     enabled: !!assessmentId,
   });
   
+  // Fetch jobs for dropdown
+  const { data: jobsData } = useQuery({
+    queryKey: ['adminJobs'],
+    queryFn: () => getJobs(1, 100),
+  });
+  
   // Fetch question templates for "AI" generation (actually from bank)
   const { data: templatesData } = useQuery({
     queryKey: ['questionTemplates', selectedJobTitleId],
@@ -225,7 +735,6 @@ const AssessmentEdit = () => {
         name: assessment.name || '',
         description: assessment.description || '',
         instructions: assessment.instructions || '',
-        job_title: assessment.job_title || null,
         duration_minutes: assessment.duration_minutes || 60,
         start_at: startDate,
         end_at: endDate,
@@ -237,13 +746,28 @@ const AssessmentEdit = () => {
         },
       });
       
-      if (assessment.job_title) {
-        setSelectedJobTitleId(assessment.job_title);
+      // Determine link type and set IDs
+      if (assessment.job_id || assessment.job) {
+        setLinkType('job');
+        setSelectedJobId(assessment.job_id || assessment.job);
+      } else if (assessment.job_title_id || assessment.job_title) {
+        setLinkType('role');
+        setSelectedJobTitleId(assessment.job_title_id || assessment.job_title);
+        setSelectedRoleName(assessment.job_title_name || '');
       }
-      if (assessment.role_name) {
-        setSelectedRoleName(assessment.role_name);
+
+      // Load competencies if they exist from backend
+      if (assessment.competencies && Array.isArray(assessment.competencies) && assessment.competencies.length > 0) {
+        const competencies = assessment.competencies.map(ac => ({
+          id: ac.competency_id,
+          name: ac.competency_name,
+          category: ac.competency_category,
+          description: ac.competency_description || '',
+          is_inherited: ac.is_inherited,
+        }));
+        setSelectedCompetencies(competencies);
       }
-      
+
       initialLoadRef.current = false;
     }
   }, [assessment]);
@@ -325,7 +849,8 @@ const AssessmentEdit = () => {
       name: formData.name,
       description: formData.description,
       instructions: formData.instructions,
-      job_title: selectedJobTitleId,
+      job: linkType === 'job' ? selectedJobId : null,
+      job_title: linkType === 'role' ? selectedJobTitleId : null,
       duration_minutes: formData.duration_minutes,
       settings: formData.settings,
     };
@@ -338,7 +863,7 @@ const AssessmentEdit = () => {
     }
     
     saveMutation.mutate(dataToSave);
-  }, [assessmentId, formData, selectedJobTitleId, isDirty, saveMutation]);
+  }, [assessmentId, formData, selectedJobTitleId, selectedJobId, linkType, isDirty, saveMutation]);
   
   // Manual save on button click
   const handleManualSave = () => {
@@ -353,13 +878,17 @@ const AssessmentEdit = () => {
   };
   
   const handlePublish = () => {
-    if (!selectedJobTitleId) {
-      alert('Please select a Role / Job Title before publishing.');
+    if (!selectedJobTitleId && !selectedJobId) {
+      alert('Please select a Role or link to a Job before publishing.');
       setActiveTab('details');
       return;
     }
     if (!questions?.length) {
       alert('Please add at least one question before publishing.');
+      return;
+    }
+    if (selectedCompetencies.length === 0) {
+      alert('Please add at least one competency before publishing.');
       return;
     }
     if (confirm('Are you sure you want to publish this assessment? It will become available to participants.')) {
@@ -396,7 +925,6 @@ const AssessmentEdit = () => {
         alert('Please enter a problem statement');
         return;
       }
-      // Ensure test_cases exists
       if (!manualQuestion.content.test_cases?.length || 
           !manualQuestion.content.test_cases[0]?.input || 
           !manualQuestion.content.test_cases[0]?.output) {
@@ -410,10 +938,7 @@ const AssessmentEdit = () => {
       }
     }
     
-    // Build the proper content structure
     let content = { ...manualQuestion.content };
-    
-    // For MCQ, filter out empty options
     if (manualQuestion.type === 'mcq') {
       content.options = content.options.filter(o => o.trim());
     }
@@ -428,18 +953,145 @@ const AssessmentEdit = () => {
     createQuestionMutation.mutate(questionData);
   };
   
+  // Handle competency changes - for manual add/remove only
+  const handleCompetenciesChange = async (newCompetencies) => {
+    // Find added and removed competencies
+    const currentIds = new Set(selectedCompetencies.map(c => c.id));
+    const newIds = new Set(newCompetencies.map(c => c.id));
+    
+    const added = newCompetencies.filter(c => !currentIds.has(c.id));
+    const removed = selectedCompetencies.filter(c => !newIds.has(c.id));
+    
+    // Update local state immediately for responsiveness
+    setSelectedCompetencies(newCompetencies);
+    
+    // Sync changes to backend
+    // Add new competencies
+    for (const comp of added) {
+      try {
+        await addAssessmentCompetency(assessmentId, comp.id, false);
+      } catch (error) {
+        // Silently ignore "already added" errors
+      }
+    }
+    
+    // Remove deleted competencies
+    for (const comp of removed) {
+      try {
+        await removeAssessmentCompetency(assessmentId, comp.id);
+      } catch (error) {
+        // Silently ignore errors
+      }
+    }
+    
+    // Invalidate cache to refresh data
+    queryClient.invalidateQueries({ queryKey: ['assessment', assessmentId] });
+  };
+  
+  // Sync competencies from role (replaces all existing)
+  const handleSyncRoleCompetencies = async (jobTitleId) => {
+    if (!assessmentId || !jobTitleId) return;
+    
+    setIsSyncingCompetencies(true);
+    try {
+      const result = await syncRoleCompetencies(assessmentId, jobTitleId);
+      if (result.success) {
+        // Refetch assessment to get updated competencies
+        const updatedAssessment = await refetchAssessment();
+        
+        // Update local competencies state from the refetched data
+        if (updatedAssessment?.data?.competencies && Array.isArray(updatedAssessment.data.competencies)) {
+          const competencies = updatedAssessment.data.competencies.map(ac => ({
+            id: ac.competency_id,
+            name: ac.competency_name,
+            category: ac.competency_category,
+            description: ac.competency_description || '',
+            is_inherited: ac.is_inherited,
+          }));
+          setSelectedCompetencies(competencies);
+        }
+        
+        alert(`Synced ${result.synced_count} competencies from "${result.job_title_name || 'role'}".`);
+      }
+    } catch (error) {
+      console.error('Failed to sync role competencies:', error);
+      alert('Failed to sync competencies: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsSyncingCompetencies(false);
+    }
+  };
+  
+  // Sync competencies from job
+  const handleSyncJobCompetencies = async () => {
+    if (!assessmentId || !selectedJobId) return;
+    
+    setIsSyncingCompetencies(true);
+    try {
+      // First, save the job link to the backend
+      await patchAssessment(assessmentId, { job: selectedJobId, job_title: null });
+      
+      // Then sync competencies
+      const result = await syncJobCompetencies(assessmentId);
+      if (result.success) {
+        // Refetch assessment to get updated competencies
+        const updatedAssessment = await refetchAssessment();
+        
+        // Update local competencies state from the refetched data
+        if (updatedAssessment?.data?.competencies && Array.isArray(updatedAssessment.data.competencies)) {
+          const competencies = updatedAssessment.data.competencies.map(ac => ({
+            id: ac.competency_id,
+            name: ac.competency_name,
+            category: ac.competency_category,
+            description: ac.competency_description || '',
+            is_inherited: ac.is_inherited,
+          }));
+          setSelectedCompetencies(competencies);
+        }
+        
+        alert(`Synced ${result.synced_count} competencies from the linked job. ${result.deleted_count || 0} previous competencies were removed.`);
+      }
+    } catch (error) {
+      console.error('Failed to sync job competencies:', error);
+      alert('Failed to sync competencies: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsSyncingCompetencies(false);
+    }
+  };
+  
   // Simulate AI generation by picking from question bank
   const handleBulkGenerate = async (config) => {
-    const { mcq, coding, subjective } = config;
-    const totalCount = (mcq?.count || 0) + (coding?.count || 0) + (subjective?.count || 0);
+    // Calculate total questions from new config format
+    let totalCount = 0;
+    
+    // MCQ with distribution
+    if (config.mcq?.enabled && config.mcq.distribution) {
+      totalCount += Object.values(config.mcq.distribution).reduce((a, b) => a + b, 0);
+    }
+    
+    // Coding (DSA) with difficulty
+    if (config.coding?.enabled) {
+      totalCount += (config.coding.easy || 0) + (config.coding.medium || 0) + (config.coding.hard || 0);
+    }
+    
+    // Subjective types (no difficulty)
+    if (config.video?.enabled) totalCount += config.video.count || 0;
+    if (config.essay?.enabled) totalCount += config.essay.count || 0;
+    if (config.case_study?.enabled) totalCount += config.case_study.count || 0;
     
     if (totalCount === 0) {
       alert('Please specify at least one question to generate.');
       return;
     }
     
-    if (!selectedJobTitleId) {
-      alert('Please select a Role / Job Title first to generate relevant questions.');
+    if (!selectedJobTitleId && !selectedJobId) {
+      alert('Please select a Role or link to a Job first to generate relevant questions.');
+      setShowBulkAIModal(false);
+      setActiveTab('details');
+      return;
+    }
+    
+    if (selectedCompetencies.length === 0) {
+      alert('Please add competencies first to generate relevant questions.');
       setShowBulkAIModal(false);
       setActiveTab('details');
       return;
@@ -453,18 +1105,56 @@ const AssessmentEdit = () => {
     await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
     
     try {
-      // Get templates from bank
-      const templates = templatesData?.data || [];
+      // Fetch templates dynamically based on selected role/job
+      const jobTitleIdToUse = selectedJobTitleId || (assessment?.job_title_id);
+      if (!jobTitleIdToUse) {
+        alert('Please select a Role first to generate questions.');
+        setIsGenerating(false);
+        setGeneratingCount(0);
+        return;
+      }
+      
+      // Fetch templates for the selected role
+      const templatesResponse = await getQuestionTemplates({ 
+        job_title: jobTitleIdToUse,
+        page_size: 200  // Get more templates to have enough for filtering
+      });
+      // Handle paginated response - could be in data or results field
+      const templates = templatesResponse?.data || templatesResponse?.results || templatesResponse || [];
+      
+      console.log(`Fetched ${templates.length} templates for role ${jobTitleIdToUse}`);
+      
       let addedCount = 0;
       
-      // Helper to add questions of a type
-      const addQuestionsOfType = async (type, count, difficulty) => {
-        const matchingTemplates = templates.filter(t => 
-          t.type === type && 
-          (difficulty === 'any' || t.difficulty === difficulty)
-        );
+      // Helper to add questions of a specific type and difficulty
+      const addQuestionsOfType = async (type, count, difficulty, tagFilter = null) => {
+        if (count <= 0) return;
         
-        // Shuffle and pick
+        // Map difficulty names to numbers (1-5)
+        const difficultyMap = {
+          'very_easy': 1,
+          'easy': 2,
+          'medium': 3,
+          'hard': 4,
+          'very_hard': 5
+        };
+        const diffNum = typeof difficulty === 'string' ? difficultyMap[difficulty] : difficulty;
+        
+        // Filter templates by type, difficulty, and optional tag
+        let matchingTemplates = templates.filter(t => {
+          const typeMatch = t.type === type;
+          const difficultyMatch = diffNum === undefined || diffNum === 'any' || t.difficulty === diffNum;
+          const tagMatch = !tagFilter || (t.tags && Array.isArray(t.tags) && t.tags.includes(tagFilter));
+          return typeMatch && difficultyMatch && tagMatch;
+        });
+        
+        console.log(`Found ${matchingTemplates.length} templates for type=${type}, difficulty=${difficulty}, tag=${tagFilter}`);
+        
+        if (matchingTemplates.length === 0) {
+          console.warn(`No templates found for type=${type}, difficulty=${difficulty}`);
+          return;
+        }
+        
         const shuffled = [...matchingTemplates].sort(() => Math.random() - 0.5);
         const toAdd = shuffled.slice(0, count);
         
@@ -478,15 +1168,38 @@ const AssessmentEdit = () => {
         }
       };
       
-      // Add questions by type
-      if (mcq?.count > 0) {
-        await addQuestionsOfType('mcq', mcq.count, mcq.difficulty);
+      // MCQ with distribution
+      if (config.mcq?.enabled && config.mcq.distribution) {
+        for (const [difficulty, count] of Object.entries(config.mcq.distribution)) {
+          await addQuestionsOfType('mcq', count, difficulty);
+        }
       }
-      if (coding?.count > 0) {
-        await addQuestionsOfType('coding', coding.count, coding.difficulty);
+      
+      // Coding (DSA) with difficulty
+      if (config.coding?.enabled) {
+        await addQuestionsOfType('coding', config.coding.easy || 0, 'easy');
+        await addQuestionsOfType('coding', config.coding.medium || 0, 'medium');
+        await addQuestionsOfType('coding', config.coding.hard || 0, 'hard');
       }
-      if (subjective?.count > 0) {
-        await addQuestionsOfType('subjective', subjective.count, subjective.difficulty);
+      
+      // Video questions (subjective with 'video' tag)
+      if (config.video?.enabled) {
+        await addQuestionsOfType('subjective', config.video.count || 0, 'any', 'video');
+      }
+      
+      // Essay questions (subjective with 'essay' tag)
+      if (config.essay?.enabled) {
+        await addQuestionsOfType('subjective', config.essay.count || 0, 'any', 'essay');
+      }
+      
+      // Case study (subjective with 'case-study' or 'case_study' tag)
+      if (config.case_study?.enabled) {
+        // Try both tag variations
+        await addQuestionsOfType('subjective', config.case_study.count || 0, 'any', 'case-study');
+        // If not enough, try case_study tag
+        if (addedCount < totalCount) {
+          await addQuestionsOfType('subjective', config.case_study.count || 0, 'any', 'case_study');
+        }
       }
       
       await refetchQuestions();
@@ -533,6 +1246,11 @@ const AssessmentEdit = () => {
     const opt = DIFFICULTY_OPTIONS.find(o => o.value === value);
     return opt ? opt.label : 'Medium';
   };
+  
+  const jobOptions = [
+    { value: '', label: 'Select a job...' },
+    ...(jobsData?.data?.map(job => ({ value: job.id, label: job.title })) || [])
+  ];
   
   return (
     <AdminLayout
@@ -603,9 +1321,9 @@ const AssessmentEdit = () => {
           {assessment?.status === 'draft' && (
             <button
               onClick={handlePublish}
-              disabled={publishMutation.isPending || !questions?.length || !selectedJobTitleId}
+              disabled={publishMutation.isPending || !questions?.length || selectedCompetencies.length === 0}
               className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 rounded-xl font-semibold text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              title={!selectedJobTitleId ? 'Please select a Role first' : !questions?.length ? 'Add questions first' : ''}
+              title={selectedCompetencies.length === 0 ? 'Add competencies first' : !questions?.length ? 'Add questions first' : ''}
             >
               {publishMutation.isPending ? 'Publishing...' : 'Publish'}
             </button>
@@ -658,25 +1376,133 @@ const AssessmentEdit = () => {
             />
           </div>
           
-          {/* Role / Job Title - REQUIRED */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              <FiBriefcase className="w-4 h-4 inline mr-1 text-orange-400" />
-              Role / Job Title <span className="text-red-400">*</span>
+          {/* Link Type Selection */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <label className="block text-sm font-medium text-gray-300 mb-3">
+              Link Assessment To <span className="text-red-400">*</span>
             </label>
-            <JobTitleSearch
-              value={selectedRoleName}
-              onChange={(jobTitleId, jobTitle) => {
-                setSelectedJobTitleId(jobTitleId);
-                setSelectedRoleName(jobTitle?.name || '');
-                handleFieldChange('job_title', jobTitleId);
-              }}
-              placeholder="Search for a role (e.g., Software Engineer)..."
-              label=""
-              required={true}
+            <div className="flex gap-4 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="linkType"
+                  value="role"
+                  checked={linkType === 'role'}
+                  onChange={() => {
+                    setLinkType('role');
+                    setSelectedJobId(null);
+                    // NOTE: We do NOT clear competencies when switching link type
+                    // User can keep existing competencies or sync new ones
+                    setIsDirty(true);
+                  }}
+                  className="w-4 h-4 text-orange-500"
+                />
+                <FiBriefcase className="w-4 h-4 text-blue-400" />
+                <span className="text-gray-300">Role / Job Title</span>
+                <span className="text-xs text-gray-500">(standalone assessment)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="linkType"
+                  value="job"
+                  checked={linkType === 'job'}
+                  onChange={() => {
+                    setLinkType('job');
+                    setSelectedJobTitleId(null);
+                    setSelectedRoleName('');
+                    // NOTE: We do NOT clear competencies when switching link type
+                    // User can keep existing competencies or sync new ones
+                    setIsDirty(true);
+                  }}
+                  className="w-4 h-4 text-orange-500"
+                />
+                <FiLink className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300">Job Posting</span>
+                <span className="text-xs text-gray-500">(linked to hiring)</span>
+              </label>
+            </div>
+            
+            {linkType === 'role' && (
+              <div>
+                <JobTitleSearch
+                  value={selectedRoleName}
+                  onChange={(jobTitleId, jobTitle) => {
+                    setSelectedJobTitleId(jobTitleId);
+                    setSelectedRoleName(jobTitle?.name || '');
+                    setIsDirty(true);
+                    // NOTE: We do NOT auto-sync competencies here
+                    // User must explicitly click "Sync Competencies from Role"
+                  }}
+                  placeholder="Search for a role (e.g., Software Engineer)..."
+                  label=""
+                  required={true}
+                />
+                {selectedJobTitleId && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={() => handleSyncRoleCompetencies(selectedJobTitleId)}
+                      disabled={isSyncingCompetencies}
+                      className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 rounded-lg text-blue-400 text-sm font-medium flex items-center gap-2"
+                    >
+                      <FiRefreshCw className={`w-4 h-4 ${isSyncingCompetencies ? 'animate-spin' : ''}`} />
+                      {isSyncingCompetencies ? 'Syncing...' : 'Sync Competencies from Role'}
+                    </button>
+                    <span className="text-xs text-gray-500">
+                      Replace current competencies with role's competencies
+                    </span>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Select a role, then click "Sync" to load its competencies
+                </p>
+              </div>
+            )}
+            
+            {linkType === 'job' && (
+              <div>
+                <GlassSelect
+                  value={selectedJobId || ''}
+                  onChange={(value) => {
+                    setSelectedJobId(value || null);
+                    setIsDirty(true);
+                    // NOTE: We do NOT auto-clear competencies when job changes
+                    // User must explicitly click "Sync Competencies from Job"
+                  }}
+                  placeholder="Select a job posting..."
+                  options={jobOptions}
+                />
+                {selectedJobId && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={handleSyncJobCompetencies}
+                      disabled={isSyncingCompetencies}
+                      className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 rounded-lg text-green-400 text-sm font-medium flex items-center gap-2"
+                    >
+                      <FiRefreshCw className={`w-4 h-4 ${isSyncingCompetencies ? 'animate-spin' : ''}`} />
+                      {isSyncingCompetencies ? 'Syncing...' : 'Sync Competencies from Job'}
+                    </button>
+                    <span className="text-xs text-gray-500">
+                      Pull competencies from the linked job
+                    </span>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Link to an existing job posting - competencies can be synced from the job
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Competency Selector */}
+          <div>
+            <CompetencySelector
+              jobTitleId={linkType === 'role' ? selectedJobTitleId : null}
+              selectedCompetencies={selectedCompetencies}
+              onCompetenciesChange={handleCompetenciesChange}
             />
             <p className="text-xs text-gray-500 mt-2">
-              Required for competency-based scoring and question recommendations
+              These competencies will be tested in this assessment. You can add or remove competencies as needed.
             </p>
           </div>
           
@@ -1091,171 +1917,17 @@ const AssessmentEdit = () => {
         )}
       </AnimatePresence>
       
-      {/* AI Bulk Generation Modal - Improved */}
+      {/* AI Bulk Generation Modal - Intuitive Multi-step */}
       <AnimatePresence>
         {showBulkAIModal && (
-          <motion.div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowBulkAIModal(false)}
-          >
-            <motion.div
-              className="bg-black/95 border border-purple-500/30 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-xl font-bold text-white mb-2">
-                <FiCpu className="w-5 h-5 inline mr-2 text-purple-400" />
-                Generate Questions with AI
-              </h3>
-              <p className="text-gray-400 text-sm mb-6">
-                Specify the number and difficulty of questions for each type.
-              </p>
-              
-              <div className="space-y-6">
-                {/* MCQ Section */}
-                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FiCheckCircle className="w-5 h-5 text-green-400" />
-                    <h4 className="font-semibold text-white">Multiple Choice Questions</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-2">Count</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={20}
-                        defaultValue={5}
-                        id="bulk-mcq-count"
-                        className="w-full px-4 py-2 bg-white/5 border border-white/15 rounded-xl text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-2">Difficulty</label>
-                      <select
-                        id="bulk-mcq-difficulty"
-                        defaultValue="any"
-                        className="w-full px-4 py-2 bg-white/5 border border-white/15 rounded-xl text-white"
-                      >
-                        <option value="any">Any</option>
-                        <option value="2">Easy</option>
-                        <option value="3">Medium</option>
-                        <option value="4">Hard</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Coding Section */}
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FiCode className="w-5 h-5 text-blue-400" />
-                    <h4 className="font-semibold text-white">Coding Questions</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-2">Count</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={10}
-                        defaultValue={2}
-                        id="bulk-coding-count"
-                        className="w-full px-4 py-2 bg-white/5 border border-white/15 rounded-xl text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-2">Difficulty</label>
-                      <select
-                        id="bulk-coding-difficulty"
-                        defaultValue="any"
-                        className="w-full px-4 py-2 bg-white/5 border border-white/15 rounded-xl text-white"
-                      >
-                        <option value="any">Any</option>
-                        <option value="2">Easy</option>
-                        <option value="3">Medium</option>
-                        <option value="4">Hard</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Subjective Section */}
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FiFileText className="w-5 h-5 text-purple-400" />
-                    <h4 className="font-semibold text-white">Subjective Questions</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-2">Count</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={10}
-                        defaultValue={2}
-                        id="bulk-subjective-count"
-                        className="w-full px-4 py-2 bg-white/5 border border-white/15 rounded-xl text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-2">Difficulty</label>
-                      <select
-                        id="bulk-subjective-difficulty"
-                        defaultValue="any"
-                        className="w-full px-4 py-2 bg-white/5 border border-white/15 rounded-xl text-white"
-                      >
-                        <option value="any">Any</option>
-                        <option value="2">Easy</option>
-                        <option value="3">Medium</option>
-                        <option value="4">Hard</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                
-                {!selectedJobTitleId && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-yellow-400 text-sm">
-                    ⚠️ Please select a Role / Job Title in the Details tab first to generate relevant questions.
-                  </div>
-                )}
-                
-                <button
-                  onClick={() => {
-                    const mcqCount = parseInt(document.getElementById('bulk-mcq-count')?.value) || 0;
-                    const codingCount = parseInt(document.getElementById('bulk-coding-count')?.value) || 0;
-                    const subjectiveCount = parseInt(document.getElementById('bulk-subjective-count')?.value) || 0;
-                    
-                    const mcqDiff = document.getElementById('bulk-mcq-difficulty')?.value;
-                    const codingDiff = document.getElementById('bulk-coding-difficulty')?.value;
-                    const subjectiveDiff = document.getElementById('bulk-subjective-difficulty')?.value;
-                    
-                    handleBulkGenerate({
-                      mcq: { count: mcqCount, difficulty: mcqDiff === 'any' ? 'any' : parseInt(mcqDiff) },
-                      coding: { count: codingCount, difficulty: codingDiff === 'any' ? 'any' : parseInt(codingDiff) },
-                      subjective: { count: subjectiveCount, difficulty: subjectiveDiff === 'any' ? 'any' : parseInt(subjectiveDiff) },
-                    });
-                  }}
-                  disabled={!selectedJobTitleId}
-                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Generate Questions
-                </button>
-              </div>
-              
-              <button
-                onClick={() => setShowBulkAIModal(false)}
-                className="mt-4 w-full py-3 bg-white/10 rounded-xl text-white font-medium"
-              >
-                Cancel
-              </button>
-            </motion.div>
-          </motion.div>
+          <BulkGenerationModal
+            isOpen={showBulkAIModal}
+            onClose={() => setShowBulkAIModal(false)}
+            onGenerate={handleBulkGenerate}
+            selectedJobTitleId={selectedJobTitleId}
+            selectedJobId={selectedJobId}
+            selectedCompetencies={selectedCompetencies}
+          />
         )}
       </AnimatePresence>
     </AdminLayout>

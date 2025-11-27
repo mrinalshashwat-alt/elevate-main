@@ -78,10 +78,11 @@ const AssessmentList = () => {
 
   // Apply search and status filters
   const filteredAssessments = currentAssessments.filter(assessment => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       assessment.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       assessment.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      assessment.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase());
+      assessment.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      assessment.jobTitleName?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || assessment.status === statusFilter;
     
@@ -237,9 +238,10 @@ const AssessmentList = () => {
                           >
                             {assessment.title || 'Untitled Assessment'}
                           </h3>
-                          {assessment.jobTitle && (
+                          {/* Show job title if linked to job, otherwise show role name */}
+                          {(assessment.jobTitle || assessment.jobTitleName) && (
                             <span className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-xs font-semibold">
-                              {assessment.jobTitle}
+                              {assessment.jobTitle ? `Job: ${assessment.jobTitle}` : `Role: ${assessment.jobTitleName}`}
                             </span>
                           )}
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadge(assessment.status)}`}>
