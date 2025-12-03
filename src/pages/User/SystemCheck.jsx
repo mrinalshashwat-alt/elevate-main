@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiCamera, FiMic, FiCheck, FiRefreshCw, FiInfo, FiShield, FiWifi, FiMonitor } from 'react-icons/fi';
+import { FiCamera, FiMic, FiCheck, FiRefreshCw, FiInfo, FiShield, FiWifi, FiMonitor, FiLoader, FiUser, FiMail, FiPhone } from 'react-icons/fi';
+import { startAssessment } from '../../api/candidate';
 
 const SystemCheck = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const videoRef = useRef(null);
   const [cameraStatus, setCameraStatus] = useState('checking');
   const [micStatus, setMicStatus] = useState('checking');
@@ -16,6 +18,16 @@ const SystemCheck = () => {
   const [audioContext, setAudioContext] = useState(null);
   const [analyser, setAnalyser] = useState(null);
   const [micDataArray, setMicDataArray] = useState(null);
+
+  // Participant details
+  const [showDetailsForm, setShowDetailsForm] = useState(false);
+  const [participantDetails, setParticipantDetails] = useState({
+    name: '',
+    email: '',
+    phone: ''
+  });
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     checkCamera();
@@ -110,9 +122,107 @@ const SystemCheck = () => {
 
   const handleStartTest = () => {
     if (cameraStatus === 'passed' && micStatus === 'passed') {
-      // Mark flow as completed before navigating to assessment
+      setShowDetailsForm(true);
+    }
+  };
+
+  // Clear any stale attempt data from previous sessions
+  useEffect(() => {
+    // Only clear if we're starting fresh (not resuming)
+    const hasExistingAttempt = localStorage.getItem('attempt_id');
+    if (!hasExistingAttempt) {
+      // Clean up any stale data
+      localStorage.removeItem('assessment_flow_completed');
+      localStorage.removeItem('attempt_data');
+      localStorage.removeItem('can_resume');
+      console.log('Cleared stale attempt data from previous session');
+    }
+  }, []);
+
+  const handleStartAssessment = async () => {
+    if (!participantDetails.name || !participantDetails.email) {
+      setError('Please provide your name and email');
+      return;
+    }
+
+    try {
+      setStarting(true);
+      setError(null);
+
+      // Get assessment data from localStorage
+      const assessmentData = JSON.parse(localStorage.getItem('assessment_data') || '{}');
+      const assessmentId = searchParams.get('assessmentId') || assessmentData.id;
+
+      if (!assessmentId) {
+        throw new Error('Assessment ID not found');
+      }
+
+      console.log('Starting assessment with ID:', assessmentId);
+      console.log('Participant details:', participantDetails);
+
+      // Start assessment with backend
+      const response = await startAssessment(assessmentId, {
+        email: participantDetails.email,
+        name: participantDetails.name,
+        phone: participantDetails.phone || ''
+      });
+
+      console.log('Assessment started successfully:', response);
+
+      // Validate response structure
+      if (!response.attempt_id) {
+        console.error('Invalid response: missing attempt_id', response);
+        throw new Error('Invalid response from server: missing attempt_id');
+      }
+
+      if (!response.questions || !Array.isArray(response.questions)) {
+        console.error('Invalid response: missing or invalid questions array', response);
+        throw new Error('Invalid response from server: missing questions');
+      }
+
+      console.log('Response validation passed:', {
+        attempt_id: response.attempt_id,
+        questions_count: response.questions.length,
+        can_resume: response.can_resume
+      });
+
+      // Store attempt data - ensure all required fields are present
+      localStorage.setItem('attempt_data', JSON.stringify(response));
+      localStorage.setItem('attempt_id', response.attempt_id);
+      localStorage.setItem('can_resume', response.can_resume ? 'true' : 'false');
       localStorage.setItem('assessment_flow_completed', 'true');
+
+      console.log('Stored attempt data in localStorage');
+      console.log('localStorage keys:', Object.keys(localStorage));
+      console.log('attempt_data length:', localStorage.getItem('attempt_data')?.length);
+      
+      // Small delay to ensure localStorage is written
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log('Navigating to /user/assessment');
+
+      // Navigate to assessment
       router.push('/user/assessment');
+    } catch (err) {
+      console.error('Error starting assessment:', err);
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      
+      let errorMessage = 'Failed to start assessment. Please try again.';
+      
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Server error occurred. The assessment may not be properly configured or active. Please use "Demo Start" button or contact support.';
+      }
+      
+      setError(errorMessage);
+      setStarting(false);
     }
   };
 
@@ -220,16 +330,87 @@ const SystemCheck = () => {
                   </div>
                 </div>
 
-                {/* Demo Start Button */}
+                {/* Demo Start Button - Creates mock attempt data */}
                 <div>
                   <button
                     onClick={() => {
+                      console.log('Demo Start: Creating mock attempt data');
+                      
+                      // Get assessment data
+                      const assessmentData = JSON.parse(localStorage.getItem('assessment_data') || '{}');
+                      
+                      // Create mock attempt response matching backend structure
+                      const mockAttemptData = {
+                        attempt_id: 'demo-attempt-' + Date.now(),
+                        assessment_id: assessmentData.id || 'demo-assessment',
+                        participant_id: 'demo-participant',
+                        expires_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+                        time_remaining_seconds: 90 * 60, // 90 minutes
+                        can_resume: false,
+                        assessment: {
+                          id: assessmentData.id || 'demo-assessment',
+                          name: assessmentData.name || 'Demo Assessment',
+                          description: assessmentData.description || '',
+                          instructions: assessmentData.instructions || '',
+                          duration_minutes: assessmentData.duration_minutes || 90,
+                          total_questions: 28,
+                          settings: assessmentData.settings || {}
+                        },
+                        questions: [
+                          // MCQ Questions (20)
+                          ...Array.from({ length: 20 }, (_, i) => ({
+                            id: `mcq-${i + 1}`,
+                            type: 'mcq',
+                            order: i + 1,
+                            marks: 1,
+                            content: {
+                              question: `Sample MCQ Question ${i + 1}`,
+                              options: ['Option A', 'Option B', 'Option C', 'Option D']
+                            }
+                          })),
+                          // Coding Questions (3)
+                          ...Array.from({ length: 3 }, (_, i) => ({
+                            id: `coding-${i + 1}`,
+                            type: 'coding',
+                            order: 20 + i + 1,
+                            marks: 10,
+                            content: {
+                              problem_statement: `Write a function to solve problem ${i + 1}`,
+                              description: 'Sample coding problem description',
+                              test_cases: [
+                                { input: 'test input', expected_output: 'test output' }
+                              ]
+                            }
+                          })),
+                          // Video Questions (5)
+                          ...Array.from({ length: 5 }, (_, i) => ({
+                            id: `video-${i + 1}`,
+                            type: 'video',
+                            order: 23 + i + 1,
+                            marks: 5,
+                            content: {
+                              question: `Video Interview Question ${i + 1}`,
+                              description: 'Please record your response to this question'
+                            }
+                          }))
+                        ]
+                      };
+                      
+                      // Store in localStorage
+                      localStorage.setItem('attempt_data', JSON.stringify(mockAttemptData));
+                      localStorage.setItem('attempt_id', mockAttemptData.attempt_id);
+                      localStorage.setItem('can_resume', 'false');
                       localStorage.setItem('assessment_flow_completed', 'true');
+                      
+                      console.log('Mock attempt data created:', mockAttemptData);
+                      console.log('Navigating to assessment...');
+                      
+                      // Navigate to assessment
                       router.push('/user/assessment');
                     }}
                     className="w-full px-6 py-2.5 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-xl font-semibold hover:bg-blue-500/30 transition-colors text-sm"
                   >
-                    Demo Start (Skip Checks)
+                    Demo Start (Skip Backend)
                   </button>
                 </div>
               </div>
@@ -366,6 +547,112 @@ const SystemCheck = () => {
           </div>
         </div>
       </div>
+
+      {/* Participant Details Modal */}
+      {showDetailsForm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl"
+          >
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-white mb-2">Enter Your Details</h2>
+              <p className="text-gray-400 text-sm">Please provide your information to start the assessment</p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="space-y-4 mb-6">
+              {/* Name Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Full Name <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={participantDetails.name}
+                    onChange={(e) => setParticipantDetails(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Enter your full name"
+                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
+                    disabled={starting}
+                  />
+                </div>
+              </div>
+
+              {/* Email Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Email Address <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="email"
+                    value={participantDetails.email}
+                    onChange={(e) => setParticipantDetails(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="your.email@example.com"
+                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
+                    disabled={starting}
+                  />
+                </div>
+              </div>
+
+              {/* Phone Input (Optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Phone Number <span className="text-gray-500 text-xs">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <FiPhone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="tel"
+                    value={participantDetails.phone}
+                    onChange={(e) => setParticipantDetails(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+1 (555) 000-0000"
+                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
+                    disabled={starting}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleStartAssessment}
+                disabled={starting || !participantDetails.name || !participantDetails.email}
+                className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+              >
+                {starting ? (
+                  <>
+                    <FiLoader className="w-5 h-5 animate-spin" />
+                    <span>Starting...</span>
+                  </>
+                ) : (
+                  <span>Start Assessment</span>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setShowDetailsForm(false);
+                  setError(null);
+                }}
+                disabled={starting}
+                className="px-6 py-3 bg-white/5 border border-white/10 text-white rounded-xl hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

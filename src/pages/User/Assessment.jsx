@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiCheckCircle, FiPlay, FiRefreshCw, FiGrid, FiArrowRight, FiSquare, FiPause, FiRotateCw, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 import Editor from '@monaco-editor/react';
 import { executeCode, runTestCases, formatOutput, validateCode } from '../../lib/codeSandbox';
+import { saveResponse, submitAttempt, sendHeartbeat, reportViolation, executeCode as executeCodeAPI, getCodeResult } from '../../api/candidate';
 
 // Proctoring Alert Modal Component
 const ProctoringAlert = ({ isOpen, violation, onClose, violationCount }) => {
@@ -138,28 +139,208 @@ const Assessment = () => {
   const videoRef = useRef(null);
   const hiddenProctoringVideoRef = useRef(null);
   
-  // Check if user has completed the pre-assessment flow
+  // Backend integration state
+  const [attemptId, setAttemptId] = useState(null);
+  const [attemptData, setAttemptData] = useState(null);
+  const [backendQuestions, setBackendQuestions] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastAutoSave, setLastAutoSave] = useState(null);
+  const autoSaveTimerRef = useRef(null);
+  const heartbeatTimerRef = useRef(null);
+
+  // Helper function to get language template (must be defined before useEffect)
+  const getLanguageTemplate = (lang) => {
+    const langObj = languages.find(l => l.value === lang);
+    return langObj ? langObj.template : '';
+  };
+
+  // Check if user has completed the pre-assessment flow and load attempt data
   useEffect(() => {
+    console.log('Assessment.jsx: Checking flow completion...');
+    console.log('All localStorage keys:', Object.keys(localStorage));
+    
     const hasCompletedFlow = localStorage.getItem('assessment_flow_completed');
+    const storedAttemptData = localStorage.getItem('attempt_data');
+    const storedAttemptId = localStorage.getItem('attempt_id');
+    const assessmentToken = localStorage.getItem('assessment_token');
+
+    console.log('Flow check:', {
+      hasCompletedFlow,
+      hasAttemptData: !!storedAttemptData,
+      attemptDataLength: storedAttemptData?.length,
+      hasAttemptId: !!storedAttemptId,
+      attemptId: storedAttemptId,
+      hasToken: !!assessmentToken
+    });
+
+    if (storedAttemptData) {
+      console.log('Attempt data preview:', storedAttemptData.substring(0, 200));
+    }
+
     if (!hasCompletedFlow) {
-      // Redirect to assessment start page if flow not completed
-      router.push('/user/assessment-start');
+      console.log('Flow not completed, redirecting to assessment start with token');
+      // Redirect to assessment start page with token if available
+      if (assessmentToken) {
+        router.push(`/user/assessment-start?token=${assessmentToken}`);
+      } else {
+        router.push('/user/assessment-start');
+      }
+      return;
+    }
+
+    // Load attempt data from localStorage (set by SystemCheck.jsx)
+    const canResume = localStorage.getItem('can_resume') === 'true';
+
+    if (storedAttemptData && storedAttemptId) {
+      try {
+        const data = JSON.parse(storedAttemptData);
+        console.log('Loaded attempt data:', data);
+        setAttemptData(data);
+        setAttemptId(storedAttemptId);
+        const questions = data.questions || [];
+        console.log('Questions from backend:', questions);
+        setBackendQuestions(questions);
+
+        // Set timer from stored data initially (will be updated by heartbeat)
+        if (data.time_remaining_seconds) {
+          console.log('Setting initial timer from stored data:', data.time_remaining_seconds, 'seconds');
+          setTimeLeft(data.time_remaining_seconds);
+        }
+        
+        // Immediately fetch fresh time from backend on page load
+        const fetchFreshTime = async () => {
+          try {
+            console.log('Fetching fresh time from backend for attempt:', storedAttemptId);
+            const heartbeatResponse = await sendHeartbeat(storedAttemptId);
+            console.log('Heartbeat response:', heartbeatResponse);
+            if (heartbeatResponse.time_remaining_seconds !== undefined) {
+              console.log('✅ Updated timer from backend:', heartbeatResponse.time_remaining_seconds, 'seconds');
+              setTimeLeft(heartbeatResponse.time_remaining_seconds);
+            } else {
+              console.warn('⚠️ Heartbeat response missing time_remaining_seconds');
+            }
+          } catch (err) {
+            console.error('❌ Failed to fetch fresh time:', err);
+            console.error('Error details:', err.response?.data || err.message);
+            // Keep using stored time if fetch fails
+          }
+        };
+        fetchFreshTime();
+
+        // Initialize questions state from backend
+        const mcqQuestions = questions.filter(q => q.type === 'mcq');
+        const codingQuestions = questions.filter(q => q.type === 'coding');
+        const videoQuestions = questions.filter(q => q.type === 'video' || q.type === 'subjective');
+        
+        console.log('MCQ questions:', mcqQuestions.length);
+        console.log('Coding questions:', codingQuestions.length);
+        console.log('Video questions:', videoQuestions.length);
+        
+        if (mcqQuestions.length > 0) {
+          const initialQuestions = mcqQuestions.map((q, index) => ({
+            id: index + 1,
+            backendId: q.id,
+            attempted: false,
+            current: index === 0
+          }));
+          setQuestions(initialQuestions);
+          setTotalQuestions(mcqQuestions.length);
+          setCurrentQuestion(1);
+        } else {
+          console.warn('No MCQ questions found in assessment');
+          setQuestions([]);
+          setTotalQuestions(0);
+        }
+
+        // Initialize coding problems from backend
+        if (codingQuestions.length > 0) {
+          const initialCodingProblems = codingQuestions.map((q, index) => {
+            const existingResponse = data.existing_responses?.find(r => r.question_id === q.id);
+            const savedCode = existingResponse?.answer?.code || '';
+            const savedLanguage = existingResponse?.answer?.language || 'python';
+            
+            return {
+              id: q.id,
+              backendId: q.id,
+              title: q.content?.title || `Problem ${index + 1}`,
+              description: q.content?.problem_statement || q.content?.description || q.content?.question || '',
+              code: savedCode || getLanguageTemplate(savedLanguage),
+              customInput: '',
+              selectedLanguage: savedLanguage,
+              testResults: [],
+              executionResult: null,
+              testCases: q.content?.test_cases || [],
+              order: q.order || index,
+              difficulty: q.difficulty
+            };
+          });
+          setCodingProblems(initialCodingProblems);
+          setTotalCodingProblems(codingQuestions.length);
+        }
+
+        // Initialize video questions from backend
+        if (videoQuestions.length > 0) {
+          setVideoQuestions(videoQuestions.map((q, index) => ({
+            id: q.id,
+            backendId: q.id,
+            question: q.content?.question || q.content?.description || '',
+            order: q.order || index + 1
+          })));
+          setTotalVideoQuestions(videoQuestions.length);
+          setCurrentVideoQuestion(1);
+        }
+
+        // If resuming, load existing responses
+        if (canResume && data.existing_responses) {
+          console.log('Resuming attempt with existing responses:', data.existing_responses);
+          // Populate answers from existing_responses
+          const savedAnswers = {};
+          data.existing_responses.forEach((response) => {
+            // Find question index by backend ID
+            const questionIndex = questions.findIndex(q => q.backendId === response.question_id);
+            if (questionIndex !== -1) {
+              const question = questions[questionIndex];
+              if (question.type === 'mcq') {
+                savedAnswers[questionIndex + 1] = response.answer?.selected_option || '';
+              }
+            }
+          });
+          
+          // Update localStorage with saved answers
+          if (Object.keys(savedAnswers).length > 0) {
+            localStorage.setItem('assessment_mcq_answers', JSON.stringify(savedAnswers));
+          }
+
+          // Update question states
+          setQuestions(prev => prev.map((q, index) => ({
+            ...q,
+            attempted: savedAnswers[index + 1] !== undefined && savedAnswers[index + 1] !== ''
+          })));
+        }
+      } catch (err) {
+        console.error('Error loading attempt data:', err);
+        // Show error to user
+        alert('Error loading assessment data. Please try starting the assessment again.');
+        router.push('/user/assessment-start');
+      }
+    } else {
+      console.error('No attempt data found in localStorage');
+      console.error('This should not happen - system check should have set attempt_data and attempt_id');
+      // Redirect to start with token if no attempt data
+      const assessmentToken = localStorage.getItem('assessment_token');
+      if (assessmentToken) {
+        router.push(`/user/assessment-start?token=${assessmentToken}`);
+      } else {
+        router.push('/user/assessment-start');
+      }
     }
   }, [router]);
   
-  const [timeLeft, setTimeLeft] = useState(34 * 60 + 18); // 34:18 in seconds
-  const [currentQuestion, setCurrentQuestion] = useState(5);
-  const [totalQuestions] = useState(20);
-  const [attempted] = useState(8);
-  const [selectedAnswer, setSelectedAnswer] = useState('merge-sort');
-  const [questions, setQuestions] = useState([
-    { id: 1, attempted: true },
-    { id: 2, attempted: true },
-    { id: 3, attempted: true },
-    { id: 4, attempted: true },
-    { id: 5, attempted: true, current: true },
-    ...Array.from({ length: 15 }, (_, i) => ({ id: i + 6, attempted: false })),
-  ]);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState(1);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState('');
+  const [questions, setQuestions] = useState([]);
   const [currentSection, setCurrentSection] = useState('mcq');
   const [stream, setStream] = useState(null);
   
@@ -174,78 +355,10 @@ const Assessment = () => {
   
   // Coding section state - support multiple problems
   const [currentCodingProblem, setCurrentCodingProblem] = useState(0);
-  const [totalCodingProblems] = useState(3);
-  const [codingProblems, setCodingProblems] = useState([
-    {
-      id: 1,
-      title: 'Two Sum',
-      code: `def two_sum(nums, target):
-    seen = {}
-    for i, n in enumerate(nums):
-        complement = target - n
-        if complement in seen:
-            return [seen[complement], i]
-        seen[n] = i
-    return []
-
-if __name__ == "__main__":
-    import sys
-    n = int(sys.stdin.readline().strip())
-    nums = list(map(int, sys.stdin.readline().strip().split()))
-    target = int(sys.stdin.readline().strip())
-    result = two_sum(nums, target)
-    print(f"{result[0]} {result[1]}")
-`,
-      customInput: '4\n2 7 11 15\n9',
-      selectedLanguage: 'python',
-      testResults: [],
-      executionResult: null,
-    },
-    {
-      id: 2,
-      title: 'Reverse Linked List',
-      code: `class ListNode:
-    def __init__(self, val=0, next=None):
-        self.val = val
-        self.next = next
-
-def reverse_list(head):
-    prev = None
-    current = head
-    while current:
-        next_node = current.next
-        current.next = prev
-        prev = current
-        current = next_node
-    return prev
-`,
-      customInput: '',
-      selectedLanguage: 'python',
-      testResults: [],
-      executionResult: null,
-    },
-    {
-      id: 3,
-      title: 'Binary Search',
-      code: `def binary_search(arr, target):
-    left, right = 0, len(arr) - 1
-    while left <= right:
-        mid = (left + right) // 2
-        if arr[mid] == target:
-            return mid
-        elif arr[mid] < target:
-            left = mid + 1
-        else:
-            right = mid - 1
-    return -1
-`,
-      customInput: '',
-      selectedLanguage: 'python',
-      testResults: [],
-      executionResult: null,
-    },
-  ]);
+  const [totalCodingProblems, setTotalCodingProblems] = useState(0);
+  const [codingProblems, setCodingProblems] = useState([]);
   
+
   // Current problem state (derived from codingProblems array)
   const currentProblem = codingProblems[currentCodingProblem] || codingProblems[0];
   const code = currentProblem?.code || '';
@@ -266,18 +379,9 @@ def reverse_list(head):
   const [isExecuting, setIsExecuting] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
   
-  // Test cases for the current problem (visible sample test cases)
-  const [problemTestCases] = useState([
-    { input: '4\n2 7 11 15\n9', expectedOutput: '0 1' },
-    { input: '5\n3 2 4 8 1\n6', expectedOutput: '1 2' },
-    { input: '3\n1 2 3\n4', expectedOutput: '0 2' },
-  ]);
-
-  // Hidden test cases (not shown in UI, used when submitting code)
-  const [hiddenTestCases] = useState([
-    { input: '2\n1 3\n4', expectedOutput: '0 1' },
-    { input: '6\n1 5 3 7 9 2\n10', expectedOutput: '1 3' },
-  ]);
+  // Get test cases from current problem
+  const problemTestCases = currentProblem?.testCases?.filter(tc => tc.is_public !== false).slice(0, 3) || [];
+  const hiddenTestCases = currentProblem?.testCases?.filter(tc => tc.is_public === false) || [];
   
   const languages = [
     { value: 'python', label: 'Python 3.10', template: `def two_sum(nums, target):
@@ -457,8 +561,9 @@ func main() {
   ];
   
   // Video section state
-  const [currentVideoQuestion, setCurrentVideoQuestion] = useState(2);
-  const [totalVideoQuestions] = useState(5);
+  const [currentVideoQuestion, setCurrentVideoQuestion] = useState(1);
+  const [totalVideoQuestions, setTotalVideoQuestions] = useState(0);
+  const [videoQuestions, setVideoQuestions] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
   const [recordedBlob, setRecordedBlob] = useState(null);
@@ -472,7 +577,7 @@ func main() {
     handleViolationRef.current = (type, details = {}) => {
       // Prevent spam with cooldown
       if (alertCooldownRef.current) return;
-      
+
       const violation = {
         type,
         timestamp: Date.now(),
@@ -488,13 +593,17 @@ func main() {
       savedViolations.push(violation);
       localStorage.setItem('assessment_violations', JSON.stringify(savedViolations));
 
+      // Report to backend
+      const severity = ['multiple_persons', 'tab_switch', 'devtools'].includes(type) ? 'high' : 'medium';
+      reportViolationToBackend(type, severity, details);
+
       // Set cooldown to prevent spam (3 seconds)
       alertCooldownRef.current = true;
       setTimeout(() => {
         alertCooldownRef.current = false;
       }, 3000);
     };
-  }, []);
+  }, [attemptId]);
 
   const handleViolation = (type, details = {}) => {
     if (handleViolationRef.current) {
@@ -739,7 +848,9 @@ func main() {
     // Start timer
     const timer = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) {
+        const newTime = Math.max(0, prev - 1);
+        
+        if (newTime <= 0) {
           clearInterval(timer);
           // Time's up - save all current state and submit entire assessment
           if (currentSection === 'mcq') {
@@ -806,7 +917,7 @@ func main() {
   }, []);
 
   // Autosave function
-  const saveCodingState = () => {
+  const saveCodingState = async () => {
     const stateToSave = {
       codingProblems,
       currentCodingProblem,
@@ -814,8 +925,15 @@ func main() {
     };
     localStorage.setItem('assessment_coding_state', JSON.stringify(stateToSave));
     setLastSaved(new Date());
-    // In production, this would call the backend API
-    // await saveAssessmentState(stateToSave);
+
+    // Save current coding problem to backend
+    if (attemptId && currentProblem && currentProblem.backendId) {
+      await saveToBackend(currentProblem.backendId, {
+        code: currentProblem.code,
+        language: currentProblem.selectedLanguage,
+        custom_input: currentProblem.customInput
+      });
+    }
   };
 
   // Load saved state on mount
@@ -849,6 +967,23 @@ func main() {
         ));
       } else {
         setSelectedAnswer('');
+      }
+    }
+
+    // Load saved coding state when switching to coding section
+    if (currentSection === 'coding' && codingProblems.length > 0) {
+      const saved = localStorage.getItem('assessment_coding_state');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.codingProblems) {
+            setCodingProblems(parsed.codingProblems);
+            setCurrentCodingProblem(parsed.currentCodingProblem || 0);
+            setLastSaved(new Date(parsed.timestamp));
+          }
+        } catch (e) {
+          console.error('Error loading saved coding state:', e);
+        }
       }
     }
   }, [currentSection, currentQuestion]);
@@ -924,8 +1059,19 @@ func main() {
           mediaPipeProctoringRef.current = new MediaPipeProctoring(
             proctoringVideoElement,
             (violation) => {
-              // Handle MediaPipe violations
-              handleViolation(violation.type, violation.details);
+              // Handle MediaPipe violations - violation is an object with type and details
+              // MediaPipe passes: { type, details: { timestamp, ... }, violationCount }
+              const violationType = violation.type || 'unknown';
+              const violationDetails = violation.details || {};
+              
+              // Map MediaPipe violation types to backend types
+              const backendViolationType = violationType === 'multiple_persons' ? 'multiple_faces' :
+                                          violationType === 'face_not_detected' ? 'face_not_detected' :
+                                          violationType === 'looking_away' ? 'eye_tracking_away' :
+                                          violationType === 'suspicious_hand_position' ? 'suspicious_hand_position' :
+                                          violationType;
+              
+              handleViolation(backendViolationType, violationDetails);
             }
           );
           
@@ -967,6 +1113,19 @@ func main() {
 
   const handlePrevious = () => {
     if (currentQuestion > 1) {
+      // Save current answer before moving
+      if (selectedAnswer) {
+        const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+        mcqAnswers[currentQuestion.toString()] = selectedAnswer;
+        localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+
+        // Save to backend
+        const currentQuestionObj = questions.find(q => q.id === currentQuestion);
+        if (currentQuestionObj && currentQuestionObj.backendId) {
+          saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+        }
+      }
+
       setCurrentQuestion(currentQuestion - 1);
       // Update question state
       setQuestions(prev => prev.map(q => ({
@@ -976,8 +1135,100 @@ func main() {
     }
   };
 
+  // Backend helper functions
+  const saveToBackend = async (questionId, answer) => {
+    if (!attemptId) {
+      console.warn('No attempt ID available for saving');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await saveResponse(attemptId, {
+        question_id: questionId,
+        answer: answer
+      });
+      setLastAutoSave(new Date());
+      console.log('Saved response to backend:', questionId);
+    } catch (err) {
+      console.error('Error saving to backend:', err);
+      // Continue with local save as fallback
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const sendHeartbeatToBackend = async () => {
+    if (!attemptId) return;
+
+    try {
+      const response = await sendHeartbeat(attemptId);
+      
+      // Sync time with backend to prevent drift
+      if (response.time_remaining_seconds !== undefined) {
+        console.log('Syncing time from backend:', response.time_remaining_seconds);
+        setTimeLeft(response.time_remaining_seconds);
+      }
+      
+      if (response.status === 'invalidated' || response.status === 'inactive') {
+        // Attempt was invalidated or expired
+        alert('Your assessment session has ended. ' + (response.reason || 'Time expired'));
+        handleSubmitSection(); // Force submit
+      }
+    } catch (err) {
+      console.error('Heartbeat error:', err);
+    }
+  };
+
+  const reportViolationToBackend = async (violationType, severity = 'medium', metadata = {}) => {
+    if (!attemptId) return;
+
+    try {
+      await reportViolation(attemptId, {
+        type: violationType,
+        severity: severity,
+        metadata: metadata
+      });
+      console.log('Reported violation to backend:', violationType);
+    } catch (err) {
+      console.error('Error reporting violation:', err);
+    }
+  };
+
+  // Setup heartbeat timer
+  useEffect(() => {
+    if (attemptId) {
+      // Send heartbeat every 30 seconds
+      heartbeatTimerRef.current = setInterval(() => {
+        sendHeartbeatToBackend();
+      }, 30000);
+
+      // Send initial heartbeat
+      sendHeartbeatToBackend();
+
+      return () => {
+        if (heartbeatTimerRef.current) {
+          clearInterval(heartbeatTimerRef.current);
+        }
+      };
+    }
+  }, [attemptId]);
+
   const handleNext = () => {
     if (currentQuestion < totalQuestions) {
+      // Save current answer before moving
+      if (selectedAnswer) {
+        const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+        mcqAnswers[currentQuestion.toString()] = selectedAnswer;
+        localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+
+        // Save to backend
+        const currentQuestionObj = questions.find(q => q.id === currentQuestion);
+        if (currentQuestionObj && currentQuestionObj.backendId) {
+          saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+        }
+      }
+
       setCurrentQuestion(currentQuestion + 1);
       // Update question state
       setQuestions(prev => prev.map(q => ({
@@ -985,12 +1236,6 @@ func main() {
         current: q.id === currentQuestion + 1,
         attempted: q.id === currentQuestion ? selectedAnswer !== '' : q.attempted
       })));
-      // Save MCQ answer
-      if (selectedAnswer) {
-        const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
-        mcqAnswers[currentQuestion.toString()] = selectedAnswer;
-        localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
-      }
     }
   };
 
@@ -1007,7 +1252,7 @@ func main() {
     localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
   };
 
-  const handleSubmitSection = () => {
+  const handleSubmitSection = async () => {
     // Save final state before submission
     if (currentSection === 'mcq') {
       // Save all MCQ answers before moving to next section
@@ -1015,6 +1260,12 @@ func main() {
         const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
         mcqAnswers[currentQuestion.toString()] = selectedAnswer;
         localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+
+        // Save to backend
+        const currentQuestionObj = questions.find(q => q.id === currentQuestion);
+        if (currentQuestionObj && currentQuestionObj.backendId) {
+          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+        }
       }
       // Navigate to coding section
       setCurrentSection('coding');
@@ -1024,9 +1275,24 @@ func main() {
       // Navigate to video section
       setCurrentSection('video');
     } else if (currentSection === 'video') {
-      // Final submission - navigate to assessment end
+      // Final submission - submit to backend
+      if (attemptId) {
+        try {
+          const response = await submitAttempt(attemptId);
+          console.log('Attempt submitted successfully:', response);
+        } catch (err) {
+          console.error('Error submitting attempt:', err);
+          alert('Error submitting assessment. Please try again.');
+          return;
+        }
+      }
+
       // Clear flow completion flag
       localStorage.removeItem('assessment_flow_completed');
+      localStorage.removeItem('attempt_data');
+      localStorage.removeItem('attempt_id');
+      localStorage.removeItem('can_resume');
+
       router.push('/user/assessment-end');
     }
   };
@@ -1461,9 +1727,29 @@ func main() {
     videoRecorderRef.current = null;
   };
 
-  const handleSubmitVideo = () => {
+  const handleSubmitVideo = async () => {
     console.log('Submitting video answer...');
-    // Save video answer
+    
+    // Get current video question from backend
+    const currentVideoQ = videoQuestions.find(q => q.order === currentVideoQuestion) || videoQuestions[currentVideoQuestion - 1];
+    
+    // Save video answer to backend
+    if (attemptId && currentVideoQ && currentVideoQ.backendId && recordedBlob) {
+      try {
+        // Convert blob to base64 or save reference
+        // Note: For production, you'd want to upload the video file to a storage service
+        // For now, we'll save a reference that the video was recorded
+        await saveToBackend(currentVideoQ.backendId, {
+          video_recorded: true,
+          video_duration: recordedBlob.size, // Approximate size
+          submitted_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('Error saving video answer:', err);
+      }
+    }
+    
+    // Save video answer to localStorage
     const videoAnswers = JSON.parse(localStorage.getItem('assessment_video_answers') || '[]');
     if (!videoAnswers.includes(currentVideoQuestion)) {
       videoAnswers.push(currentVideoQuestion);
@@ -1551,12 +1837,12 @@ func main() {
               <div className="mb-4">
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-400">Total: {totalQuestions}</span>
-                  <span className="text-gray-400">Attempted: {attempted}</span>
+                  <span className="text-gray-400">Attempted: {questions.filter(q => q.attempted).length}</span>
                 </div>
                 <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-orange-500 transition-all"
-                    style={{ width: `${(attempted / totalQuestions) * 100}%` }}
+                    style={{ width: `${totalQuestions > 0 ? (questions.filter(q => q.attempted).length / totalQuestions) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -1696,52 +1982,100 @@ func main() {
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <FiShield />
                       <span>Proctoring enabled</span>
+                      {isSaving && (
+                        <span className="text-orange-500 flex items-center space-x-1">
+                          <FiSave className="animate-pulse" />
+                          <span>Saving...</span>
+                        </span>
+                      )}
+                      {lastAutoSave && !isSaving && (
+                        <span className="text-gray-500 text-xs">
+                          Saved {new Date(lastAutoSave).toLocaleTimeString()}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
-                    <h2 className="text-xl font-semibold mb-6 leading-tight">
-                      Which sorting algorithm has the best average time complexity for large, randomly distributed datasets?
-                    </h2>
+                  {(() => {
+                    if (totalQuestions === 0 || questions.length === 0) {
+                      return (
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+                          <p className="text-gray-400">No questions available. Please check if the assessment has questions configured.</p>
+                          <p className="text-gray-500 text-sm mt-2">Questions loaded: {backendQuestions.length}</p>
+                        </div>
+                      );
+                    }
+                    
+                    const currentQuestionObj = questions.find(q => q.id === currentQuestion);
+                    const backendQuestion = currentQuestionObj 
+                      ? backendQuestions.find(q => q.id === currentQuestionObj.backendId)
+                      : null;
+                    
+                    if (!backendQuestion) {
+                      console.warn('Backend question not found for current question:', currentQuestion, 'Question obj:', currentQuestionObj);
+                      return (
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+                          <p className="text-gray-400">Question not found. Current: {currentQuestion}, Total: {totalQuestions}</p>
+                          <p className="text-gray-500 text-sm mt-2">Backend questions: {backendQuestions.length}</p>
+                        </div>
+                      );
+                    }
 
-                    <div className="space-y-3">
-                      {[
-                        { id: 'bubble-sort', label: 'Bubble Sort' },
-                        { id: 'merge-sort', label: 'Merge Sort' },
-                        { id: 'insertion-sort', label: 'Insertion Sort' },
-                        { id: 'selection-sort', label: 'Selection Sort' },
-                      ].map((option) => (
-                        <label
-                          key={option.id}
-                          className={`flex items-center space-x-3 p-4 rounded-lg cursor-pointer transition-colors ${
-                            selectedAnswer === option.id
-                              ? 'bg-orange-500/20 border border-orange-500/50'
-                              : 'bg-white/5 border border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="answer"
-                            value={option.id}
-                            checked={selectedAnswer === option.id}
-                            onChange={() => {
-                              setSelectedAnswer(option.id);
-                              // Mark question as attempted
-                              setQuestions(prev => prev.map(q => 
-                                q.id === currentQuestion ? { ...q, attempted: true } : q
-                              ));
-                              // Save answer immediately
-                              const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
-                              mcqAnswers[currentQuestion.toString()] = option.id;
-                              localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
-                            }}
-                            className="w-5 h-5 text-orange-500 focus:ring-orange-500 focus:ring-2"
-                          />
-                          <span className="text-lg">{option.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                    const questionContent = backendQuestion.content || {};
+                    const options = questionContent.options || [];
+                    const questionText = questionContent.question || questionContent.description || '';
+
+                    return (
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+                        <h2 className="text-xl font-semibold mb-6 leading-tight">
+                          {questionText}
+                        </h2>
+
+                        <div className="space-y-3">
+                          {options.map((option, index) => {
+                            const optionId = typeof option === 'string' ? option : option.id || `option-${index}`;
+                            const optionLabel = typeof option === 'string' ? option : option.label || option.text || optionId;
+                            
+                            return (
+                              <label
+                                key={optionId}
+                                className={`flex items-center space-x-3 p-4 rounded-lg cursor-pointer transition-colors ${
+                                  selectedAnswer === optionId
+                                    ? 'bg-orange-500/20 border border-orange-500/50'
+                                    : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="answer"
+                                  value={optionId}
+                                  checked={selectedAnswer === optionId}
+                                  onChange={() => {
+                                    setSelectedAnswer(optionId);
+                                    // Mark question as attempted
+                                    setQuestions(prev => prev.map(q => 
+                                      q.id === currentQuestion ? { ...q, attempted: true } : q
+                                    ));
+                                    // Save answer immediately
+                                    const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+                                    mcqAnswers[currentQuestion.toString()] = optionId;
+                                    localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+                                    
+                                    // Save to backend
+                                    if (currentQuestionObj && currentQuestionObj.backendId) {
+                                      saveToBackend(currentQuestionObj.backendId, { selected_option: optionId });
+                                    }
+                                  }}
+                                  className="w-5 h-5 text-orange-500 focus:ring-orange-500 focus:ring-2"
+                                />
+                                <span className="text-lg">{optionLabel}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Navigation Buttons */}
                   <div className="flex items-center justify-between">
@@ -1825,72 +2159,47 @@ func main() {
                       <span className="text-sm text-gray-400">Coding — Problem {currentCodingProblem + 1} of {totalCodingProblems}</span>
                     </div>
                   
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
-                    <h1 className="text-2xl font-bold mb-4">{currentProblem?.title || 'Coding Problem'}</h1>
-                    <div className="flex items-center space-x-4 text-sm text-gray-400 mb-6">
-                      <span>Difficulty: Easy</span>
-                      <span>Language: Python</span>
-                      <span>Time Limit: 2s</span>
-                    </div>
-                    
-                    <div className="mb-6">
-                      <h2 className="text-lg font-semibold mb-2">Description</h2>
-                      <p className="text-gray-300 leading-relaxed">
-                        Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
-                        Assume that each input would have exactly one solution, and you may not use the same element twice.
-                      </p>
-                    </div>
-                    
-                    <div className="mb-6">
-                      <h2 className="text-lg font-semibold mb-2">Input Format</h2>
-                      <ul className="list-disc list-inside text-gray-300 space-y-1">
-                        <li>Line 1: n (length of array)</li>
-                        <li>Line 2: n space-separated integers</li>
-                        <li>Line 3: target</li>
-                      </ul>
-                    </div>
-                    
-                    <div className="mb-6">
-                      <h2 className="text-lg font-semibold mb-2">Output Format</h2>
-                      <p className="text-gray-300">Indices i and j (0-based) such that nums[i] + nums[j] = target.</p>
-                    </div>
-                    
-                    <div className="mb-6">
-                      <h2 className="text-lg font-semibold mb-2">Example 1</h2>
-                      <div className="bg-gray-800 rounded-lg p-4 mb-2">
-                        <div className="text-gray-400 text-sm mb-1">Input:</div>
-                        <div className="text-gray-300 font-mono">4</div>
-                        <div className="text-gray-300 font-mono">2 7 11 15</div>
-                        <div className="text-gray-300 font-mono">9</div>
+                  {currentProblem ? (
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+                      <h1 className="text-2xl font-bold mb-4">{currentProblem.title || 'Coding Problem'}</h1>
+                      <div className="flex items-center space-x-4 text-sm text-gray-400 mb-6">
+                        {currentProblem.difficulty && <span>Difficulty: {currentProblem.difficulty}</span>}
+                        <span>Language: {currentProblem.selectedLanguage || 'Python'}</span>
                       </div>
-                      <div className="bg-gray-800 rounded-lg p-4">
-                        <div className="text-gray-400 text-sm mb-1">Output:</div>
-                        <div className="text-gray-300 font-mono">0 1</div>
-                      </div>
+                      
+                      {currentProblem.description && (
+                        <div className="mb-6">
+                          <h2 className="text-lg font-semibold mb-2">Description</h2>
+                          <div className="text-gray-300 leading-relaxed whitespace-pre-wrap">
+                            {currentProblem.description}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {currentProblem.testCases && currentProblem.testCases.length > 0 && (
+                        <div className="mb-6">
+                          <h2 className="text-lg font-semibold mb-2">Examples</h2>
+                          {currentProblem.testCases.slice(0, 2).map((testCase, idx) => (
+                            <div key={idx} className="mb-4">
+                              <h3 className="text-sm font-semibold mb-2 text-gray-400">Example {idx + 1}</h3>
+                              <div className="bg-gray-800 rounded-lg p-4 mb-2">
+                                <div className="text-gray-400 text-sm mb-1">Input:</div>
+                                <div className="text-gray-300 font-mono whitespace-pre-wrap">{testCase.input || testCase.stdin}</div>
+                              </div>
+                              <div className="bg-gray-800 rounded-lg p-4">
+                                <div className="text-gray-400 text-sm mb-1">Output:</div>
+                                <div className="text-gray-300 font-mono">{testCase.output || testCase.stdout || testCase.expected_output}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    
-                    <div className="mb-6">
-                      <h2 className="text-lg font-semibold mb-2">Example 2</h2>
-                      <div className="bg-gray-800 rounded-lg p-4 mb-2">
-                        <div className="text-gray-400 text-sm mb-1">Input:</div>
-                        <div className="text-gray-300 font-mono">5</div>
-                        <div className="text-gray-300 font-mono">3 2 4 8 1</div>
-                        <div className="text-gray-300 font-mono">6</div>
-                      </div>
-                      <div className="bg-gray-800 rounded-lg p-4">
-                        <div className="text-gray-400 text-sm mb-1">Output:</div>
-                        <div className="text-gray-300 font-mono">1 2</div>
-                      </div>
+                  ) : (
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+                      <p className="text-gray-400">Loading problem...</p>
                     </div>
-                    
-                    <div>
-                      <h2 className="text-lg font-semibold mb-2">Explanation</h2>
-                      <p className="text-gray-300 leading-relaxed">
-                        Use a hash map to store seen numbers and their indices. For each number at index i, check if target - n is already seen. 
-                        If yes, return the stored index and i. This yields linear time complexity O(n) and O(1) space.
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Right Panel - Code Editor */}
@@ -2154,43 +2463,54 @@ func main() {
               </div>
             )}
 
-            {currentSection === 'video' && (
-              <div className="flex-1 flex overflow-hidden">
-                {/* Left Panel - Question */}
-                <div className="w-1/2 border-r border-gray-800 overflow-y-auto p-6">
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <h1 className="text-xl font-semibold">Video Interview — Question {currentVideoQuestion} of {totalVideoQuestions}</h1>
-                      <button className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300">2 min</button>
-                    </div>
-                    
-                    <h2 className="text-2xl font-bold mb-6">Explain a challenging bug you fixed recently.</h2>
-                    
-                    <p className="text-gray-300 leading-relaxed mb-6">
-                      Walk through the debugging process, tools you used, and how you verified the fix. Focus on impact and lessons learned.
-                    </p>
+            {currentSection === 'video' && (() => {
+              const currentVideoQ = videoQuestions.find(q => q.order === currentVideoQuestion) || videoQuestions[currentVideoQuestion - 1];
+              
+              return (
+                <div className="flex-1 flex overflow-hidden">
+                  {/* Left Panel - Question */}
+                  <div className="w-1/2 border-r border-gray-800 overflow-y-auto p-6">
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h1 className="text-xl font-semibold">Video Interview — Question {currentVideoQuestion} of {totalVideoQuestions}</h1>
+                        <button className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300">2 min</button>
+                      </div>
+                      
+                      {currentVideoQ ? (
+                        <>
+                          <h2 className="text-2xl font-bold mb-6">{currentVideoQ.question || currentVideoQ.content?.question || 'Video Question'}</h2>
+                          
+                          {currentVideoQ.content?.description && (
+                            <p className="text-gray-300 leading-relaxed mb-6">
+                              {currentVideoQ.content.description}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-gray-400">Loading question...</p>
+                      )}
 
-                    {/* Question Map */}
-                    <div className="mt-8">
-                      <h3 className="text-sm font-semibold mb-3 text-gray-400">Question Map</h3>
-                      <div className="flex items-center space-x-2">
-                        {Array.from({ length: totalVideoQuestions }, (_, i) => i + 1).map((num) => (
-                          <button
-                            key={num}
-                            onClick={() => setCurrentVideoQuestion(num)}
-                            className={`w-10 h-10 rounded-full font-semibold transition-colors ${
-                              currentVideoQuestion === num
-                                ? 'bg-orange-500 text-white'
-                                : 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10'
-                            }`}
-                          >
-                            {num}
-                          </button>
-                        ))}
+                      {/* Question Map */}
+                      <div className="mt-8">
+                        <h3 className="text-sm font-semibold mb-3 text-gray-400">Question Map</h3>
+                        <div className="flex items-center space-x-2">
+                          {Array.from({ length: totalVideoQuestions }, (_, i) => i + 1).map((num) => (
+                            <button
+                              key={num}
+                              onClick={() => setCurrentVideoQuestion(num)}
+                              className={`w-10 h-10 rounded-full font-semibold transition-colors ${
+                                currentVideoQuestion === num
+                                  ? 'bg-orange-500 text-white'
+                                  : 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10'
+                              }`}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
                 {/* Right Panel - Video Recording */}
                 <div className="w-1/2 flex flex-col bg-gray-900">
@@ -2286,7 +2606,8 @@ func main() {
                   </div>
                 </div>
               </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Bottom Navigation for Coding Section */}

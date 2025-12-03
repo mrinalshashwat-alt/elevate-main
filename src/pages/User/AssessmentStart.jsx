@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiCheckCircle, FiAlertCircle, FiShield, FiClock, FiFileText, FiVideo, FiCode, FiChevronRight, FiX } from 'react-icons/fi';
+import { FiCheckCircle, FiAlertCircle, FiShield, FiClock, FiFileText, FiVideo, FiCode, FiChevronRight, FiX, FiLoader } from 'react-icons/fi';
+import { joinAssessmentByToken } from '../../api/candidate';
 
 const AssessmentStart = () => {
   const router = useRouter();
@@ -11,62 +12,219 @@ const AssessmentStart = () => {
   const [acceptedRules, setAcceptedRules] = useState(false);
   const [instructions, setInstructions] = useState([]);
   const [assessmentInfo, setAssessmentInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const assessmentId = searchParams.get('assessmentId');
-    
-    let loadedInstructions = [];
-    let assessment = null;
-    
-    if (assessmentId) {
-      try {
-        const assessments = JSON.parse(localStorage.getItem('elevate_admin_assessments') || '[]');
-        assessment = assessments.find(a => a.id === assessmentId);
-        
-        if (assessment) {
-          setAssessmentInfo(assessment);
-          
-          if (assessment.instructions) {
-            if (typeof assessment.instructions === 'string') {
-              loadedInstructions = assessment.instructions
-                .split(/\n|•|-\s*/)
-                .map(line => line.trim())
-                .filter(line => line.length > 0);
-            } else if (Array.isArray(assessment.instructions)) {
-              loadedInstructions = assessment.instructions;
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Error loading assessment:', e);
+    console.log('AssessmentStart: useEffect triggered');
+    let token = searchParams.get('token');
+    console.log('Token from URL:', token);
+
+    if (!token && typeof window !== 'undefined') {
+      const storedToken = window.localStorage.getItem('assessment_token');
+      console.log('Token from localStorage:', storedToken);
+      if (storedToken) {
+        console.log('Restoring token to URL');
+        // Persist token in URL so refresh/back keeps working
+        router.replace(`/user/assessment-start?token=${storedToken}`);
+        return; // Wait for URL to update, effect will rerun
       }
     }
-    
-    if (loadedInstructions.length === 0) {
-      loadedInstructions = [
-        'Ensure you have a stable internet connection throughout the assessment',
-        'Do not switch tabs, minimize the browser window, or use other applications',
-        'Camera and microphone monitoring will be active during the assessment',
-        'All answers must be your own work - plagiarism will result in disqualification',
-        'You can navigate between questions and your progress is automatically saved',
-        'Review all answers before final submission as you cannot change them afterward'
-      ];
+
+    if (!token) {
+      console.error('No token found in URL or localStorage');
+      setError('Invalid assessment link: No token provided in URL');
+      setLoading(false);
+      return;
     }
-    
-    setInstructions(loadedInstructions);
+
+    // Fetch assessment data from backend
+    const fetchAssessment = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('Fetching assessment with token:', token);
+        const data = await joinAssessmentByToken(token);
+        console.log('Assessment data received:', data);
+
+        if (!data || !data.assessment) {
+          setError('Invalid response from server. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        const assessment = data.assessment;
+        setAssessmentInfo(assessment);
+
+        // Store token for next steps
+        localStorage.setItem('assessment_token', token);
+        localStorage.setItem('assessment_data', JSON.stringify(assessment));
+
+        // Parse instructions
+        let loadedInstructions = [];
+        if (assessment.instructions) {
+          if (typeof assessment.instructions === 'string') {
+            loadedInstructions = assessment.instructions
+              .split(/\n|•|-\s*/)
+              .map(line => line.trim())
+              .filter(line => line.length > 0);
+          } else if (Array.isArray(assessment.instructions)) {
+            loadedInstructions = assessment.instructions;
+          }
+        }
+
+        if (loadedInstructions.length === 0) {
+          loadedInstructions = [
+            'Ensure you have a stable internet connection throughout the assessment',
+            'Do not switch tabs, minimize the browser window, or use other applications',
+            'Camera and microphone monitoring will be active during the assessment',
+            'All answers must be your own work - plagiarism will result in disqualification',
+            'You can navigate between questions and your progress is automatically saved',
+            'Review all answers before final submission as you cannot change them afterward'
+          ];
+        }
+
+        setInstructions(loadedInstructions);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error loading assessment:', err);
+        console.error('Error details:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status,
+          statusText: err.response?.statusText
+        });
+        
+        let errorMessage = 'Failed to load assessment. Please check your link.';
+        
+        if (err.response?.status === 404) {
+          errorMessage = err.response?.data?.error || 'Invalid assessment link. The assessment may not exist or the link may be incorrect.';
+        } else if (err.response?.status === 403) {
+          errorMessage = 'Access denied. This assessment may not be available.';
+        } else if (err.response?.data?.error) {
+          errorMessage = err.response.data.error;
+        } else if (err.message) {
+          errorMessage = `Error: ${err.message}`;
+        }
+        
+        setError(errorMessage);
+        setLoading(false);
+      }
+    };
+
+    fetchAssessment();
   }, [searchParams]);
 
   const handleSystemCheck = () => {
-    if (acceptedRules) {
-      router.push('/user/system-check');
+    if (acceptedRules && assessmentInfo) {
+      router.push(`/user/system-check?assessmentId=${assessmentInfo.id}`);
     }
   };
 
-  const sections = [
-    { type: 'MCQ', count: 20, time: 20, icon: FiFileText, color: 'blue' },
-    { type: 'Coding', count: 3, time: 40, icon: FiCode, color: 'green' },
-    { type: 'Video', count: 5, time: 30, icon: FiVideo, color: 'purple' },
-  ];
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <FiLoader className="w-12 h-12 animate-spin text-orange-500 mx-auto mb-4" />
+          <p className="text-gray-300 text-lg">Loading assessment...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    const token = searchParams.get('token');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center p-6">
+        <div className="max-w-md text-center">
+          <FiAlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Error Loading Assessment</h2>
+          <p className="text-gray-300 mb-4">{error}</p>
+          {token && (
+            <div className="bg-white/5 rounded-lg p-4 mb-4 text-left">
+              <p className="text-xs text-gray-400 mb-1">Token:</p>
+              <p className="text-sm font-mono text-gray-300 break-all">{token}</p>
+            </div>
+          )}
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => router.push('/')}
+              className="px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold"
+            >
+              Go Back
+            </button>
+            {token && (
+              <button
+                onClick={() => {
+                  setError(null);
+                  setLoading(true);
+                  // Retry fetching
+                  const fetchAssessment = async () => {
+                    try {
+                      const data = await joinAssessmentByToken(token);
+                      if (data && data.assessment) {
+                        setAssessmentInfo(data.assessment);
+                        localStorage.setItem('assessment_token', token);
+                        localStorage.setItem('assessment_data', JSON.stringify(data.assessment));
+                        setLoading(false);
+                      }
+                    } catch (err) {
+                      setError(err.response?.data?.error || 'Failed to load assessment');
+                      setLoading(false);
+                    }
+                  };
+                  fetchAssessment();
+                }}
+                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Build sections from backend data
+  const sections = [];
+  
+  if (assessmentInfo?.question_distribution) {
+    const dist = assessmentInfo.question_distribution;
+    
+    if (dist.mcq > 0) {
+      sections.push({
+        type: 'MCQ',
+        count: dist.mcq,
+        time: Math.ceil(dist.mcq * 1), // ~1 min per MCQ
+        icon: FiFileText,
+        color: 'blue'
+      });
+    }
+    
+    if (dist.coding > 0) {
+      sections.push({
+        type: 'Coding',
+        count: dist.coding,
+        time: Math.ceil(dist.coding * 15), // ~15 min per coding
+        icon: FiCode,
+        color: 'green'
+      });
+    }
+    
+    if (dist.video > 0 || dist.subjective > 0) {
+      const videoCount = (dist.video || 0) + (dist.subjective || 0);
+      sections.push({
+        type: 'Video',
+        count: videoCount,
+        time: Math.ceil(videoCount * 5), // ~5 min per video
+        icon: FiVideo,
+        color: 'purple'
+      });
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
@@ -96,16 +254,18 @@ const AssessmentStart = () => {
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <h1 className="text-4xl font-bold mb-3 text-white">
-                {assessmentInfo?.title || 'Technical Assessment'}
+                {assessmentInfo?.name || 'Technical Assessment'}
               </h1>
               {assessmentInfo?.description && (
                 <p className="text-gray-300 text-lg">{assessmentInfo.description}</p>
               )}
             </div>
-            <div className="flex items-center space-x-2 px-5 py-2.5 bg-green-500/20 border border-green-500/30 rounded-xl ml-6 shadow-lg shadow-green-500/20">
-              <FiShield className="text-green-400 w-5 h-5" />
-              <span className="text-green-400 font-semibold">Proctored</span>
-            </div>
+            {assessmentInfo?.settings?.enable_proctoring && (
+              <div className="flex items-center space-x-2 px-5 py-2.5 bg-green-500/20 border border-green-500/30 rounded-xl ml-6 shadow-lg shadow-green-500/20">
+                <FiShield className="text-green-400 w-5 h-5" />
+                <span className="text-green-400 font-semibold">Proctored</span>
+              </div>
+            )}
           </div>
 
           {/* Section Breakdown */}
@@ -168,28 +328,28 @@ const AssessmentStart = () => {
                     <FiClock className="w-5 h-5" />
                     <span className="text-sm font-medium">Duration</span>
                   </div>
-                  <p className="text-3xl font-bold text-white">{assessmentInfo?.duration || 90} min</p>
+                  <p className="text-3xl font-bold text-white">{assessmentInfo?.duration_minutes || 90} min</p>
                 </div>
                 <div className="bg-white/5 rounded-xl p-6 border border-white/10 hover:border-orange-500/30 transition-colors">
                   <div className="flex items-center space-x-2 text-gray-400 mb-2">
                     <FiFileText className="w-5 h-5" />
-                    <span className="text-sm font-medium">Questions</span>
+                    <span className="text-sm font-medium">Total Marks</span>
                   </div>
-                  <p className="text-3xl font-bold text-white">{assessmentInfo?.questions || 28}</p>
+                  <p className="text-3xl font-bold text-white">{assessmentInfo?.total_marks || '-'}</p>
                 </div>
                 <div className="bg-white/5 rounded-xl p-6 border border-white/10 hover:border-orange-500/30 transition-colors">
                   <div className="flex items-center space-x-2 text-gray-400 mb-2">
                     <FiCode className="w-5 h-5" />
-                    <span className="text-sm font-medium">Sections</span>
+                    <span className="text-sm font-medium">Difficulty</span>
                   </div>
-                  <p className="text-3xl font-bold text-white">3</p>
+                  <p className="text-3xl font-bold text-white capitalize">{assessmentInfo?.difficulty || 'Medium'}</p>
                 </div>
                 <div className="bg-white/5 rounded-xl p-6 border border-white/10 hover:border-orange-500/30 transition-colors">
                   <div className="flex items-center space-x-2 text-gray-400 mb-2">
                     <FiShield className="w-5 h-5" />
                     <span className="text-sm font-medium">Monitoring</span>
                   </div>
-                  <p className="text-3xl font-bold text-white">Active</p>
+                  <p className="text-3xl font-bold text-white">{assessmentInfo?.settings?.enable_proctoring ? 'Active' : 'Off'}</p>
                 </div>
               </div>
 

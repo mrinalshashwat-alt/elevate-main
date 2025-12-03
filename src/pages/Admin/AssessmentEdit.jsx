@@ -4,10 +4,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   FiSave, FiArrowLeft, FiPlus, FiTrash2, FiCpu,
   FiFileText, FiCode, FiVideo, FiCheckCircle, FiClock, FiSettings,
-  FiChevronDown, FiCopy, FiBriefcase, FiLink, FiRefreshCw
+  FiChevronDown, FiCopy, FiBriefcase, FiLink, FiRefreshCw, FiEdit2
 } from 'react-icons/fi';
 import {
   getAssessment,
@@ -15,6 +15,7 @@ import {
   publishAssessment,
   getAssessmentQuestions,
   createQuestion,
+  updateQuestion,
   deleteQuestion,
   getQuestionTemplates,
   addTemplateToAssessment,
@@ -680,7 +681,8 @@ const AssessmentEdit = () => {
   // Question management state
   const [showManualModal, setShowManualModal] = useState(false);
   const [showBulkAIModal, setShowBulkAIModal] = useState(false);
-  
+  const [editingQuestion, setEditingQuestion] = useState(null); // Track which question is being edited
+
   // Manual question state
   const [manualQuestion, setManualQuestion] = useState({
     type: 'mcq',
@@ -807,6 +809,7 @@ const AssessmentEdit = () => {
     onSuccess: () => {
       refetchQuestions();
       setShowManualModal(false);
+      setEditingQuestion(null);
       resetManualQuestion();
     },
     onError: (error) => {
@@ -814,7 +817,22 @@ const AssessmentEdit = () => {
       alert('Failed to create question: ' + (error.response?.data?.error || error.message));
     }
   });
-  
+
+  // Update question mutation
+  const updateQuestionMutation = useMutation({
+    mutationFn: ({ questionId, data }) => updateQuestion(questionId, data),
+    onSuccess: () => {
+      refetchQuestions();
+      setShowManualModal(false);
+      setEditingQuestion(null);
+      resetManualQuestion();
+    },
+    onError: (error) => {
+      console.error('Update question failed:', error);
+      alert('Failed to update question: ' + (error.response?.data?.error || error.message));
+    }
+  });
+
   // Add template mutation
   const addTemplateMutation = useMutation({
     mutationFn: ({ templateId }) => addTemplateToAssessment(templateId, assessmentId),
@@ -904,7 +922,45 @@ const AssessmentEdit = () => {
     }
   };
   
-  const handleCreateManualQuestion = () => {
+  const handleEditQuestion = (question) => {
+    // Populate the modal with existing question data
+    setEditingQuestion(question);
+
+    // Ensure content has the right structure based on question type
+    let content = question.content ? { ...question.content } : {};
+
+    if (question.type === 'mcq') {
+      content = {
+        question: content.question || '',
+        options: Array.isArray(content.options) ? content.options : ['', '', '', ''],
+        correct_answer: typeof content.correct_answer === 'number' ? content.correct_answer : 0,
+        explanation: content.explanation || '',
+      };
+    } else if (question.type === 'coding') {
+      content = {
+        title: content.title || '',
+        problem_statement: content.problem_statement || '',
+        test_cases: Array.isArray(content.test_cases) ? content.test_cases : [{ input: '', output: '', is_hidden: false }],
+        time_limit_ms: content.time_limit_ms || 2000,
+        memory_limit_mb: content.memory_limit_mb || 256,
+      };
+    } else if (question.type === 'subjective') {
+      content = {
+        question: content.question || '',
+        expected_length: content.expected_length || 300,
+      };
+    }
+
+    setManualQuestion({
+      type: question.type,
+      content: content,
+      difficulty: question.difficulty || 3,
+      scoring: question.scoring || { max_marks: question.weightage || 1 },
+    });
+    setShowManualModal(true);
+  };
+
+  const handleCreateOrUpdateQuestion = () => {
     // Validate based on type
     if (manualQuestion.type === 'mcq') {
       if (!manualQuestion.content.question?.trim()) {
@@ -925,10 +981,15 @@ const AssessmentEdit = () => {
         alert('Please enter a problem statement');
         return;
       }
-      if (!manualQuestion.content.test_cases?.length || 
-          !manualQuestion.content.test_cases[0]?.input || 
-          !manualQuestion.content.test_cases[0]?.output) {
-        alert('Please provide at least one test case with input and output');
+      const testCases = manualQuestion.content.test_cases || [];
+      if (testCases.length === 0) {
+        alert('Please add at least one test case');
+        return;
+      }
+      // Check if all test cases have input and output
+      const hasEmptyTestCase = testCases.some(tc => !tc.input?.trim() || !tc.output?.trim());
+      if (hasEmptyTestCase) {
+        alert('All test cases must have both input and output');
         return;
       }
     } else if (manualQuestion.type === 'subjective') {
@@ -937,12 +998,12 @@ const AssessmentEdit = () => {
         return;
       }
     }
-    
+
     let content = { ...manualQuestion.content };
     if (manualQuestion.type === 'mcq') {
       content.options = content.options.filter(o => o.trim());
     }
-    
+
     const questionData = {
       type: manualQuestion.type,
       content: content,
@@ -950,8 +1011,25 @@ const AssessmentEdit = () => {
       difficulty: manualQuestion.difficulty,
       tags: [],
     };
-    createQuestionMutation.mutate(questionData);
+
+    if (editingQuestion) {
+      // Update existing question
+      updateQuestionMutation.mutate({ questionId: editingQuestion.id, data: questionData });
+    } else {
+      // Create new question - calculate next order number
+      const nextOrder = questions && questions.length > 0
+        ? Math.max(...questions.map(q => q.order || 0)) + 1
+        : 0;
+
+      createQuestionMutation.mutate({
+        ...questionData,
+        order: nextOrder,
+      });
+    }
   };
+
+  // Keep old name for backward compatibility (alias)
+  const handleCreateManualQuestion = handleCreateOrUpdateQuestion;
   
   // Handle competency changes - for manual add/remove only
   const handleCompetenciesChange = async (newCompetencies) => {
@@ -1637,7 +1715,8 @@ const AssessmentEdit = () => {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className="bg-white/5 border border-white/10 rounded-xl p-4 hover:border-orange-500/30 transition-all"
+                  className="bg-white/5 border border-white/10 rounded-xl p-4 hover:border-orange-500/30 transition-all cursor-pointer"
+                  onClick={() => handleEditQuestion(question)}
                 >
                   <div className="flex items-start gap-4">
                     <div className="flex items-center gap-2">
@@ -1650,7 +1729,7 @@ const AssessmentEdit = () => {
                         <QuestionTypeIcon type={question.type} />
                       </div>
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <h4 className="text-white font-medium truncate">
                         {question.title || question.content?.question || question.content?.title || 'Untitled Question'}
@@ -1663,11 +1742,22 @@ const AssessmentEdit = () => {
                         <span className="text-gray-500">Weight: {question.weightage || question.scoring?.max_marks || 1}</span>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => handleDeleteQuestion(question.id)}
+                        onClick={() => handleEditQuestion(question)}
+                        className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors"
+                        title="Edit question"
+                      >
+                        <FiEdit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteQuestion(question.id);
+                        }}
                         className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+                        title="Delete question"
                       >
                         <FiTrash2 className="w-4 h-4" />
                       </button>
@@ -1688,7 +1778,11 @@ const AssessmentEdit = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setShowManualModal(false)}
+            onClick={() => {
+              setShowManualModal(false);
+              setEditingQuestion(null);
+              resetManualQuestion();
+            }}
           >
             <motion.div
               className="bg-black/95 border border-orange-500/30 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
@@ -1697,7 +1791,9 @@ const AssessmentEdit = () => {
               exit={{ scale: 0.9 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-xl font-bold text-white mb-4">Add Question Manually</h3>
+              <h3 className="text-xl font-bold text-white mb-4">
+                {editingQuestion ? 'Edit Question' : 'Add Question Manually'}
+              </h3>
               
               <div className="space-y-4">
                 {/* Question Type */}
@@ -1826,46 +1922,233 @@ const AssessmentEdit = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-300 mb-2">Sample Test Case</label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">Input</label>
-                          <textarea
-                            value={manualQuestion.content.test_cases?.[0]?.input || ''}
-                            onChange={(e) => setManualQuestion({
-                              ...manualQuestion,
-                              content: { 
-                                ...manualQuestion.content, 
-                                test_cases: [{ 
-                                  input: e.target.value, 
-                                  output: manualQuestion.content.test_cases?.[0]?.output || '' 
-                                }]
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm text-gray-300">
+                          Test Cases *
+                          <span className="text-gray-500 ml-2">
+                            ({(manualQuestion.content.test_cases || []).length}/100)
+                          </span>
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const testCases = manualQuestion.content.test_cases || [];
+                              if (testCases.length >= 100) {
+                                alert('Maximum 100 test cases allowed');
+                                return;
                               }
-                            })}
-                            rows={2}
-                            className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-white text-sm resize-none font-mono"
-                            placeholder="[1, 2, 3]"
-                          />
+                              setManualQuestion({
+                                ...manualQuestion,
+                                content: {
+                                  ...manualQuestion.content,
+                                  test_cases: [...testCases, { input: '', output: '', is_hidden: false }]
+                                }
+                              });
+                            }}
+                            className="text-xs px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30"
+                          >
+                            + Add One
+                          </button>
+                          <label className="text-xs px-3 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/30 cursor-pointer">
+                            + Upload File
+                            <input
+                              type="file"
+                              accept=".txt"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  // Validate file size (max 1MB)
+                                  if (file.size > 1024 * 1024) {
+                                    alert('File too large. Maximum size is 1MB');
+                                    e.target.value = '';
+                                    return;
+                                  }
+
+                                  const reader = new FileReader();
+                                  reader.onload = (event) => {
+                                    try {
+                                      const content = event.target.result;
+
+                                      // Validate content is text
+                                      if (typeof content !== 'string') {
+                                        alert('Invalid file format. Please upload a .txt file');
+                                        return;
+                                      }
+
+                                      const lines = content.split('\n').map(line => line.trim()).filter(line => line);
+
+                                      // Validate minimum content
+                                      if (lines.length < 2) {
+                                        alert('File must contain at least 2 lines (1 input, 1 output)');
+                                        return;
+                                      }
+
+                                      // Parse format: alternating lines of input and output
+                                      // OR separated by "---" for each test case
+                                      let parsedTestCases = [];
+
+                                      // Check if format uses "---" separator
+                                      if (content.includes('---')) {
+                                        const blocks = content.split('---').filter(block => block.trim());
+                                        parsedTestCases = blocks.map(block => {
+                                          const blockLines = block.split('\n').map(l => l.trim()).filter(l => l);
+                                          if (blockLines.length >= 2) {
+                                            return {
+                                              input: blockLines[0],
+                                              output: blockLines[1],
+                                              is_hidden: false
+                                            };
+                                          }
+                                          return null;
+                                        }).filter(tc => tc !== null);
+                                      } else {
+                                        // Alternating lines format (LeetCode style)
+                                        for (let i = 0; i < lines.length; i += 2) {
+                                          if (i + 1 < lines.length) {
+                                            parsedTestCases.push({
+                                              input: lines[i],
+                                              output: lines[i + 1],
+                                              is_hidden: false
+                                            });
+                                          }
+                                        }
+                                      }
+
+                                      if (parsedTestCases.length === 0) {
+                                        alert('No valid test cases found. Format should be:\nLine 1: Input\nLine 2: Output\nLine 3: Input\nLine 4: Output\n...\n\nOR separate test cases with ---');
+                                        return;
+                                      }
+
+                                      const existingTestCases = manualQuestion.content.test_cases || [];
+                                      const totalTestCases = existingTestCases.length + parsedTestCases.length;
+
+                                      if (totalTestCases > 100) {
+                                        alert(`Cannot add ${parsedTestCases.length} test cases. Maximum is 100 (currently have ${existingTestCases.length})`);
+                                        return;
+                                      }
+
+                                      setManualQuestion({
+                                        ...manualQuestion,
+                                        content: {
+                                          ...manualQuestion.content,
+                                          test_cases: [...existingTestCases, ...parsedTestCases]
+                                        }
+                                      });
+                                      alert(`Successfully added ${parsedTestCases.length} test case(s) from file`);
+                                    } catch (error) {
+                                      alert('Error reading file: ' + error.message);
+                                    }
+                                  };
+                                  reader.readAsText(file);
+                                  e.target.value = ''; // Reset input
+                                }
+                              }}
+                            />
+                          </label>
+                          {(manualQuestion.content.test_cases || []).length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm('Are you sure you want to delete all test cases?')) {
+                                  setManualQuestion({
+                                    ...manualQuestion,
+                                    content: {
+                                      ...manualQuestion.content,
+                                      test_cases: []
+                                    }
+                                  });
+                                }
+                              }}
+                              className="text-xs px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30"
+                            >
+                              Clear All
+                            </button>
+                          )}
                         </div>
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">Expected Output</label>
-                          <textarea
-                            value={manualQuestion.content.test_cases?.[0]?.output || ''}
-                            onChange={(e) => setManualQuestion({
-                              ...manualQuestion,
-                              content: { 
-                                ...manualQuestion.content, 
-                                test_cases: [{ 
-                                  input: manualQuestion.content.test_cases?.[0]?.input || '', 
-                                  output: e.target.value 
-                                }]
-                              }
-                            })}
-                            rows={2}
-                            className="w-full px-3 py-2 bg-white/5 border border-white/15 rounded-lg text-white text-sm resize-none font-mono"
-                            placeholder="6"
-                          />
-                        </div>
+                      </div>
+                      <div className="space-y-3 max-h-60 overflow-y-auto">
+                        {(manualQuestion.content.test_cases || []).map((testCase, idx) => (
+                          <div key={idx} className="bg-white/5 border border-white/10 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs text-gray-400">Test Case #{idx + 1}</span>
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-1 text-xs text-gray-400">
+                                  <input
+                                    type="checkbox"
+                                    checked={testCase.is_hidden || false}
+                                    onChange={(e) => {
+                                      const newTestCases = [...manualQuestion.content.test_cases];
+                                      newTestCases[idx] = { ...newTestCases[idx], is_hidden: e.target.checked };
+                                      setManualQuestion({
+                                        ...manualQuestion,
+                                        content: { ...manualQuestion.content, test_cases: newTestCases }
+                                      });
+                                    }}
+                                    className="w-3 h-3"
+                                  />
+                                  Hidden
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newTestCases = manualQuestion.content.test_cases.filter((_, i) => i !== idx);
+                                    setManualQuestion({
+                                      ...manualQuestion,
+                                      content: { ...manualQuestion.content, test_cases: newTestCases }
+                                    });
+                                  }}
+                                  className="text-red-400 hover:text-red-300 text-xs"
+                                >
+                                  <FiTrash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs text-gray-400 mb-1">Input</label>
+                                <textarea
+                                  value={testCase.input || ''}
+                                  onChange={(e) => {
+                                    const newTestCases = [...manualQuestion.content.test_cases];
+                                    newTestCases[idx] = { ...newTestCases[idx], input: e.target.value };
+                                    setManualQuestion({
+                                      ...manualQuestion,
+                                      content: { ...manualQuestion.content, test_cases: newTestCases }
+                                    });
+                                  }}
+                                  rows={2}
+                                  className="w-full px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs resize-none font-mono"
+                                  placeholder="1 2 3"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-400 mb-1">Expected Output</label>
+                                <textarea
+                                  value={testCase.output || ''}
+                                  onChange={(e) => {
+                                    const newTestCases = [...manualQuestion.content.test_cases];
+                                    newTestCases[idx] = { ...newTestCases[idx], output: e.target.value };
+                                    setManualQuestion({
+                                      ...manualQuestion,
+                                      content: { ...manualQuestion.content, test_cases: newTestCases }
+                                    });
+                                  }}
+                                  rows={2}
+                                  className="w-full px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs resize-none font-mono"
+                                  placeholder="6"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-2 space-y-1">
+                        <p><strong>Sample test cases</strong> (visible, unchecked): Shown to candidates for "Run" button testing.</p>
+                        <p><strong>Hidden test cases</strong> (checked): Only run on "Submit" for final evaluation.</p>
+                        <p className="text-gray-600">Upload .txt file format (alternating lines):<br/>
+                        <code className="bg-white/5 px-1 py-0.5 rounded">input1\noutput1\ninput2\noutput2</code> or use <code className="bg-white/5 px-1 py-0.5 rounded">---</code> separator</p>
                       </div>
                     </div>
                   </>
@@ -1898,17 +2181,23 @@ const AssessmentEdit = () => {
                 
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={() => setShowManualModal(false)}
+                    onClick={() => {
+                      setShowManualModal(false);
+                      setEditingQuestion(null);
+                      resetManualQuestion();
+                    }}
                     className="flex-1 py-3 bg-white/10 rounded-xl text-white font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleCreateManualQuestion}
-                    disabled={createQuestionMutation.isPending}
+                    disabled={createQuestionMutation.isPending || updateQuestionMutation.isPending}
                     className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl text-white font-semibold disabled:opacity-50"
                   >
-                    {createQuestionMutation.isPending ? 'Adding...' : 'Add Question'}
+                    {editingQuestion
+                      ? (updateQuestionMutation.isPending ? 'Updating...' : 'Update Question')
+                      : (createQuestionMutation.isPending ? 'Adding...' : 'Add Question')}
                   </button>
                 </div>
               </div>
