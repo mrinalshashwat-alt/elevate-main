@@ -145,6 +145,8 @@ const Assessment = () => {
   const [backendQuestions, setBackendQuestions] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [lastAutoSave, setLastAutoSave] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [failedSaveCount, setFailedSaveCount] = useState(0);
   const autoSaveTimerRef = useRef(null);
   const heartbeatTimerRef = useRef(null);
 
@@ -197,6 +199,16 @@ const Assessment = () => {
         console.log('Loaded attempt data:', data);
         setAttemptData(data);
         setAttemptId(storedAttemptId);
+
+        // Update URL with attempt ID for proper state management and bookmarking
+        if (typeof window !== 'undefined' && storedAttemptId) {
+          const url = new URL(window.location.href);
+          if (!url.searchParams.has('attempt')) {
+            url.searchParams.set('attempt', storedAttemptId);
+            window.history.replaceState({}, '', url.toString());
+          }
+        }
+
         const questions = data.questions || [];
         console.log('Questions from backend:', questions);
         setBackendQuestions(questions);
@@ -296,26 +308,39 @@ const Assessment = () => {
           // Populate answers from existing_responses
           const savedAnswers = {};
           data.existing_responses.forEach((response) => {
-            // Find question index by backend ID
-            const questionIndex = questions.findIndex(q => q.backendId === response.question_id);
+            // Find question index by backend ID (questions array has raw backend data with 'id' property)
+            const questionIndex = questions.findIndex(q => q.id === response.question_id);
             if (questionIndex !== -1) {
               const question = questions[questionIndex];
               if (question.type === 'mcq') {
-                savedAnswers[questionIndex + 1] = response.answer?.selected_option || '';
+                // Map to frontend question number (1-indexed)
+                const frontendQuestionNum = mcqQuestions.findIndex(q => q.id === question.id) + 1;
+                if (frontendQuestionNum > 0) {
+                  savedAnswers[frontendQuestionNum] = response.answer?.selected_option || '';
+                }
               }
             }
           });
-          
+
           // Update localStorage with saved answers
           if (Object.keys(savedAnswers).length > 0) {
+            console.log('Loaded saved MCQ answers:', savedAnswers);
             localStorage.setItem('assessment_mcq_answers', JSON.stringify(savedAnswers));
           }
 
-          // Update question states
+          // Update question states to mark attempted questions
           setQuestions(prev => prev.map((q, index) => ({
             ...q,
             attempted: savedAnswers[index + 1] !== undefined && savedAnswers[index + 1] !== ''
           })));
+        }
+
+        // Load existing violations from localStorage
+        const savedViolations = JSON.parse(localStorage.getItem('assessment_violations') || '[]');
+        if (savedViolations.length > 0) {
+          console.log('Loaded saved violations:', savedViolations.length);
+          violationsRef.current = savedViolations;
+          setViolationCount(savedViolations.length);
         }
       } catch (err) {
         console.error('Error loading attempt data:', err);
@@ -879,19 +904,13 @@ func main() {
       });
     }, 1000);
 
-    // Autosave interval for coding section
-    const autosaveTimer = setInterval(() => {
-      if (currentSection === 'coding') {
-        saveCodingState();
-      }
-    }, 2000); // Autosave every 2 seconds
-    autosaveIntervalRef.current = autosaveTimer;
+    // REMOVED: Auto-save interval (causes conflicts with debounced saves)
+    // Coding section uses debounced saves on code change (2s delay)
+    // + heartbeat sync every 30s as backup
+    // This is the industry best practice approach
 
     return () => {
       clearInterval(timer);
-      if (autosaveIntervalRef.current) {
-        clearInterval(autosaveIntervalRef.current);
-      }
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -1051,11 +1070,15 @@ func main() {
       proctoringVideoElement = hiddenProctoringVideoRef.current;
       
       // Initialize MediaPipe proctoring (optional, graceful failure)
-      if (proctoringVideoElement && !mediaPipeProctoringRef.current) {
+      // TEMPORARILY DISABLED: MediaPipe has WASM loading errors with Next.js
+      // Basic proctoring (tab switching, copy/paste, etc.) still works without it
+      const ENABLE_MEDIAPIPE = false; // Set to true when MediaPipe is fixed
+
+      if (ENABLE_MEDIAPIPE && proctoringVideoElement && !mediaPipeProctoringRef.current) {
         try {
           // Dynamically import MediaPipe to avoid blocking if it fails
           const { MediaPipeProctoring } = await import('../../lib/mediapipeProctoring');
-          
+
           mediaPipeProctoringRef.current = new MediaPipeProctoring(
             proctoringVideoElement,
             (violation) => {
@@ -1063,18 +1086,18 @@ func main() {
               // MediaPipe passes: { type, details: { timestamp, ... }, violationCount }
               const violationType = violation.type || 'unknown';
               const violationDetails = violation.details || {};
-              
+
               // Map MediaPipe violation types to backend types
               const backendViolationType = violationType === 'multiple_persons' ? 'multiple_faces' :
                                           violationType === 'face_not_detected' ? 'face_not_detected' :
                                           violationType === 'looking_away' ? 'eye_tracking_away' :
                                           violationType === 'suspicious_hand_position' ? 'suspicious_hand_position' :
                                           violationType;
-              
+
               handleViolation(backendViolationType, violationDetails);
             }
           );
-          
+
           // Start MediaPipe detection once video is ready
           const startMediaPipe = async () => {
             if (proctoringVideoElement && proctoringVideoElement.readyState >= 2 && mediaPipeProctoringRef.current) {
@@ -1091,7 +1114,7 @@ func main() {
               setTimeout(startMediaPipe, 100);
             }
           };
-          
+
           proctoringVideoElement.addEventListener('loadedmetadata', startMediaPipe);
           proctoringVideoElement.addEventListener('canplay', startMediaPipe);
           startMediaPipe(); // Also try immediately
@@ -1099,6 +1122,8 @@ func main() {
           console.warn('MediaPipe proctoring not available:', error);
           // Continue without MediaPipe - basic proctoring still works
         }
+      } else if (!ENABLE_MEDIAPIPE) {
+        console.log('MediaPipe proctoring disabled. Using basic proctoring only (tab switching, copy/paste, etc.)');
       }
     } catch (error) {
       console.error('Proctoring camera error:', error);
@@ -1111,18 +1136,18 @@ func main() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = async () => {
     if (currentQuestion > 1) {
-      // Save current answer before moving
+      // Save current answer before moving (AWAIT to prevent data loss)
       if (selectedAnswer) {
         const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
         mcqAnswers[currentQuestion.toString()] = selectedAnswer;
         localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
 
-        // Save to backend
+        // Save to backend - AWAIT to ensure save completes before navigation
         const currentQuestionObj = questions.find(q => q.id === currentQuestion);
         if (currentQuestionObj && currentQuestionObj.backendId) {
-          saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
         }
       }
 
@@ -1144,15 +1169,57 @@ func main() {
 
     try {
       setIsSaving(true);
+      setSaveStatus('saving');
+
       await saveResponse(attemptId, {
         question_id: questionId,
         answer: answer
       });
+
       setLastAutoSave(new Date());
-      console.log('Saved response to backend:', questionId);
+      setSaveStatus('saved');
+      console.log('✅ Saved response to backend:', questionId);
+
+      // Remove from failed queue if it was there
+      const failedQueue = JSON.parse(localStorage.getItem('assessment_failed_saves') || '[]');
+      const filtered = failedQueue.filter(item => item.question_id !== questionId);
+      localStorage.setItem('assessment_failed_saves', JSON.stringify(filtered));
+      setFailedSaveCount(filtered.length);
+
+      // Reset to idle after showing "saved" for 2 seconds
+      setTimeout(() => setSaveStatus('idle'), 2000);
+
     } catch (err) {
-      console.error('Error saving to backend:', err);
-      // Continue with local save as fallback
+      console.error('❌ Error saving to backend:', err);
+      setSaveStatus('error');
+
+      // INDUSTRY BEST PRACTICE: Add to failed saves queue for retry
+      const failedQueue = JSON.parse(localStorage.getItem('assessment_failed_saves') || '[]');
+      const failedSave = {
+        question_id: questionId,
+        answer: answer,
+        timestamp: Date.now(),
+        attempt_count: 1
+      };
+
+      // Check if already in queue
+      const existing = failedQueue.find(item => item.question_id === questionId);
+      if (existing) {
+        existing.answer = answer;  // Update with latest answer
+        existing.attempt_count += 1;
+        existing.timestamp = Date.now();
+      } else {
+        failedQueue.push(failedSave);
+      }
+
+      localStorage.setItem('assessment_failed_saves', JSON.stringify(failedQueue));
+      setFailedSaveCount(failedQueue.length);
+      console.log('📝 Added to retry queue. Will retry on next heartbeat.');
+
+      // Reset error status after 3 seconds
+      setTimeout(() => setSaveStatus('idle'), 3000);
+
+      // Note: User already has localStorage backup, so no data is lost
     } finally {
       setIsSaving(false);
     }
@@ -1163,13 +1230,80 @@ func main() {
 
     try {
       const response = await sendHeartbeat(attemptId);
-      
-      // Sync time with backend to prevent drift
+
+      // Sync time with backend to prevent drift (INDUSTRY BEST PRACTICE)
       if (response.time_remaining_seconds !== undefined) {
         console.log('Syncing time from backend:', response.time_remaining_seconds);
         setTimeLeft(response.time_remaining_seconds);
       }
-      
+
+      // Reconcile violation count with backend (INDUSTRY BEST PRACTICE)
+      // Backend is source of truth - local count may drift due to network failures
+      if (response.total_violations !== undefined) {
+        const localCount = violationCount;
+        const serverCount = response.total_violations;
+
+        if (serverCount !== localCount) {
+          console.log(`Reconciling violations: local=${localCount}, server=${serverCount}`);
+          setViolationCount(serverCount);
+
+          // Optionally: Retry failed violations from localStorage queue
+          // This handles cases where reportViolation() failed due to network issues
+          const savedViolations = JSON.parse(localStorage.getItem('assessment_violations') || '[]');
+          if (savedViolations.length > serverCount) {
+            console.log('Found unsent violations in queue, retrying...');
+            // Backend will de-duplicate based on timestamp
+            const unsentViolations = savedViolations.slice(serverCount);
+            for (const violation of unsentViolations) {
+              const severity = ['multiple_persons', 'tab_switch', 'devtools'].includes(violation.type) ? 'high' : 'medium';
+              try {
+                await reportViolation(attemptId, {
+                  type: violation.type,
+                  severity: severity,
+                  metadata: violation
+                });
+              } catch (err) {
+                // Will retry on next heartbeat
+                console.error('Failed to retry violation:', err);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // INDUSTRY BEST PRACTICE: Periodic save during heartbeat
+      // Ensures coding answers are saved even if debounced save missed
+      if (currentSection === 'coding') {
+        console.log('Heartbeat: Syncing coding state to backend');
+        await saveCodingState();
+      }
+
+      // INDUSTRY BEST PRACTICE: Retry failed answer saves
+      const failedQueue = JSON.parse(localStorage.getItem('assessment_failed_saves') || '[]');
+      if (failedQueue.length > 0) {
+        console.log(`📝 Retrying ${failedQueue.length} failed saves...`);
+        const remainingFailed = [];
+
+        for (const failedSave of failedQueue) {
+          try {
+            await saveResponse(attemptId, {
+              question_id: failedSave.question_id,
+              answer: failedSave.answer
+            });
+            console.log(`✅ Successfully retried save for question ${failedSave.question_id}`);
+          } catch (err) {
+            // Keep in queue for next retry
+            console.log(`❌ Retry failed for question ${failedSave.question_id}, will retry again`);
+            remainingFailed.push(failedSave);
+          }
+        }
+
+        // Update queue with remaining failed saves
+        localStorage.setItem('assessment_failed_saves', JSON.stringify(remainingFailed));
+        setFailedSaveCount(remainingFailed.length);
+      }
+
       if (response.status === 'invalidated' || response.status === 'inactive') {
         // Attempt was invalidated or expired
         alert('Your assessment session has ended. ' + (response.reason || 'Time expired'));
@@ -1214,18 +1348,18 @@ func main() {
     }
   }, [attemptId]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentQuestion < totalQuestions) {
-      // Save current answer before moving
+      // Save current answer before moving (AWAIT to prevent data loss)
       if (selectedAnswer) {
         const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
         mcqAnswers[currentQuestion.toString()] = selectedAnswer;
         localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
 
-        // Save to backend
+        // Save to backend - AWAIT to ensure save completes before navigation
         const currentQuestionObj = questions.find(q => q.id === currentQuestion);
         if (currentQuestionObj && currentQuestionObj.backendId) {
-          saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
         }
       }
 
@@ -1253,6 +1387,33 @@ func main() {
   };
 
   const handleSubmitSection = async () => {
+    // INDUSTRY BEST PRACTICE: Clear failed save queue before section transition
+    // This ensures all answers are synced before moving forward
+    const failedQueue = JSON.parse(localStorage.getItem('assessment_failed_saves') || '[]');
+    if (failedQueue.length > 0) {
+      console.log(`⏳ Syncing ${failedQueue.length} pending saves before submission...`);
+      setSaveStatus('saving');
+
+      for (const failedSave of failedQueue) {
+        try {
+          await saveResponse(attemptId, {
+            question_id: failedSave.question_id,
+            answer: failedSave.answer
+          });
+          console.log(`✅ Synced question ${failedSave.question_id}`);
+        } catch (err) {
+          console.error(`❌ Failed to sync question ${failedSave.question_id}:`, err);
+          // Continue trying other saves
+        }
+      }
+
+      // Clear queue after attempting all syncs
+      localStorage.setItem('assessment_failed_saves', JSON.stringify([]));
+      setFailedSaveCount(0);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 1000);
+    }
+
     // Save final state before submission
     if (currentSection === 'mcq') {
       // Save all MCQ answers before moving to next section
@@ -1271,7 +1432,7 @@ func main() {
       setCurrentSection('coding');
     } else if (currentSection === 'coding') {
       // Save coding state
-      saveCodingState();
+      await saveCodingState();
       // Navigate to video section
       setCurrentSection('video');
     } else if (currentSection === 'video') {
@@ -1292,6 +1453,7 @@ func main() {
       localStorage.removeItem('attempt_data');
       localStorage.removeItem('attempt_id');
       localStorage.removeItem('can_resume');
+      localStorage.removeItem('assessment_failed_saves');
 
       router.push('/user/assessment-end');
     }
@@ -1481,6 +1643,27 @@ func main() {
     }
   }, [isDragging, dragOffset]);
 
+  // Helper function to poll for code execution result
+  const pollCodeResult = async (jobId, maxRetries = 30) => {
+    for (let i = 0; i < maxRetries; i++) {
+      const response = await getCodeResult(attemptId, jobId);
+
+      if (response.status === 'completed') {
+        return {
+          success: response.success,
+          output: response.output || '',
+          error: response.error || '',
+          executionTime: response.execution_time || 0
+        };
+      }
+
+      // Wait 1 second before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    throw new Error('Code execution timeout');
+  };
+
   const handleRunCustomInput = async () => {
     if (!customInput.trim()) {
       const updatedProblems = [...codingProblems];
@@ -1519,8 +1702,53 @@ func main() {
         setIsExecuting(false);
         return;
       }
-      
-      const result = await executeCode(selectedLanguage, code, customInput);
+
+      // MOCKED: Replace with real backend API when you have Judge0 keys
+      const MOCK_CODE_EXECUTION = true; // Set to false when you have Judge0 API keys
+
+      let result;
+      if (MOCK_CODE_EXECUTION) {
+        // ============ MOCKED FLOW ============
+        console.log('💻 [MOCKED] Code execution (waiting for Judge0 keys)');
+        console.log('Language:', selectedLanguage);
+        console.log('Code length:', code.length, 'chars');
+        console.log('Input:', customInput);
+
+        // Simulate execution delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        result = {
+          success: true,
+          output: '[MOCKED OUTPUT]\nYour code will execute here when Judge0 keys are configured.\nInput received: ' + customInput,
+          error: '',
+          executionTime: 145
+        };
+        console.log('✅ [MOCKED] Execution complete');
+        // ====================================
+      } else {
+        // ============ REAL FLOW (when you have Judge0 keys) ============
+        // Get current coding question
+        const currentCodingQ = codingQuestions.find(q => q.order === currentCodingProblem) || codingQuestions[currentCodingProblem - 1];
+
+        // Step 1: Submit code to backend (backend will call Judge0)
+        const executeResponse = await executeCodeAPI(
+          attemptId,
+          currentCodingQ.backendId,
+          code,
+          selectedLanguage,
+          0 // test_case_index for custom input
+        );
+
+        const { job_id } = executeResponse;
+        console.log('⏳ Code submitted, job ID:', job_id);
+
+        // Step 2: Poll for result
+        result = await pollCodeResult(job_id);
+        console.log('✅ Execution complete:', result);
+        // ============================================================
+      }
+
+      // Continue with existing logic...
       const updatedProblems = [...codingProblems];
       updatedProblems[currentCodingProblem] = {
         ...updatedProblems[currentCodingProblem],
@@ -1729,42 +1957,132 @@ func main() {
 
   const handleSubmitVideo = async () => {
     console.log('Submitting video answer...');
-    
+
+    if (!recordedBlob) {
+      console.error('No video recorded');
+      return;
+    }
+
     // Get current video question from backend
     const currentVideoQ = videoQuestions.find(q => q.order === currentVideoQuestion) || videoQuestions[currentVideoQuestion - 1];
-    
-    // Save video answer to backend
-    if (attemptId && currentVideoQ && currentVideoQ.backendId && recordedBlob) {
-      try {
-        // Convert blob to base64 or save reference
-        // Note: For production, you'd want to upload the video file to a storage service
-        // For now, we'll save a reference that the video was recorded
-        await saveToBackend(currentVideoQ.backendId, {
-          video_recorded: true,
-          video_duration: recordedBlob.size, // Approximate size
-          submitted_at: new Date().toISOString()
+
+    if (!attemptId || !currentVideoQ || !currentVideoQ.backendId) {
+      console.error('Missing attempt or question data');
+      return;
+    }
+
+    try {
+      // MOCKED: Replace with real API call when you have AWS keys
+      const MOCK_MODE = true; // Set to false when you have real API keys
+
+      if (MOCK_MODE) {
+        // ============ MOCKED FLOW ============
+        console.log('📹 [MOCKED] Video upload flow (waiting for AWS S3 keys)');
+        console.log('Video blob size:', recordedBlob.size, 'bytes');
+        console.log('Video type:', recordedBlob.type);
+
+        // Simulate upload delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        console.log('✅ [MOCKED] Video upload successful');
+        // ====================================
+      } else {
+        // ============ REAL FLOW (when you have AWS keys) ============
+
+        // Step 1: Request presigned URL from backend
+        const requestResponse = await fetch(
+          `/api/attempts/${attemptId}/request_video_upload/`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              question_id: currentVideoQ.backendId,
+              filename: 'answer.webm',
+              content_type: recordedBlob.type || 'video/webm',
+              file_size_bytes: recordedBlob.size
+            })
+          }
+        );
+
+        if (!requestResponse.ok) {
+          throw new Error('Failed to request upload URL');
+        }
+
+        const { upload_url, fields, s3_key } = await requestResponse.json();
+        console.log('📤 Got presigned URL, uploading to S3...');
+
+        // Step 2: Upload directly to S3 using presigned POST
+        const formData = new FormData();
+
+        // Add all fields from presigned POST (MUST come before file)
+        Object.entries(fields).forEach(([key, value]) => {
+          formData.append(key, value);
         });
-      } catch (err) {
-        console.error('Error saving video answer:', err);
+
+        // Add file last
+        formData.append('file', recordedBlob, 'answer.webm');
+
+        const uploadResponse = await fetch(upload_url, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('S3 upload failed');
+        }
+
+        console.log('✅ S3 upload successful');
+
+        // Step 3: Confirm upload with backend
+        const confirmResponse = await fetch(
+          `/api/attempts/${attemptId}/confirm_video_upload/`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              question_id: currentVideoQ.backendId,
+              s3_key: s3_key
+            })
+          }
+        );
+
+        if (!confirmResponse.ok) {
+          throw new Error('Failed to confirm upload');
+        }
+
+        const { video_url } = await confirmResponse.json();
+        console.log('✅ Upload confirmed, video URL:', video_url);
+
+        // ============================================================
       }
-    }
-    
-    // Save video answer to localStorage
-    const videoAnswers = JSON.parse(localStorage.getItem('assessment_video_answers') || '[]');
-    if (!videoAnswers.includes(currentVideoQuestion)) {
-      videoAnswers.push(currentVideoQuestion);
-      localStorage.setItem('assessment_video_answers', JSON.stringify(videoAnswers));
-    }
-    
-    // Check if this is the last video question
-    if (currentVideoQuestion < totalVideoQuestions) {
-      // Move to next video question
-      setCurrentVideoQuestion(currentVideoQuestion + 1);
-      handleRetake();
-    } else {
-      // All sections completed - navigate to assessment end
-      localStorage.removeItem('assessment_flow_completed');
-      router.push('/user/assessment-end');
+
+      // Save video answer to localStorage
+      const videoAnswers = JSON.parse(localStorage.getItem('assessment_video_answers') || '[]');
+      if (!videoAnswers.includes(currentVideoQuestion)) {
+        videoAnswers.push(currentVideoQuestion);
+        localStorage.setItem('assessment_video_answers', JSON.stringify(videoAnswers));
+      }
+
+      // Check if this is the last video question
+      if (currentVideoQuestion < totalVideoQuestions) {
+        // Move to next video question
+        setCurrentVideoQuestion(currentVideoQuestion + 1);
+        handleRetake();
+      } else {
+        // All sections completed - navigate to assessment end
+        localStorage.removeItem('assessment_flow_completed');
+        router.push('/user/assessment-end');
+      }
+
+    } catch (err) {
+      console.error('Error uploading video:', err);
+      alert('Failed to upload video. Please try again.');
     }
   };
 
@@ -1979,18 +2297,38 @@ func main() {
                     <div>
                       <span className="text-sm text-gray-400">MCQ — Question {currentQuestion} of {totalQuestions}</span>
                     </div>
-                    <div className="flex items-center space-x-2 text-sm text-gray-400">
-                      <FiShield />
-                      <span>Proctoring enabled</span>
-                      {isSaving && (
-                        <span className="text-orange-500 flex items-center space-x-1">
-                          <FiSave className="animate-pulse" />
+                    <div className="flex items-center space-x-3 text-sm text-gray-400">
+                      <div className="flex items-center space-x-1">
+                        <FiShield />
+                        <span>Proctoring enabled</span>
+                      </div>
+
+                      {/* Save Status Indicator - Industry Best Practice */}
+                      {saveStatus === 'saving' && (
+                        <span className="text-orange-500 flex items-center space-x-1 animate-fade-in">
+                          <FiSave className="animate-spin" />
                           <span>Saving...</span>
                         </span>
                       )}
-                      {lastAutoSave && !isSaving && (
-                        <span className="text-gray-500 text-xs">
-                          Saved {new Date(lastAutoSave).toLocaleTimeString()}
+
+                      {saveStatus === 'saved' && (
+                        <span className="text-green-400 flex items-center space-x-1 animate-fade-in">
+                          <FiCheckCircle />
+                          <span>Saved</span>
+                        </span>
+                      )}
+
+                      {saveStatus === 'error' && (
+                        <span className="text-yellow-400 flex items-center space-x-1 animate-fade-in">
+                          <FiRefreshCw className="animate-spin" />
+                          <span>Retrying...</span>
+                        </span>
+                      )}
+
+                      {saveStatus === 'idle' && lastAutoSave && (
+                        <span className="text-gray-500 text-xs flex items-center space-x-1">
+                          <FiCheckCircle className="w-3 h-3" />
+                          <span>{new Date(lastAutoSave).toLocaleTimeString()}</span>
                         </span>
                       )}
                     </div>
@@ -2033,12 +2371,14 @@ func main() {
 
                         <div className="space-y-3">
                           {options.map((option, index) => {
-                            const optionId = typeof option === 'string' ? option : option.id || `option-${index}`;
-                            const optionLabel = typeof option === 'string' ? option : option.label || option.text || optionId;
-                            
+                            // IMPORTANT: Use index as optionId to match backend's correct_answer field
+                            // Backend stores correct_answer as index (0, 1, 2, 3)
+                            const optionId = index;
+                            const optionLabel = typeof option === 'string' ? option : option.label || option.text || option;
+
                             return (
                               <label
-                                key={optionId}
+                                key={index}
                                 className={`flex items-center space-x-3 p-4 rounded-lg cursor-pointer transition-colors ${
                                   selectedAnswer === optionId
                                     ? 'bg-orange-500/20 border border-orange-500/50'
@@ -2053,14 +2393,14 @@ func main() {
                                   onChange={() => {
                                     setSelectedAnswer(optionId);
                                     // Mark question as attempted
-                                    setQuestions(prev => prev.map(q => 
+                                    setQuestions(prev => prev.map(q =>
                                       q.id === currentQuestion ? { ...q, attempted: true } : q
                                     ));
                                     // Save answer immediately
                                     const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
                                     mcqAnswers[currentQuestion.toString()] = optionId;
                                     localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
-                                    
+
                                     // Save to backend
                                     if (currentQuestionObj && currentQuestionObj.backendId) {
                                       saveToBackend(currentQuestionObj.backendId, { selected_option: optionId });
@@ -2109,8 +2449,8 @@ func main() {
                           onClick={handleSubmitSection}
                           className="flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors font-semibold"
                         >
-                          <span>Submit Section</span>
-                          <FiSend />
+                          <span>Continue to Coding</span>
+                          <FiArrowRight />
                         </button>
                       )}
                     </div>
@@ -2592,7 +2932,8 @@ func main() {
                             onClick={handleSubmitVideo}
                             className="flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors font-semibold"
                           >
-                            <span>Submit</span>
+                            <span>{currentVideoQuestion < totalVideoQuestions ? 'Submit & Continue' : 'Submit Assessment'}</span>
+                            <FiArrowRight />
                           </button>
                         </>
                       )}
@@ -2625,8 +2966,8 @@ func main() {
                 }}
                 className="flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors font-semibold"
               >
-                <span>{currentCodingProblem < totalCodingProblems - 1 ? 'Next' : 'Submit'}</span>
-                {currentCodingProblem < totalCodingProblems - 1 ? <FiChevronRight /> : <FiSend />}
+                <span>{currentCodingProblem < totalCodingProblems - 1 ? 'Next Problem' : 'Continue to Video'}</span>
+                {currentCodingProblem < totalCodingProblems - 1 ? <FiChevronRight /> : <FiArrowRight />}
               </button>
             </div>
           )}

@@ -28,9 +28,37 @@ const CompetencySelector: React.FC<CompetencySelectorProps> = ({
 
   const MAX_COMPETENCIES = 10;
 
-  // NOTE: We no longer auto-load competencies when jobTitleId changes
-  // User must explicitly click "Sync Competencies from Role" button
-  // This provides consistent UX with the Job flow which also requires explicit sync
+  // Auto-load standard competencies when jobTitleId changes
+  useEffect(() => {
+    if (!jobTitleId) return;
+
+    const loadStandardCompetencies = async () => {
+      setLoading(true);
+      try {
+        const response = await axiosInstance.get(`/competencies/job-titles/${jobTitleId}/competencies/`);
+        const apiData = response.data;
+
+        // Transform backend format to frontend Competency format
+        const standardComps = apiData.competencies.map((jc: any) => ({
+          id: jc.competency_id,
+          name: jc.competency_name,
+          category: jc.competency_category,
+          description: jc.competency_description || jc.description || '',
+        }));
+
+        // Only set if competencies list is currently empty (don't override user's manual selections)
+        if (selectedCompetencies.length === 0 && standardComps.length > 0) {
+          onCompetenciesChange(standardComps);
+        }
+      } catch (error) {
+        console.error('Failed to load standard competencies:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStandardCompetencies();
+  }, [jobTitleId]); // Only run when jobTitleId changes
 
   // Search for additional competencies
   useEffect(() => {
@@ -152,8 +180,8 @@ const CompetencySelector: React.FC<CompetencySelectorProps> = ({
           <div className="text-gray-500 text-sm mb-2">No competencies selected yet</div>
           <div className="text-gray-600 text-xs">
             {jobTitleId
-              ? 'Competencies will be auto-loaded from the selected job title'
-              : 'Please select a job title first'}
+              ? 'Select a job title above to auto-load standard competencies'
+              : 'Please select a job title first to auto-load competencies'}
           </div>
         </div>
       )}

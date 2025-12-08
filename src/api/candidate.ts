@@ -64,6 +64,7 @@ interface SubmitAttemptResponse {
 interface HeartbeatResponse {
   status: 'active' | 'inactive' | 'invalidated';
   time_remaining_seconds: number;
+  total_violations?: number; // Added for violation reconciliation
   reason?: string;
 }
 
@@ -136,7 +137,7 @@ export const saveResponse = async (
   attemptId: string,
   data: SaveResponsePayload
 ): Promise<any> => {
-  const response = await axiosInstance.post(`/attempts/${attemptId}/save/`, data);
+  const response = await axiosInstance.post(`/attempt/${attemptId}/save/`, data);
   return response.data;
 };
 
@@ -144,7 +145,7 @@ export const saveResponse = async (
  * Submit attempt (final submission)
  */
 export const submitAttempt = async (attemptId: string): Promise<SubmitAttemptResponse> => {
-  const response = await axiosInstance.post(`/attempts/${attemptId}/submit/`);
+  const response = await axiosInstance.post(`/attempt/${attemptId}/submit/`);
   return response.data;
 };
 
@@ -152,7 +153,7 @@ export const submitAttempt = async (attemptId: string): Promise<SubmitAttemptRes
  * Send heartbeat to check status and get time remaining
  */
 export const sendHeartbeat = async (attemptId: string): Promise<HeartbeatResponse> => {
-  const response = await axiosInstance.post(`/attempts/${attemptId}/heartbeat/`);
+  const response = await axiosInstance.post(`/attempt/${attemptId}/heartbeat/`);
   return response.data;
 };
 
@@ -163,7 +164,7 @@ export const reportViolation = async (
   attemptId: string,
   violation: ReportViolationPayload
 ): Promise<any> => {
-  const response = await axiosInstance.post(`/attempts/${attemptId}/report_violation/`, violation);
+  const response = await axiosInstance.post(`/attempt/${attemptId}/report_violation/`, violation);
   return response.data;
 };
 
@@ -174,7 +175,7 @@ export const executeCode = async (
   attemptId: string,
   data: ExecuteCodePayload
 ): Promise<any> => {
-  const response = await axiosInstance.post(`/attempts/${attemptId}/execute_code/`, data);
+  const response = await axiosInstance.post(`/attempt/${attemptId}/execute_code/`, data);
   return response.data;
 };
 
@@ -182,7 +183,7 @@ export const executeCode = async (
  * Get code execution result
  */
 export const getCodeResult = async (attemptId: string, jobId: string): Promise<any> => {
-  const response = await axiosInstance.get(`/attempts/${attemptId}/code/result/${jobId}/`);
+  const response = await axiosInstance.get(`/attempt/${attemptId}/code/result/${jobId}/`);
   return response.data;
 };
 
@@ -190,7 +191,7 @@ export const getCodeResult = async (attemptId: string, jobId: string): Promise<a
  * Get attempt results (after submission)
  */
 export const getAttemptResults = async (attemptId: string): Promise<GetResultsResponse> => {
-  const response = await axiosInstance.get(`/attempts/${attemptId}/results/`);
+  const response = await axiosInstance.get(`/attempt/${attemptId}/results/`);
   return response.data;
 };
 
