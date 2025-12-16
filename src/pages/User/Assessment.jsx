@@ -7,6 +7,7 @@ import { FiClock, FiSave, FiChevronLeft, FiChevronRight, FiSend, FiShield, FiChe
 import Editor from '@monaco-editor/react';
 import { executeCode, runTestCases, formatOutput, validateCode } from '../../lib/codeSandbox';
 import { saveResponse, submitAttempt, sendHeartbeat, reportViolation, executeCode as executeCodeAPI, getCodeResult } from '../../api/candidate';
+import { debounce } from '../../utils/debounce';
 
 // Proctoring Alert Modal Component
 const ProctoringAlert = ({ isOpen, violation, onClose, violationCount }) => {
@@ -191,12 +192,15 @@ const Assessment = () => {
     }
 
     // Load attempt data from localStorage (set by SystemCheck.jsx)
-    const canResume = localStorage.getItem('can_resume') === 'true';
+    // IMPORTANT: On page refresh/reload, we should always try to resume if there's existing data
+    // The backend will return existing_responses if the attempt is ongoing
+    const canResume = true; // Always try to resume on page load - backend knows if attempt is ongoing
 
     if (storedAttemptData && storedAttemptId) {
       try {
         const data = JSON.parse(storedAttemptData);
         console.log('Loaded attempt data:', data);
+        console.log('Existing responses in data:', data.existing_responses);
         setAttemptData(data);
         setAttemptId(storedAttemptId);
 
@@ -219,10 +223,10 @@ const Assessment = () => {
           setTimeLeft(data.time_remaining_seconds);
         }
         
-        // Immediately fetch fresh time from backend on page load
-        const fetchFreshTime = async () => {
+        // Immediately fetch fresh time AND existing responses from backend on page load
+        const fetchFreshData = async () => {
           try {
-            console.log('Fetching fresh time from backend for attempt:', storedAttemptId);
+            console.log('Fetching fresh data from backend for attempt:', storedAttemptId);
             const heartbeatResponse = await sendHeartbeat(storedAttemptId);
             console.log('Heartbeat response:', heartbeatResponse);
             if (heartbeatResponse.time_remaining_seconds !== undefined) {
@@ -231,13 +235,84 @@ const Assessment = () => {
             } else {
               console.warn('⚠️ Heartbeat response missing time_remaining_seconds');
             }
+            
+            // Fetch existing responses from backend to handle page refresh
+            // This ensures we always have the latest saved answers
+            try {
+              const attemptToken = localStorage.getItem('attempt_token');
+              if (!attemptToken) {
+                console.warn('No attempt token found - cannot fetch existing responses');
+                return;
+              }
+              
+              const response = await fetch(`http://localhost:8000/api/v1/attempt/${storedAttemptId}/`, {
+                headers: {
+                  'Authorization': `Bearer ${attemptToken}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (!response.ok) {
+                console.warn('Failed to fetch attempt details:', response.status);
+                return;
+              }
+              
+              const attemptDetails = await response.json();
+              console.log('📥 Fetched fresh attempt data from backend:', attemptDetails);
+              console.log('📥 Existing responses count:', attemptDetails.existing_responses?.length || 0);
+              
+              // If there are existing responses, load them into localStorage
+              if (attemptDetails.existing_responses && attemptDetails.existing_responses.length > 0) {
+                const savedAnswers = {};
+                attemptDetails.existing_responses.forEach((r) => {
+                  const questionIndex = questions.findIndex(q => q.id === r.question_id);
+                  if (questionIndex !== -1) {
+                    const question = questions[questionIndex];
+                    if (question.type === 'mcq') {
+                      const frontendQuestionNum = mcqQuestions.findIndex(q => q.id === question.id) + 1;
+                      if (frontendQuestionNum > 0) {
+                        // Use ?? to handle option 0 correctly
+                        savedAnswers[frontendQuestionNum] = r.answer?.selected_option ?? '';
+                        console.log(`  Q${frontendQuestionNum}: option ${r.answer?.selected_option}`);
+                      }
+                    }
+                  }
+                });
+                
+                if (Object.keys(savedAnswers).length > 0) {
+                  console.log('💾 Updating localStorage with fresh backend data:', savedAnswers);
+                  localStorage.setItem('assessment_mcq_answers', JSON.stringify(savedAnswers));
+                  
+                  // Update question states to mark attempted questions
+                  setQuestions(prev => prev.map((q, index) => ({
+                    ...q,
+                    attempted: savedAnswers[index + 1] !== undefined && savedAnswers[index + 1] !== ''
+                  })));
+                  
+                  // If we're on question 1, load its saved answer immediately
+                  if (savedAnswers['1'] !== undefined && savedAnswers['1'] !== '') {
+                    const savedAnswer = savedAnswers['1'];
+                    const numericAnswer = typeof savedAnswer === 'string' ? parseInt(savedAnswer, 10) : savedAnswer;
+                    console.log(`🔄 Loading Q1 answer immediately: ${numericAnswer}`);
+                    setSelectedAnswer(numericAnswer);
+                  }
+                } else {
+                  console.log('No MCQ answers to restore');
+                }
+              } else {
+                console.log('No existing responses in backend data');
+              }
+            } catch (fetchErr) {
+              console.error('❌ Failed to fetch existing responses:', fetchErr);
+              // Not critical - continue with localStorage data
+            }
           } catch (err) {
-            console.error('❌ Failed to fetch fresh time:', err);
+            console.error('❌ Failed to fetch fresh data:', err);
             console.error('Error details:', err.response?.data || err.message);
             // Keep using stored time if fetch fails
           }
         };
-        fetchFreshTime();
+        fetchFreshData();
 
         // Initialize questions state from backend
         const mcqQuestions = questions.filter(q => q.type === 'mcq');
@@ -316,7 +391,8 @@ const Assessment = () => {
                 // Map to frontend question number (1-indexed)
                 const frontendQuestionNum = mcqQuestions.findIndex(q => q.id === question.id) + 1;
                 if (frontendQuestionNum > 0) {
-                  savedAnswers[frontendQuestionNum] = response.answer?.selected_option || '';
+                  // Use ?? instead of || to properly handle 0 as a valid option index
+                  savedAnswers[frontendQuestionNum] = response.answer?.selected_option ?? '';
                 }
               }
             }
@@ -331,6 +407,7 @@ const Assessment = () => {
           // Update question states to mark attempted questions
           setQuestions(prev => prev.map((q, index) => ({
             ...q,
+            // Use !== undefined && !== '' to properly handle 0 as valid answer
             attempted: savedAnswers[index + 1] !== undefined && savedAnswers[index + 1] !== ''
           })));
         }
@@ -367,6 +444,30 @@ const Assessment = () => {
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [questions, setQuestions] = useState([]);
   const [currentSection, setCurrentSection] = useState('mcq');
+  
+  // Load saved answer when navigating between questions
+  useEffect(() => {
+    if (currentQuestion > 0 && currentSection === 'mcq') {
+      const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+      const savedAnswer = mcqAnswers[currentQuestion.toString()];
+      
+      if (savedAnswer !== undefined && savedAnswer !== '') {
+        console.log(`Loading saved answer for question ${currentQuestion}:`, savedAnswer, typeof savedAnswer);
+        // Ensure it's a number for consistent comparison
+        const numericAnswer = typeof savedAnswer === 'string' ? parseInt(savedAnswer, 10) : savedAnswer;
+        setSelectedAnswer(numericAnswer);
+        
+        // Update question state to mark as attempted
+        setQuestions(prev => prev.map(q => ({
+          ...q,
+          attempted: q.id === currentQuestion ? true : q.attempted
+        })));
+      } else {
+        console.log(`No saved answer for question ${currentQuestion}`);
+        setSelectedAnswer('');
+      }
+    }
+  }, [currentQuestion, currentSection]);
   const [stream, setStream] = useState(null);
   
   // Proctoring state
@@ -880,7 +981,8 @@ func main() {
           // Time's up - save all current state and submit entire assessment
           if (currentSection === 'mcq') {
             // Save MCQ answers
-            if (selectedAnswer) {
+            // Use !== '' to properly handle 0 as a valid answer
+            if (selectedAnswer !== '' && selectedAnswer !== undefined) {
               const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
               mcqAnswers[currentQuestion.toString()] = selectedAnswer;
               localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
@@ -951,7 +1053,7 @@ func main() {
         code: currentProblem.code,
         language: currentProblem.selectedLanguage,
         custom_input: currentProblem.customInput
-      });
+      }, true); // immediate save before section change
     }
   };
 
@@ -1012,8 +1114,12 @@ func main() {
     if (stream && videoRef.current) {
       // Always set the stream when section changes or stream changes
       videoRef.current.srcObject = stream;
+      videoRef.current.muted = true; // Mute to avoid feedback
       videoRef.current.play().catch(err => {
-        console.error('Error playing video:', err);
+        // Gracefully handle play errors (AbortError, NotAllowedError, etc.)
+        if (err.name !== 'AbortError') {
+          console.warn('Video play interrupted:', err.name);
+        }
       });
     }
   }, [stream, currentSection]);
@@ -1026,8 +1132,12 @@ func main() {
       if (!isRecording && !recordedBlob) {
         if (videoPreviewRef.current.srcObject !== stream) {
           videoPreviewRef.current.srcObject = stream;
+          videoPreviewRef.current.muted = true; // Mute to avoid feedback
           videoPreviewRef.current.play().catch(err => {
-            console.error('Error playing video preview:', err);
+            // Gracefully handle play errors (AbortError, NotAllowedError, etc.)
+            if (err.name !== 'AbortError') {
+              console.warn('Video preview play interrupted:', err.name);
+            }
           });
         }
       }
@@ -1139,7 +1249,8 @@ func main() {
   const handlePrevious = async () => {
     if (currentQuestion > 1) {
       // Save current answer before moving (AWAIT to prevent data loss)
-      if (selectedAnswer) {
+      // Use !== '' to properly handle 0 as a valid answer
+      if (selectedAnswer !== '' && selectedAnswer !== undefined) {
         const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
         mcqAnswers[currentQuestion.toString()] = selectedAnswer;
         localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
@@ -1147,7 +1258,7 @@ func main() {
         // Save to backend - AWAIT to ensure save completes before navigation
         const currentQuestionObj = questions.find(q => q.id === currentQuestion);
         if (currentQuestionObj && currentQuestionObj.backendId) {
-          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer }, true); // immediate save before navigation
         }
       }
 
@@ -1155,73 +1266,50 @@ func main() {
       // Update question state
       setQuestions(prev => prev.map(q => ({
         ...q,
-        current: q.id === currentQuestion - 1
+        current: q.id === currentQuestion - 1,
+        attempted: q.id === currentQuestion ? selectedAnswer !== '' : q.attempted
       })));
     }
   };
 
-  // Backend helper functions
-  const saveToBackend = async (questionId, answer) => {
+  // Backend helper functions - HackerRank/LeetCode style (simple debounce)
+  const saveToBackend = async (questionId, answer, immediate = false) => {
     if (!attemptId) {
       console.warn('No attempt ID available for saving');
       return;
     }
 
-    try {
+    const performSave = async () => {
       setIsSaving(true);
       setSaveStatus('saving');
 
-      await saveResponse(attemptId, {
-        question_id: questionId,
-        answer: answer
-      });
+      try {
+        await saveResponse(attemptId, {
+          question_id: questionId,
+          answer: answer
+        });
 
-      setLastAutoSave(new Date());
-      setSaveStatus('saved');
-      console.log('✅ Saved response to backend:', questionId);
+        setLastAutoSave(new Date());
+        setSaveStatus('saved');
+        console.log('✅ Saved response to backend:', questionId);
 
-      // Remove from failed queue if it was there
-      const failedQueue = JSON.parse(localStorage.getItem('assessment_failed_saves') || '[]');
-      const filtered = failedQueue.filter(item => item.question_id !== questionId);
-      localStorage.setItem('assessment_failed_saves', JSON.stringify(filtered));
-      setFailedSaveCount(filtered.length);
-
-      // Reset to idle after showing "saved" for 2 seconds
-      setTimeout(() => setSaveStatus('idle'), 2000);
-
-    } catch (err) {
-      console.error('❌ Error saving to backend:', err);
-      setSaveStatus('error');
-
-      // INDUSTRY BEST PRACTICE: Add to failed saves queue for retry
-      const failedQueue = JSON.parse(localStorage.getItem('assessment_failed_saves') || '[]');
-      const failedSave = {
-        question_id: questionId,
-        answer: answer,
-        timestamp: Date.now(),
-        attempt_count: 1
-      };
-
-      // Check if already in queue
-      const existing = failedQueue.find(item => item.question_id === questionId);
-      if (existing) {
-        existing.answer = answer;  // Update with latest answer
-        existing.attempt_count += 1;
-        existing.timestamp = Date.now();
-      } else {
-        failedQueue.push(failedSave);
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch (err) {
+        console.error('❌ Error saving to backend:', err);
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      } finally {
+        setIsSaving(false);
       }
+    };
 
-      localStorage.setItem('assessment_failed_saves', JSON.stringify(failedQueue));
-      setFailedSaveCount(failedQueue.length);
-      console.log('📝 Added to retry queue. Will retry on next heartbeat.');
-
-      // Reset error status after 3 seconds
-      setTimeout(() => setSaveStatus('idle'), 3000);
-
-      // Note: User already has localStorage backup, so no data is lost
-    } finally {
-      setIsSaving(false);
+    if (immediate) {
+      // Immediate save (navigation/submit) - no debounce
+      await performSave();
+    } else {
+      // Debounced save (typing) - wait 2 seconds after user stops
+      setSaveStatus('unsaved');
+      debounce(`save-${questionId}`, performSave, 2000);
     }
   };
 
@@ -1231,83 +1319,20 @@ func main() {
     try {
       const response = await sendHeartbeat(attemptId);
 
-      // Sync time with backend to prevent drift (INDUSTRY BEST PRACTICE)
+      // Sync time with backend (prevents client-side drift)
       if (response.time_remaining_seconds !== undefined) {
-        console.log('Syncing time from backend:', response.time_remaining_seconds);
         setTimeLeft(response.time_remaining_seconds);
       }
 
-      // Reconcile violation count with backend (INDUSTRY BEST PRACTICE)
-      // Backend is source of truth - local count may drift due to network failures
+      // Update violation count from server
       if (response.total_violations !== undefined) {
-        const localCount = violationCount;
-        const serverCount = response.total_violations;
-
-        if (serverCount !== localCount) {
-          console.log(`Reconciling violations: local=${localCount}, server=${serverCount}`);
-          setViolationCount(serverCount);
-
-          // Optionally: Retry failed violations from localStorage queue
-          // This handles cases where reportViolation() failed due to network issues
-          const savedViolations = JSON.parse(localStorage.getItem('assessment_violations') || '[]');
-          if (savedViolations.length > serverCount) {
-            console.log('Found unsent violations in queue, retrying...');
-            // Backend will de-duplicate based on timestamp
-            const unsentViolations = savedViolations.slice(serverCount);
-            for (const violation of unsentViolations) {
-              const severity = ['multiple_persons', 'tab_switch', 'devtools'].includes(violation.type) ? 'high' : 'medium';
-              try {
-                await reportViolation(attemptId, {
-                  type: violation.type,
-                  severity: severity,
-                  metadata: violation
-                });
-              } catch (err) {
-                // Will retry on next heartbeat
-                console.error('Failed to retry violation:', err);
-                break;
-              }
-            }
-          }
-        }
+        setViolationCount(response.total_violations);
       }
 
-      // INDUSTRY BEST PRACTICE: Periodic save during heartbeat
-      // Ensures coding answers are saved even if debounced save missed
-      if (currentSection === 'coding') {
-        console.log('Heartbeat: Syncing coding state to backend');
-        await saveCodingState();
-      }
-
-      // INDUSTRY BEST PRACTICE: Retry failed answer saves
-      const failedQueue = JSON.parse(localStorage.getItem('assessment_failed_saves') || '[]');
-      if (failedQueue.length > 0) {
-        console.log(`📝 Retrying ${failedQueue.length} failed saves...`);
-        const remainingFailed = [];
-
-        for (const failedSave of failedQueue) {
-          try {
-            await saveResponse(attemptId, {
-              question_id: failedSave.question_id,
-              answer: failedSave.answer
-            });
-            console.log(`✅ Successfully retried save for question ${failedSave.question_id}`);
-          } catch (err) {
-            // Keep in queue for next retry
-            console.log(`❌ Retry failed for question ${failedSave.question_id}, will retry again`);
-            remainingFailed.push(failedSave);
-          }
-        }
-
-        // Update queue with remaining failed saves
-        localStorage.setItem('assessment_failed_saves', JSON.stringify(remainingFailed));
-        setFailedSaveCount(remainingFailed.length);
-      }
-
+      // Check if attempt is still valid
       if (response.status === 'invalidated' || response.status === 'inactive') {
-        // Attempt was invalidated or expired
         alert('Your assessment session has ended. ' + (response.reason || 'Time expired'));
-        handleSubmitSection(); // Force submit
+        handleSubmitSection();
       }
     } catch (err) {
       console.error('Heartbeat error:', err);
@@ -1317,6 +1342,7 @@ func main() {
   const reportViolationToBackend = async (violationType, severity = 'medium', metadata = {}) => {
     if (!attemptId) return;
 
+    // Simple direct send (HackerRank/LeetCode style - no batching)
     try {
       await reportViolation(attemptId, {
         type: violationType,
@@ -1326,6 +1352,7 @@ func main() {
       console.log('Reported violation to backend:', violationType);
     } catch (err) {
       console.error('Error reporting violation:', err);
+      // Fail silently - violations are informational only
     }
   };
 
@@ -1351,7 +1378,8 @@ func main() {
   const handleNext = async () => {
     if (currentQuestion < totalQuestions) {
       // Save current answer before moving (AWAIT to prevent data loss)
-      if (selectedAnswer) {
+      // Use !== '' to properly handle 0 as a valid answer
+      if (selectedAnswer !== '' && selectedAnswer !== undefined) {
         const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
         mcqAnswers[currentQuestion.toString()] = selectedAnswer;
         localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
@@ -1359,7 +1387,7 @@ func main() {
         // Save to backend - AWAIT to ensure save completes before navigation
         const currentQuestionObj = questions.find(q => q.id === currentQuestion);
         if (currentQuestionObj && currentQuestionObj.backendId) {
-          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer }, true); // immediate save before navigation
         }
       }
 
@@ -1371,6 +1399,34 @@ func main() {
         attempted: q.id === currentQuestion ? selectedAnswer !== '' : q.attempted
       })));
     }
+  };
+
+  // Handle direct navigation from question map
+  const handleQuestionJump = async (questionId) => {
+    if (questionId === currentQuestion) return; // Already on this question
+
+    // Save current answer before jumping
+    // Use !== '' to properly handle 0 as a valid answer
+    if (selectedAnswer !== '' && selectedAnswer !== undefined) {
+      const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
+      mcqAnswers[currentQuestion.toString()] = selectedAnswer;
+      localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
+
+      // Save to backend
+      const currentQuestionObj = questions.find(q => q.id === currentQuestion);
+      if (currentQuestionObj && currentQuestionObj.backendId) {
+        await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer }, true);
+      }
+    }
+
+    // Update question state
+    setQuestions(prev => prev.map(q => ({
+      ...q,
+      current: q.id === questionId,
+      attempted: q.id === currentQuestion ? selectedAnswer !== '' : q.attempted
+    })));
+
+    setCurrentQuestion(questionId);
   };
 
   const handleClearResponse = () => {
@@ -1417,7 +1473,8 @@ func main() {
     // Save final state before submission
     if (currentSection === 'mcq') {
       // Save all MCQ answers before moving to next section
-      if (selectedAnswer) {
+      // Use !== '' to properly handle 0 as a valid answer
+      if (selectedAnswer !== '' && selectedAnswer !== undefined) {
         const mcqAnswers = JSON.parse(localStorage.getItem('assessment_mcq_answers') || '{}');
         mcqAnswers[currentQuestion.toString()] = selectedAnswer;
         localStorage.setItem('assessment_mcq_answers', JSON.stringify(mcqAnswers));
@@ -1425,7 +1482,7 @@ func main() {
         // Save to backend
         const currentQuestionObj = questions.find(q => q.id === currentQuestion);
         if (currentQuestionObj && currentQuestionObj.backendId) {
-          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer });
+          await saveToBackend(currentQuestionObj.backendId, { selected_option: selectedAnswer }, true); // immediate save before section change
         }
       }
       // Navigate to coding section
@@ -1865,7 +1922,13 @@ func main() {
       // Set video stream to preview element
       if (videoPreviewRef.current) {
         videoPreviewRef.current.srcObject = mediaStream;
-        videoPreviewRef.current.play().catch(err => console.error('Error playing video:', err));
+        videoPreviewRef.current.muted = true; // Mute to avoid feedback
+        videoPreviewRef.current.play().catch(err => {
+          // Gracefully handle play errors (AbortError, NotAllowedError, etc.)
+          if (err.name !== 'AbortError') {
+            console.warn('Video preview play interrupted:', err.name);
+          }
+        });
       }
 
       // Initialize MediaRecorder with supported MIME type
@@ -2178,7 +2241,7 @@ func main() {
                 {questions.map((q) => (
                   <button
                     key={q.id}
-                    onClick={() => setCurrentQuestion(q.id)}
+                    onClick={() => handleQuestionJump(q.id)}
                     className={`w-10 h-10 rounded-lg font-semibold transition-colors ${
                       q.current
                         ? 'bg-orange-500 text-white'

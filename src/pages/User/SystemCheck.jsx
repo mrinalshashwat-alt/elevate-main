@@ -182,6 +182,7 @@ const SystemCheck = () => {
 
       console.log('Response validation passed:', {
         attempt_id: response.attempt_id,
+        attempt_token: response.attempt_token ? 'JWT present' : 'missing',
         questions_count: response.questions.length,
         can_resume: response.can_resume
       });
@@ -191,6 +192,12 @@ const SystemCheck = () => {
       localStorage.setItem('attempt_id', response.attempt_id);
       localStorage.setItem('can_resume', response.can_resume ? 'true' : 'false');
       localStorage.setItem('assessment_flow_completed', 'true');
+
+      // Store JWT token for guest participant authentication (stateless, industry standard)
+      if (response.attempt_token) {
+        localStorage.setItem('attempt_token', response.attempt_token);
+        console.log('✅ Stored JWT attempt_token for stateless authentication');
+      }
 
       console.log('Stored attempt data in localStorage');
       console.log('localStorage keys:', Object.keys(localStorage));

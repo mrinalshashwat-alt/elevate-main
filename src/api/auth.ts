@@ -20,17 +20,38 @@ type VerifyOtpPayload = {
 };
 
 export const signup = async (payload: SignupPayload) => {
-  const { data } = await axiosInstance.post('/auth/signup/', payload);
+  const { data } = await axiosInstance.post('/auth/signup/', payload, {
+    transformRequest: [(data, headers) => {
+      // Remove auth header for public endpoint
+      delete headers.Authorization;
+      headers['Content-Type'] = 'application/json';
+      return JSON.stringify(data);
+    }],
+  });
   return data;
 };
 
 export const requestOtp = async (payload: RequestOtpPayload) => {
-  const { data } = await axiosInstance.post('/auth/request-otp/', payload);
+  const { data } = await axiosInstance.post('/auth/request-otp/', payload, {
+    transformRequest: [(data, headers) => {
+      // Remove auth header for public endpoint
+      delete headers.Authorization;
+      headers['Content-Type'] = 'application/json';
+      return JSON.stringify(data);
+    }],
+  });
   return data;
 };
 
 export const verifyOtp = async (payload: VerifyOtpPayload) => {
-  const { data } = await axiosInstance.post('/auth/verify-otp/', payload);
+  const { data } = await axiosInstance.post('/auth/verify-otp/', payload, {
+    transformRequest: [(data, headers) => {
+      // Remove auth header for public endpoint
+      delete headers.Authorization;
+      headers['Content-Type'] = 'application/json';
+      return JSON.stringify(data);
+    }],
+  });
   return data;
 };
 

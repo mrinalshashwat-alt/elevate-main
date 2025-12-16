@@ -843,3 +843,140 @@ export const addTemplatesToAssessment = async (
   });
   return data;
 };
+
+// ==========================
+// Assessment Results & Leaderboard API
+// ==========================
+
+export type CompetencyScore = {
+  competency_id: string;
+  competency_name: string;
+  competency_category: string;
+  total_marks: number;
+  marks_obtained: number;
+  percentage: number;
+  mcq_marks: number;
+  coding_marks: number;
+  subjective_marks: number;
+  grade: string;
+};
+
+export type LeaderboardEntry = {
+  rank: number;
+  participant_id: string;
+  participant_name: string;
+  email: string;
+  total_score: number;
+  mcq_score: number;
+  code_score: number;
+  subjective_score: number;
+  time_taken_minutes: number;
+  finished_at: string;
+  top_competencies: Array<{
+    name: string;
+    percentage: number;
+    grade: string;
+  }>;
+};
+
+export type GapAnalysis = {
+  overall_match: number;
+  competencies: Array<{
+    competency_id: string;
+    name: string;
+    category: string;
+    required_level: number;
+    candidate_score: number;
+    candidate_grade: string;
+    gap: 'strong' | 'adequate' | 'gap' | 'critical_gap';
+    percentile: number;
+    recommendations: string[];
+  }>;
+  strong_skills: string[];
+  skill_gaps: string[];
+  critical_gaps: string[];
+};
+
+export type ParticipantDetail = {
+  participant: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+  };
+  attempt: {
+    id: string;
+    status: string;
+    total_score: number;
+    mcq_score: number;
+    code_score: number;
+    subjective_score: number;
+    started_at: string;
+    finished_at: string;
+    time_taken_minutes: number;
+    ip_address: string;
+    user_agent: string;
+    proctoring_violations: Array<{
+      type: string;
+      severity: string;
+      timestamp: string;
+      metadata: any;
+    }>;
+  };
+  competency_scores: CompetencyScore[];
+  gap_analysis: GapAnalysis | null;
+  responses: Array<{
+    id: string;
+    question: {
+      id: string;
+      type: string;
+      difficulty: number;
+      content: any;
+      order: number;
+    };
+    answer: any;
+    score: number;
+    is_graded: boolean;
+    graded_at: string | null;
+    feedback: string;
+    execution_result: any;
+    video_transcript: string;
+    video_url?: string;
+    ai_grading_metadata: any;
+  }>;
+};
+
+/**
+ * Get assessment leaderboard
+ */
+export const getAssessmentLeaderboard = async (
+  assessmentId: string,
+  params?: {
+    limit?: number;
+    offset?: number;
+    sort?: 'score' | 'time';
+  }
+): Promise<{
+  count: number;
+  next: boolean;
+  previous: boolean;
+  results: LeaderboardEntry[];
+}> => {
+  const { data } = await axiosInstance.get(`/admin/assessments/${assessmentId}/leaderboard/`, {
+    params,
+  });
+  return data;
+};
+
+/**
+ * Get participant detail for an assessment
+ */
+export const getParticipantDetail = async (
+  assessmentId: string,
+  participantId: string
+): Promise<ParticipantDetail> => {
+  const { data } = await axiosInstance.get(
+    `/admin/assessments/${assessmentId}/participants/${participantId}/`
+  );
+  return data;
+};

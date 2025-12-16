@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminLayout from '../../components/AdminLayout';
+import { getAssessmentLeaderboard } from '../../api/admin';
 
 // Custom Dropdown Component with Orange Background
 const CustomDropdown = ({ label, value, onChange, options, placeholder }) => {
@@ -74,109 +75,58 @@ const CustomDropdown = ({ label, value, onChange, options, placeholder }) => {
 
 const CandidatesList = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const assessmentId = searchParams.get('assessmentId');
+  
   const [competency, setCompetency] = useState('');
-  const [scoreRange, setScoreRange] = useState('70% - 100%');
-  const [location, setLocation] = useState('All locations');
+  const [scoreRange, setScoreRange] = useState('All Scores');
   const [showCompetencyModal, setShowCompetencyModal] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(null);
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [copiedEmailId, setCopiedEmailId] = useState(null);
+  const [leaderboardData, setLeaderboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [allCandidates, setAllCandidates] = useState([]);
 
-  const competencyOptions = ['All Competencies', 'Frontend Development', 'Backend Development', 'Full Stack', 'Data Analysis', 'Product Management'];
   const scoreRangeOptions = ['All Scores', '0% - 25%', '25% - 50%', '50% - 70%', '70% - 80%', '80% - 90%', '90% - 100%'];
-  const locationOptions = ['All locations', 'Mumbai, Maharashtra', 'Bangalore, Karnataka', 'Hyderabad, Telangana', 'Delhi, NCR', 'Chennai, Tamil Nadu', 'Pune, Maharashtra', 'Ahmedabad, Gujarat', 'Kochi, Kerala', 'Indore, Madhya Pradesh', 'Remote'];
 
-  const allCandidates = [
-    {
-      id: 1,
-      name: 'Priya Sharma',
-      email: 'priya.sharma@gmail.com',
-      score: 88,
-      competencyMatch: 82,
-      location: 'Mumbai, Maharashtra',
-      competency: 'Product Management'
-    },
-    {
-      id: 2,
-      name: 'Arjun Patel',
-      email: 'arjun.patel@outlook.com',
-      score: 74,
-      competencyMatch: 68,
-      location: 'Bangalore, Karnataka',
-      competency: 'Backend Development'
-    },
-    {
-      id: 3,
-      name: 'Ananya Reddy',
-      email: 'ananya.reddy@yahoo.com',
-      score: 92,
-      competencyMatch: 90,
-      location: 'Hyderabad, Telangana',
-      competency: 'Frontend Development'
-    },
-    {
-      id: 4,
-      name: 'Rohan Kumar',
-      email: 'rohan.kumar@gmail.com',
-      score: 61,
-      competencyMatch: 74,
-      location: 'Delhi, NCR',
-      competency: 'Full Stack'
-    },
-    {
-      id: 5,
-      name: 'Kavya Nair',
-      email: 'kavya.nair@outlook.com',
-      score: 85,
-      competencyMatch: 88,
-      location: 'Chennai, Tamil Nadu',
-      competency: 'Data Analysis'
-    },
-    {
-      id: 6,
-      name: 'Vikram Singh',
-      email: 'vikram.singh@gmail.com',
-      score: 79,
-      competencyMatch: 75,
-      location: 'Pune, Maharashtra',
-      competency: 'Full Stack'
-    },
-    {
-      id: 7,
-      name: 'Meera Iyer',
-      email: 'meera.iyer@yahoo.com',
-      score: 95,
-      competencyMatch: 92,
-      location: 'Bangalore, Karnataka',
-      competency: 'Frontend Development'
-    },
-    {
-      id: 8,
-      name: 'Aditya Desai',
-      email: 'aditya.desai@gmail.com',
-      score: 67,
-      competencyMatch: 71,
-      location: 'Ahmedabad, Gujarat',
-      competency: 'Backend Development'
-    },
-    {
-      id: 9,
-      name: 'Sneha Menon',
-      email: 'sneha.menon@outlook.com',
-      score: 83,
-      competencyMatch: 79,
-      location: 'Kochi, Kerala',
-      competency: 'Product Management'
-    },
-    {
-      id: 10,
-      name: 'Rahul Joshi',
-      email: 'rahul.joshi@gmail.com',
-      score: 72,
-      competencyMatch: 69,
-      location: 'Indore, Madhya Pradesh',
-      competency: 'Data Analysis'
+  // Fetch leaderboard data
+  useEffect(() => {
+    if (assessmentId) {
+      fetchLeaderboard();
+    } else {
+      setError('No assessment ID provided in URL');
+      setLoading(false);
     }
-  ];
+  }, [assessmentId]);
+
+  const fetchLeaderboard = async () => {
+    try {
+      setLoading(true);
+      const data = await getAssessmentLeaderboard(assessmentId, { limit: 100 });
+      setLeaderboardData(data);
+      
+      // Transform leaderboard data to candidate format
+      const transformed = data.results.map((entry) => ({
+        id: entry.participant_id,
+        participantId: entry.participant_id,
+        name: entry.participant_name,
+        email: entry.participant_email,
+        score: Math.round(entry.total_score),
+        competencyMatch: entry.overall_competency_score ? Math.round(entry.overall_competency_score) : Math.round(entry.total_score),
+        competencies: entry.top_competencies || [],
+        rank: entry.rank
+      }));
+      
+      setAllCandidates(transformed);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching leaderboard:', err);
+      setError('Failed to load candidates data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter logic
   const getFilteredCandidates = () => {
@@ -184,7 +134,9 @@ const CandidatesList = () => {
 
     // Filter by competency
     if (competency && competency !== 'All Competencies') {
-      filtered = filtered.filter(c => c.competency === competency);
+      filtered = filtered.filter(c => 
+        c.competencies && c.competencies.some(comp => comp.name === competency)
+      );
     }
 
     // Filter by score range
@@ -197,15 +149,15 @@ const CandidatesList = () => {
       }
     }
 
-    // Filter by location
-    if (location && location !== 'All locations') {
-      filtered = filtered.filter(c => c.location === location);
-    }
-
     return filtered;
   };
 
   const candidates = getFilteredCandidates();
+
+  // Get unique competencies from all candidates
+  const competencyOptions = ['All Competencies', ...new Set(
+    allCandidates.flatMap(c => c.competencies ? c.competencies.map(comp => comp.name) : [])
+  )];
 
   // Calculate stats from filtered candidates
   const avgCompetencyMatch = candidates.length > 0
@@ -219,56 +171,8 @@ const CandidatesList = () => {
     : 0;
   const totalCandidates = candidates.length;
 
-  // Mock competency breakdown data for different roles
-  const getCompetencyBreakdown = (role) => {
-    const breakdowns = {
-      'Product Management': [
-        { name: 'Strategic Thinking', score: 85 },
-        { name: 'Product Vision', score: 88 },
-        { name: 'Stakeholder Management', score: 82 },
-        { name: 'Data Analysis', score: 79 },
-        { name: 'User Research', score: 80 },
-      ],
-      'Frontend Development': [
-        { name: 'React/JavaScript', score: 92 },
-        { name: 'CSS/Design Systems', score: 88 },
-        { name: 'Performance Optimization', score: 85 },
-        { name: 'Testing', score: 90 },
-        { name: 'API Integration', score: 87 },
-      ],
-      'Backend Development': [
-        { name: 'API Design', score: 74 },
-        { name: 'Database Management', score: 71 },
-        { name: 'System Architecture', score: 68 },
-        { name: 'Security', score: 72 },
-        { name: 'Scalability', score: 69 },
-      ],
-      'Full Stack': [
-        { name: 'Frontend Skills', score: 74 },
-        { name: 'Backend Skills', score: 75 },
-        { name: 'Full Stack Integration', score: 76 },
-        { name: 'DevOps', score: 73 },
-        { name: 'Problem Solving', score: 77 },
-      ],
-      'Data Analysis': [
-        { name: 'SQL', score: 88 },
-        { name: 'Data Visualization', score: 85 },
-        { name: 'Statistical Analysis', score: 90 },
-        { name: 'Python/R', score: 87 },
-        { name: 'Business Intelligence', score: 89 },
-      ],
-    };
-    return breakdowns[role] || [
-      { name: 'Technical Skills', score: 75 },
-      { name: 'Communication', score: 78 },
-      { name: 'Problem Solving', score: 80 },
-      { name: 'Team Collaboration', score: 76 },
-      { name: 'Leadership', score: 72 },
-    ];
-  };
-
-  const handleCompetencyClick = (role) => {
-    setSelectedRole(role);
+  const handleCompetencyClick = (candidate) => {
+    setSelectedCandidate(candidate);
     setShowCompetencyModal(true);
   };
 
@@ -284,11 +188,34 @@ const CandidatesList = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <AdminLayout title="Candidates">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-white text-lg">Loading candidates...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AdminLayout title="Candidates">
+        <div className="bg-red-500/10 border border-red-500/50 rounded-3xl p-8">
+          <p className="text-white text-center">{error}</p>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout title="Candidates">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2 text-white">Candidates</h1>
-        <p className="text-gray-400">Browse and filter candidates by competency, score, and location</p>
+        <p className="text-gray-400">Browse and filter candidates by competency and score</p>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-12 relative z-10">
@@ -296,7 +223,7 @@ const CandidatesList = () => {
         <h2 className="text-4xl font-bold mb-8 text-orange-400">Completed Assessment - Candidates</h2>
 
         {/* Filters */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-2 gap-6 mb-8">
           <CustomDropdown
             label="Competency"
             value={competency}
@@ -310,13 +237,6 @@ const CandidatesList = () => {
             onChange={setScoreRange}
             options={scoreRangeOptions}
             placeholder="Select score range"
-          />
-          <CustomDropdown
-            label="Location (optional)"
-            value={location}
-            onChange={setLocation}
-            options={locationOptions}
-            placeholder="Select location"
           />
         </div>
 
@@ -371,9 +291,8 @@ const CandidatesList = () => {
             <p className="text-gray-400 mb-6">Try adjusting your filters to see more results</p>
             <button
               onClick={() => {
-                setCompetency('');
-                setScoreRange('70% - 100%');
-                setLocation('All locations');
+                setCompetency('All Competencies');
+                setScoreRange('All Scores');
               }}
               className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-semibold text-white hover:shadow-lg transition-all"
             >
@@ -408,7 +327,7 @@ const CandidatesList = () => {
                     >
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => router.push(`/admin/results?candidateId=${candidate.id}&tab=profile`)}
+                          onClick={() => router.push(`/admin/results?assessmentId=${assessmentId}&participantId=${candidate.participantId}`)}
                           className="font-semibold text-white hover:text-orange-400 transition-colors cursor-pointer text-left"
                         >
                           {candidate.name}
@@ -436,7 +355,7 @@ const CandidatesList = () => {
                       </td>
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => handleCompetencyClick(candidate.competency)}
+                          onClick={() => handleCompetencyClick(candidate)}
                           className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity w-full"
                         >
                           <span className="text-white font-semibold min-w-[50px]">{candidate.competencyMatch}%</span>
@@ -452,7 +371,7 @@ const CandidatesList = () => {
                       </td>
                       <td className="px-6 py-4">
                         <button
-                          onClick={() => router.push('/admin/results?tab=report')}
+                          onClick={() => router.push(`/admin/results?assessmentId=${assessmentId}&participantId=${candidate.participantId}`)}
                           className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg text-white font-semibold hover:shadow-lg transition-all transform hover:scale-105"
                         >
                           View Full Report
@@ -469,7 +388,7 @@ const CandidatesList = () => {
 
       {/* Competency Breakdown Modal */}
       <AnimatePresence>
-        {showCompetencyModal && selectedRole && (
+        {showCompetencyModal && selectedCandidate && (
           <motion.div
             className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] p-4"
             initial={{ opacity: 0 }}
@@ -485,7 +404,7 @@ const CandidatesList = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-white">Competency Breakdown: {selectedRole}</h3>
+                <h3 className="text-2xl font-bold text-white">Competency Breakdown: {selectedCandidate.name}</h3>
                 <button
                   onClick={() => setShowCompetencyModal(false)}
                   className="text-gray-400 hover:text-white transition-colors"
@@ -496,33 +415,39 @@ const CandidatesList = () => {
                 </button>
               </div>
               
-              <div className="space-y-6">
-                {getCompetencyBreakdown(selectedRole).map((item, idx) => (
-                  <div key={idx}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-white font-semibold">{item.name}</span>
-                      <span className="text-orange-400 font-bold">{item.score}%</span>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
-                      <motion.div
-                        className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${item.score}%` }}
-                        transition={{ duration: 1, delay: idx * 0.1 }}
-                      ></motion.div>
+              {selectedCandidate.competencies && selectedCandidate.competencies.length > 0 ? (
+                <>
+                  <div className="space-y-6">
+                    {selectedCandidate.competencies.map((item, idx) => (
+                      <div key={idx}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-white font-semibold">{item.name}</span>
+                          <span className="text-orange-400 font-bold">{Math.round(item.score)}%</span>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+                          <motion.div
+                            className="bg-gradient-to-r from-orange-500 to-orange-600 h-3 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${item.score}%` }}
+                            transition={{ duration: 1, delay: idx * 0.1 }}
+                          ></motion.div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 pt-6 border-t border-white/10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Overall Score</span>
+                      <span className="text-3xl font-black text-orange-400">
+                        {selectedCandidate.score}%
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              <div className="mt-6 pt-6 border-t border-white/10">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Overall Match Score</span>
-                  <span className="text-3xl font-black text-orange-400">
-                    {Math.round(getCompetencyBreakdown(selectedRole).reduce((sum, item) => sum + item.score, 0) / getCompetencyBreakdown(selectedRole).length)}%
-                  </span>
-                </div>
-              </div>
+                </>
+              ) : (
+                <p className="text-gray-400 text-center py-8">No competency data available</p>
+              )}
             </motion.div>
           </motion.div>
         )}
