@@ -346,6 +346,13 @@ const Assessment = () => {
             const savedCode = existingResponse?.answer?.code || '';
             const savedLanguage = existingResponse?.answer?.language || 'python';
             
+            // Transform test cases to match frontend expectations
+            const transformedTestCases = (q.content?.test_cases || []).map(tc => ({
+              ...tc,
+              expectedOutput: tc.expectedOutput || tc.output || tc.expected_output || '',
+              input: tc.input || tc.stdin || ''
+            }));
+
             return {
               id: q.id,
               backendId: q.id,
@@ -356,7 +363,7 @@ const Assessment = () => {
               selectedLanguage: savedLanguage,
               testResults: [],
               executionResult: null,
-              testCases: q.content?.test_cases || [],
+              testCases: transformedTestCases,
               order: q.order || index,
               difficulty: q.difficulty
             };

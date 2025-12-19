@@ -383,16 +383,19 @@ const normalizeOutput = (output) => {
 // Run test cases against code
 export const runTestCases = async (language, code, testCases) => {
   const results = [];
-  
+
   for (const testCase of testCases) {
     const result = await executeCode(language, code, testCase.input);
-    
+
+    // Support both 'expectedOutput' (camelCase) and 'output' (from backend)
+    const expectedOutput = testCase.expectedOutput || testCase.output || testCase.expected_output || '';
+
     // Normalize both outputs for comparison
     const normalizedActual = normalizeOutput(result.output);
-    const normalizedExpected = normalizeOutput(testCase.expectedOutput);
-    
+    const normalizedExpected = normalizeOutput(expectedOutput);
+
     const passed = result.success && normalizedActual === normalizedExpected;
-    
+
     results.push({
       ...testCase,
       passed,
@@ -403,7 +406,7 @@ export const runTestCases = async (language, code, testCases) => {
       executionTime: result.executionTime,
     });
   }
-  
+
   return results;
 };
 

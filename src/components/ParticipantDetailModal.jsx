@@ -1,10 +1,27 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ParticipantDetailModal = ({ participant, onClose }) => {
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Null safety checks
+  if (!participant || !participant.participant || !participant.attempt) {
+    return null;
+  }
+
+  // Keyboard navigation - Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '👤' },
@@ -33,9 +50,9 @@ const ParticipantDetailModal = ({ participant, onClose }) => {
           <div className="flex justify-between items-center p-6 border-b border-white/10">
             <div>
               <h2 className="text-3xl font-bold text-white mb-1">
-                {participant.participant.name}
+                {participant.participant?.name || 'Unknown'}
               </h2>
-              <p className="text-gray-400">{participant.participant.email}</p>
+              <p className="text-gray-400">{participant.participant?.email || 'No email'}</p>
             </div>
             <button
               onClick={onClose}
@@ -90,10 +107,101 @@ const ParticipantDetailModal = ({ participant, onClose }) => {
 
 // Overview Tab
 const OverviewTab = ({ participant }) => {
-  const { participant: profile, attempt } = participant;
+  const { participant: profile, attempt, gap_analysis } = participant;
+
+  // Determine fit score color based on percentage
+  const getFitScoreColor = (score) => {
+    if (score >= 80) return 'green';
+    if (score >= 60) return 'yellow';
+    return 'red';
+  };
+
+  const getFitScoreLabel = (score) => {
+    if (score >= 85) return 'Excellent Fit';
+    if (score >= 70) return 'Good Fit';
+    if (score >= 50) return 'Moderate Fit';
+    return 'Poor Fit';
+  };
+
+  const fitScore = gap_analysis?.overall_match;
+  const fitColor = fitScore ? getFitScoreColor(fitScore) : 'gray';
+  const fitLabel = fitScore ? getFitScoreLabel(fitScore) : 'N/A';
 
   return (
     <div className="space-y-6">
+      {/* Fit Score Card - Prominently Displayed */}
+      {fitScore !== undefined && (
+        <div className={`bg-gradient-to-br ${
+          fitColor === 'green' ? 'from-green-500/20 to-green-600/20 border-green-500/50' :
+          fitColor === 'yellow' ? 'from-yellow-500/20 to-yellow-600/20 border-yellow-500/50' :
+          'from-red-500/20 to-red-600/20 border-red-500/50'
+        } border rounded-3xl p-8`}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-4xl">🎯</span>
+                <h3 className="text-3xl font-bold text-white">Fit Score</h3>
+              </div>
+              <p className="text-gray-300 text-sm">Match against job requirements</p>
+            </div>
+            <div className="text-right">
+              <div className={`text-6xl font-bold ${
+                fitColor === 'green' ? 'text-green-400' :
+                fitColor === 'yellow' ? 'text-yellow-400' :
+                'text-red-400'
+              }`}>
+                {fitScore}%
+              </div>
+              <div className={`text-lg font-semibold ${
+                fitColor === 'green' ? 'text-green-400' :
+                fitColor === 'yellow' ? 'text-yellow-400' :
+                'text-red-400'
+              }`}>
+                {fitLabel}
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden">
+            <motion.div
+              className={`h-4 rounded-full ${
+                fitColor === 'green' ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                fitColor === 'yellow' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                'bg-gradient-to-r from-red-500 to-red-600'
+              }`}
+              initial={{ width: 0 }}
+              animate={{ width: `${fitScore}%` }}
+              transition={{ duration: 1, delay: 0.2 }}
+            />
+          </div>
+
+          {/* Quick Insights */}
+          {gap_analysis && (
+            <div className="grid grid-cols-3 gap-3 mt-6">
+              <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="text-green-400 text-2xl font-bold">
+                  {gap_analysis.strong_skills?.length || 0}
+                </div>
+                <div className="text-gray-400 text-xs">Strong Skills</div>
+              </div>
+              <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="text-yellow-400 text-2xl font-bold">
+                  {gap_analysis.skill_gaps?.length || 0}
+                </div>
+                <div className="text-gray-400 text-xs">Skill Gaps</div>
+              </div>
+              <div className="bg-white/5 rounded-xl p-3 text-center">
+                <div className="text-red-400 text-2xl font-bold">
+                  {gap_analysis.critical_gaps?.length || 0}
+                </div>
+                <div className="text-gray-400 text-xs">Critical Gaps</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Score Card */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
         <h3 className="text-2xl font-bold text-white mb-6">Score Summary</h3>
@@ -110,10 +218,10 @@ const OverviewTab = ({ participant }) => {
         <h3 className="text-xl font-bold text-white mb-4">Attempt Details</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <MetadataRow label="Status" value={<StatusBadge status={attempt.status} />} />
-          <MetadataRow label="Started" value={new Date(attempt.started_at).toLocaleString()} />
-          <MetadataRow label="Finished" value={new Date(attempt.finished_at).toLocaleString()} />
-          <MetadataRow label="Time Taken" value={`${attempt.time_taken_minutes} minutes`} />
-          <MetadataRow label="IP Address" value={attempt.ip_address} />
+          <MetadataRow label="Started" value={attempt.started_at ? new Date(attempt.started_at).toLocaleString() : 'N/A'} />
+          <MetadataRow label="Finished" value={attempt.finished_at ? new Date(attempt.finished_at).toLocaleString() : 'Ongoing'} />
+          <MetadataRow label="Time Taken" value={attempt.time_taken_minutes ? `${attempt.time_taken_minutes} minutes` : 'N/A'} />
+          <MetadataRow label="IP Address" value={attempt.ip_address || 'Not recorded'} />
           <MetadataRow label="Location" value={profile.phone || 'Not provided'} />
         </div>
       </div>
@@ -128,7 +236,7 @@ const CompetencyTab = ({ participant }) => {
   return (
     <div className="space-y-6">
       {/* Gap Analysis Card - KEY USP */}
-      {gap_analysis && (
+      {gap_analysis ? (
         <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/10 border border-orange-500/50 rounded-3xl p-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="text-4xl">🎯</span>
@@ -183,6 +291,14 @@ const CompetencyTab = ({ participant }) => {
               color="red"
             />
           </div>
+        </div>
+      ) : (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <span className="text-6xl mb-4 block">📊</span>
+          <h4 className="text-xl font-bold text-white mb-2">Gap Analysis Not Available</h4>
+          <p className="text-gray-400">
+            Gap analysis requires the assessment to be linked to a job with defined competency requirements.
+          </p>
         </div>
       )}
 
@@ -357,6 +473,12 @@ const ResponsesTab = ({ participant }) => {
 const ResponseCard = ({ response, index }) => {
   const [expanded, setExpanded] = useState(index === 0);
 
+  // Calculate max marks from scoring or use default
+  const maxMarks = response.question.content.max_marks
+    || response.question.scoring?.max_marks
+    || response.question.scoring?.points
+    || 10;
+
   return (
     <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
       <div
@@ -371,7 +493,7 @@ const ResponseCard = ({ response, index }) => {
                 {response.question.type}
               </span>
               <span className="text-white font-semibold">
-                {response.score} / {response.question.content.max_marks || 10} points
+                {response.score.toFixed(1)} / {maxMarks} points
               </span>
             </div>
           </div>
@@ -499,13 +621,29 @@ const CodingResponseDetail = ({ response }) => {
 
 // Subjective Response Detail
 const SubjectiveResponseDetail = ({ response }) => {
-  const { video_transcript, ai_grading_metadata } = response;
+  const { video_transcript, ai_grading_metadata, video_url } = response;
 
   return (
     <div className="space-y-4">
+      {/* Video Player */}
+      {video_url && (
+        <div>
+          <h5 className="text-white font-semibold mb-2">Video Response</h5>
+          <div className="bg-black/50 border border-white/10 rounded-lg overflow-hidden">
+            <video
+              controls
+              className="w-full max-h-96"
+              src={video_url}
+            >
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+      )}
+
       {video_transcript && (
         <div>
-          <h5 className="text-white font-semibold mb-2">Transcript</h5>
+          <h5 className="text-white font-semibold mb-2">Transcript (Whisper AI)</h5>
           <div className="bg-black/50 border border-white/10 rounded-lg p-4 text-gray-300 max-h-64 overflow-y-auto">
             {video_transcript}
           </div>
@@ -628,6 +766,22 @@ const ViolationEvent = ({ violation }) => {
     high: 'bg-red-500/10 border-red-500/50 text-red-400'
   };
 
+  // Format metadata in user-friendly way
+  const formatMetadata = (metadata) => {
+    if (!metadata || Object.keys(metadata).length === 0) return null;
+
+    return (
+      <div className="text-sm mt-3 pt-3 border-t border-white/10 space-y-1">
+        {Object.entries(metadata).map(([key, value]) => (
+          <div key={key} className="flex items-start gap-2">
+            <span className="font-semibold capitalize">{key.replace('_', ' ')}:</span>
+            <span className="text-gray-300">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className={`${severityColors[violation.severity]} border rounded-lg p-4`}>
       <div className="flex items-center justify-between mb-2">
@@ -639,11 +793,7 @@ const ViolationEvent = ({ violation }) => {
           {new Date(violation.timestamp).toLocaleTimeString()}
         </span>
       </div>
-      {violation.metadata && Object.keys(violation.metadata).length > 0 && (
-        <div className="text-sm mt-2">
-          {JSON.stringify(violation.metadata, null, 2)}
-        </div>
-      )}
+      {formatMetadata(violation.metadata)}
     </div>
   );
 };

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FiCheckCircle, FiClock, FiFileText, FiCode, FiVideo, FiAlertCircle, FiChevronRight, FiArrowLeft, FiCheck, FiX } from 'react-icons/fi';
+import { submitAttempt } from '../../api/candidate';
 
 const AssessmentSummary = () => {
   const router = useRouter();
@@ -15,6 +16,8 @@ const AssessmentSummary = () => {
   const [totalAttempted, setTotalAttempted] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(28);
   const [timeSpent, setTimeSpent] = useState('0:00');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
     // Load assessment data from localStorage
@@ -65,27 +68,58 @@ const AssessmentSummary = () => {
     }
   }, []);
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
     if (totalAttempted < totalQuestions) {
       const confirmSubmit = confirm(
         `You have ${totalQuestions - totalAttempted} unanswered question(s). Are you sure you want to submit?`
       );
       if (!confirmSubmit) return;
     }
-    
-    // Clear all assessment data
-    localStorage.removeItem('assessment_coding_state');
-    localStorage.removeItem('assessment_mcq_answers');
-    localStorage.removeItem('assessment_video_answers');
-    localStorage.removeItem('assessment_flow_completed');
-    localStorage.removeItem('assessment_start_time');
-    
-    // Navigate to thank you page
-    router.push('/user/assessment-end');
+
+    // Get attempt ID from localStorage
+    const attemptId = localStorage.getItem('attempt_id');
+
+    if (!attemptId) {
+      setSubmitError('No attempt ID found. Please try again.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // Submit attempt to backend
+      console.log('Submitting attempt:', attemptId);
+      const response = await submitAttempt(attemptId);
+      console.log('Attempt submitted successfully:', response);
+
+      // Clear all assessment data
+      localStorage.removeItem('assessment_coding_state');
+      localStorage.removeItem('assessment_mcq_answers');
+      localStorage.removeItem('assessment_video_answers');
+      localStorage.removeItem('assessment_flow_completed');
+      localStorage.removeItem('assessment_start_time');
+      localStorage.removeItem('attempt_data');
+      localStorage.removeItem('attempt_id');
+      localStorage.removeItem('can_resume');
+      localStorage.removeItem('assessment_failed_saves');
+
+      // Navigate to thank you page
+      router.push('/user/assessment-end');
+    } catch (err) {
+      console.error('Error submitting attempt:', err);
+      setSubmitError(err.response?.data?.error || 'Failed to submit assessment. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   const handleContinueAssessment = () => {
-    router.push('/user/assessment');
+    const attemptId = localStorage.getItem('attempt_id');
+    if (attemptId) {
+      router.push(`/user/assessment?attempt=${attemptId}`);
+    } else {
+      router.push('/user/dashboard');
+    }
   };
 
   const completionPercentage = Math.round((totalAttempted / totalQuestions) * 100);
@@ -331,21 +365,41 @@ const AssessmentSummary = () => {
 
       {/* Action Buttons */}
       <div className="bg-black/95 backdrop-blur-lg border-t border-white/10 flex-shrink-0 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <button
-            onClick={handleContinueAssessment}
-            className="flex items-center space-x-2 px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all font-semibold"
-          >
-            <FiArrowLeft />
-            <span>Continue Assessment</span>
-          </button>
-          <button
-            onClick={handleFinalSubmit}
-            className="flex items-center space-x-2 px-8 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all"
-          >
-            <span>Submit Assessment</span>
-            <FiChevronRight className="w-5 h-5" />
-          </button>
+        <div className="max-w-7xl mx-auto">
+          {/* Error Message */}
+          {submitError && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              {submitError}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-4">
+            <button
+              onClick={handleContinueAssessment}
+              disabled={isSubmitting}
+              className="flex items-center space-x-2 px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FiArrowLeft />
+              <span>Continue Assessment</span>
+            </button>
+            <button
+              onClick={handleFinalSubmit}
+              disabled={isSubmitting}
+              className="flex items-center space-x-2 px-8 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl font-bold text-white hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <span>Submit Assessment</span>
+                  <FiChevronRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

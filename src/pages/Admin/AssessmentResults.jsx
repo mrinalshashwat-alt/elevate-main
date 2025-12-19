@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import AdminLayout from '../../components/AdminLayout';
@@ -18,15 +18,16 @@ const AssessmentResults = () => {
   const [error, setError] = useState(null);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [loadingParticipant, setLoadingParticipant] = useState(false);
 
-  // Fetch leaderboard data
-  useEffect(() => {
-    if (assessmentId) {
-      fetchLeaderboard();
+  // Fetch leaderboard data with useCallback to fix ESLint warning
+  const fetchLeaderboard = useCallback(async () => {
+    if (!assessmentId) {
+      setError('No assessment ID provided');
+      setLoading(false);
+      return;
     }
-  }, [assessmentId]);
 
-  const fetchLeaderboard = async () => {
     try {
       setLoading(true);
       const data = await getAssessmentLeaderboard(assessmentId, { limit: 100 });
@@ -38,17 +39,84 @@ const AssessmentResults = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [assessmentId]);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
   const handleViewParticipant = async (participantId) => {
     try {
+      setLoadingParticipant(true);
       const detail = await getParticipantDetail(assessmentId, participantId);
       setSelectedParticipant(detail);
       setShowDetailModal(true);
     } catch (err) {
       console.error('Error fetching participant detail:', err);
-      alert('Failed to load participant details');
+      setError('Failed to load participant details');
+    } finally {
+      setLoadingParticipant(false);
     }
+  };
+
+  const handleExportCSV = () => {
+    if (!leaderboardData || !leaderboardData.results) {
+      return;
+    }
+
+    const results = leaderboardData.results;
+
+    // CSV headers
+    const headers = [
+      'Rank',
+      'Name',
+      'Email',
+      'Total Score',
+      'MCQ Score',
+      'Code Score',
+      'Subjective Score',
+      'Time Taken (minutes)',
+      'Top Competencies'
+    ];
+
+    // Convert data to CSV rows
+    const rows = results.map(entry => [
+      entry.rank,
+      entry.participant_name,
+      entry.email,
+      entry.total_score,
+      entry.mcq_score,
+      entry.code_score,
+      entry.subjective_score,
+      entry.time_taken_minutes,
+      entry.top_competencies?.join('; ') || ''
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => {
+        // Escape cells that contain commas or quotes
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${assessmentName.replace(/[^a-z0-9]/gi, '_')}_results_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const tabs = [
@@ -93,24 +161,39 @@ const AssessmentResults = () => {
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <div className="flex items-center gap-4 mb-8">
-        {tabs.map((tab) => (
+      {/* Tab Navigation and Actions */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          {tabs.map((tab) => (
+            <motion.button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
+                  : 'bg-black border border-orange-500/50 text-white'
+              }`}
+              whileHover={{ scale: activeTab === tab.id ? 1 : 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <span>{tab.icon}</span>
+              {tab.label}
+            </motion.button>
+          ))}
+        </div>
+
+        {/* Export CSV Button */}
+        {leaderboardData && leaderboardData.results?.length > 0 && (
           <motion.button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${
-              activeTab === tab.id
-                ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
-                : 'bg-black border border-orange-500/50 text-white'
-            }`}
-            whileHover={{ scale: activeTab === tab.id ? 1 : 1.05 }}
+            onClick={handleExportCSV}
+            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all flex items-center gap-2"
+            whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            <span>{tab.icon}</span>
-            {tab.label}
+            <span>📥</span>
+            Export CSV
           </motion.button>
-        ))}
+        )}
       </div>
 
       {/* Tab Content */}
@@ -148,6 +231,16 @@ const AssessmentResults = () => {
           participant={selectedParticipant}
           onClose={() => setShowDetailModal(false)}
         />
+      )}
+
+      {/* Loading Overlay for Participant Detail */}
+      {loadingParticipant && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[999]">
+          <div className="bg-black/90 border border-orange-500/50 rounded-2xl p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-orange-500 border-t-transparent mb-4"></div>
+            <p className="text-white text-lg">Loading participant details...</p>
+          </div>
+        </div>
       )}
     </AdminLayout>
   );
@@ -353,28 +446,206 @@ const LeaderboardRow = ({ entry, onViewDetail }) => (
   </motion.tr>
 );
 
-// Participants Tab (similar to leaderboard but full list)
+// Participants Tab with Filtering
 const ParticipantsTab = ({ data, onViewDetail }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [scoreRange, setScoreRange] = useState({ min: 0, max: 100 });
+  const [codeScoreRange, setCodeScoreRange] = useState({ min: 0, max: 100 });
+  const [sortBy, setSortBy] = useState('rank');
+  const [sortOrder, setSortOrder] = useState('asc');
+
+  // Filter and sort data
+  const filteredData = useMemo(() => {
+    let filtered = data.filter(entry => {
+      // Search filter
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = searchTerm === '' ||
+        entry.participant_name.toLowerCase().includes(searchLower) ||
+        entry.email.toLowerCase().includes(searchLower);
+
+      // Score range filter
+      const matchesScoreRange = entry.total_score >= scoreRange.min && entry.total_score <= scoreRange.max;
+
+      // Code score range filter
+      const matchesCodeScore = entry.code_score >= codeScoreRange.min && entry.code_score <= codeScoreRange.max;
+
+      return matchesSearch && matchesScoreRange && matchesCodeScore;
+    });
+
+    // Sort data
+    filtered.sort((a, b) => {
+      let aVal, bVal;
+
+      switch(sortBy) {
+        case 'name':
+          aVal = a.participant_name.toLowerCase();
+          bVal = b.participant_name.toLowerCase();
+          return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        case 'total_score':
+          aVal = a.total_score;
+          bVal = b.total_score;
+          break;
+        case 'code_score':
+          aVal = a.code_score;
+          bVal = b.code_score;
+          break;
+        case 'time':
+          aVal = a.time_taken_minutes;
+          bVal = b.time_taken_minutes;
+          break;
+        default: // rank
+          aVal = a.rank;
+          bVal = b.rank;
+      }
+
+      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+
+    return filtered;
+  }, [data, searchTerm, scoreRange, codeScoreRange, sortBy, sortOrder]);
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setScoreRange({ min: 0, max: 100 });
+    setCodeScoreRange({ min: 0, max: 100 });
+    setSortBy('rank');
+    setSortOrder('asc');
+  };
+
   return (
     <div className="bg-black/90 border border-white/10 rounded-3xl overflow-hidden">
+      {/* Header with Filters */}
       <div className="px-6 py-4 border-b border-white/10">
-        <h3 className="text-xl font-bold text-white">All Participants ({data.length})</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-white">All Participants ({filteredData.length} of {data.length})</h3>
+          {(searchTerm || scoreRange.min > 0 || scoreRange.max < 100 || codeScoreRange.min > 0 || codeScoreRange.max < 100) && (
+            <button
+              onClick={resetFilters}
+              className="px-4 py-2 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-semibold hover:bg-orange-500/30 transition-colors"
+            >
+              Reset Filters
+            </button>
+          )}
+        </div>
+
+        {/* Filter Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Search */}
+          <div>
+            <label className="block text-gray-400 text-sm mb-2">Search by Name/Email</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Type to search..."
+              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50"
+            />
+          </div>
+
+          {/* Total Score Range */}
+          <div>
+            <label className="block text-gray-400 text-sm mb-2">
+              Total Score: {scoreRange.min}% - {scoreRange.max}%
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={scoreRange.min}
+                onChange={(e) => setScoreRange({ ...scoreRange, min: parseInt(e.target.value) || 0 })}
+                className="w-20 px-2 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500/50"
+              />
+              <span className="text-gray-400">to</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={scoreRange.max}
+                onChange={(e) => setScoreRange({ ...scoreRange, max: parseInt(e.target.value) || 100 })}
+                className="w-20 px-2 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500/50"
+              />
+            </div>
+          </div>
+
+          {/* Code Score Range */}
+          <div>
+            <label className="block text-gray-400 text-sm mb-2">
+              Code Score: {codeScoreRange.min}% - {codeScoreRange.max}%
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={codeScoreRange.min}
+                onChange={(e) => setCodeScoreRange({ ...codeScoreRange, min: parseInt(e.target.value) || 0 })}
+                className="w-20 px-2 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500/50"
+              />
+              <span className="text-gray-400">to</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={codeScoreRange.max}
+                onChange={(e) => setCodeScoreRange({ ...codeScoreRange, max: parseInt(e.target.value) || 100 })}
+                className="w-20 px-2 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500/50"
+              />
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Table */}
       <table className="w-full">
         <thead className="bg-white/5">
           <tr>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Rank</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Participant</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Total Score</th>
+            <th
+              className="px-6 py-4 text-left text-sm font-semibold text-gray-400 cursor-pointer hover:text-orange-400 transition-colors"
+              onClick={() => handleSort('rank')}
+            >
+              Rank {sortBy === 'rank' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </th>
+            <th
+              className="px-6 py-4 text-left text-sm font-semibold text-gray-400 cursor-pointer hover:text-orange-400 transition-colors"
+              onClick={() => handleSort('name')}
+            >
+              Participant {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </th>
+            <th
+              className="px-6 py-4 text-left text-sm font-semibold text-gray-400 cursor-pointer hover:text-orange-400 transition-colors"
+              onClick={() => handleSort('total_score')}
+            >
+              Total Score {sortBy === 'total_score' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </th>
             <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">MCQ</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Code</th>
+            <th
+              className="px-6 py-4 text-left text-sm font-semibold text-gray-400 cursor-pointer hover:text-orange-400 transition-colors"
+              onClick={() => handleSort('code_score')}
+            >
+              Code {sortBy === 'code_score' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </th>
             <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Subjective</th>
-            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Time</th>
+            <th
+              className="px-6 py-4 text-left text-sm font-semibold text-gray-400 cursor-pointer hover:text-orange-400 transition-colors"
+              onClick={() => handleSort('time')}
+            >
+              Time {sortBy === 'time' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </th>
             <th className="px-6 py-4 text-left text-sm font-semibold text-gray-400">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {data.map((entry) => (
+          {filteredData.map((entry) => (
             <LeaderboardRow
               key={entry.participant_id}
               entry={entry}
@@ -383,9 +654,11 @@ const ParticipantsTab = ({ data, onViewDetail }) => {
           ))}
         </tbody>
       </table>
-      {data.length === 0 && (
+      {filteredData.length === 0 && (
         <div className="p-12 text-center">
-          <p className="text-gray-400 text-lg">No participants found.</p>
+          <p className="text-gray-400 text-lg">
+            {data.length === 0 ? 'No participants found.' : 'No participants match the current filters.'}
+          </p>
         </div>
       )}
     </div>
