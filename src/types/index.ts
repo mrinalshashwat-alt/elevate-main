@@ -79,7 +79,9 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | string;  // Primary role (first in roles array)
+  roles?: string[];  // All assigned roles
+  organizations?: Array<{ id: string; name: string; org_type: string }>;  // User's organizations
   status: 'active' | 'inactive';
   joinedAt: string;
   lastActive: string;

@@ -183,16 +183,23 @@ export const AuthProvider = ({ children }) => {
   );
 
   const login = useCallback(
-    async (emailOrPayload, maybeOtp, roleOrRememberMe) => {
-      if (typeof emailOrPayload === 'object' && emailOrPayload !== null) {
-        const { email, otp, rememberMe } = emailOrPayload;
+    async (tokenOrEmailOrPayload, maybeOtp, roleOrRememberMe) => {
+      // Case 1: Called with just a token string (new password-based login)
+      if (typeof tokenOrEmailOrPayload === 'string' && !maybeOtp) {
+        return establishSession(tokenOrEmailOrPayload);
+      }
+
+      // Case 2: Called with object containing email + otp (legacy OTP login)
+      if (typeof tokenOrEmailOrPayload === 'object' && tokenOrEmailOrPayload !== null) {
+        const { email, otp, rememberMe } = tokenOrEmailOrPayload;
         return verifyOtp({ email, otp, rememberMe });
       }
 
+      // Case 3: Called with email, otp as separate params (legacy OTP login)
       const rememberMe = typeof roleOrRememberMe === 'boolean' ? roleOrRememberMe : true;
-      return verifyOtp({ email: emailOrPayload, otp: maybeOtp, rememberMe });
+      return verifyOtp({ email: tokenOrEmailOrPayload, otp: maybeOtp, rememberMe });
     },
-    [verifyOtp]
+    [establishSession, verifyOtp]
   );
 
   const register = useCallback(

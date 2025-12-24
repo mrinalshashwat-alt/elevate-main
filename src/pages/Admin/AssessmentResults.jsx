@@ -19,6 +19,7 @@ const AssessmentResults = () => {
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingParticipant, setLoadingParticipant] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   // Fetch leaderboard data with useCallback to fix ESLint warning
   const fetchLeaderboard = useCallback(async () => {
@@ -32,6 +33,10 @@ const AssessmentResults = () => {
       setLoading(true);
       const data = await getAssessmentLeaderboard(assessmentId, { limit: 100 });
       setLeaderboardData(data);
+      // Extract updated_at timestamp from API response
+      if (data.updated_at) {
+        setLastUpdated(new Date(data.updated_at));
+      }
       setError(null);
     } catch (err) {
       console.error('Error fetching leaderboard:', err);
@@ -182,18 +187,28 @@ const AssessmentResults = () => {
           ))}
         </div>
 
-        {/* Export CSV Button */}
-        {leaderboardData && leaderboardData.results?.length > 0 && (
-          <motion.button
-            onClick={handleExportCSV}
-            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all flex items-center gap-2"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <span>📥</span>
-            Export CSV
-          </motion.button>
-        )}
+        <div className="flex items-center gap-4">
+          {/* Last Updated Indicator */}
+          {lastUpdated && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl">
+              <span className="text-gray-400 text-sm">Updated:</span>
+              <span className="text-white text-sm font-semibold">{formatRelativeTime(lastUpdated)}</span>
+            </div>
+          )}
+
+          {/* Export CSV Button */}
+          {leaderboardData && leaderboardData.results?.length > 0 && (
+            <motion.button
+              onClick={handleExportCSV}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all flex items-center gap-2"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <span>📥</span>
+              Export CSV
+            </motion.button>
+          )}
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -257,6 +272,30 @@ const calculatePassRate = (results) => {
   if (!results || results.length === 0) return 0;
   const passed = results.filter(r => r.total_score >= 50).length;
   return Math.round((passed / results.length) * 100);
+};
+
+// Format timestamp as "X seconds/minutes/hours ago"
+const formatRelativeTime = (date) => {
+  if (!date) return null;
+
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSec = Math.floor(diffMs / 1000);
+
+  if (diffSec < 10) return 'just now';
+  if (diffSec < 60) return `${diffSec} seconds ago`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin === 1) return '1 minute ago';
+  if (diffMin < 60) return `${diffMin} minutes ago`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr === 1) return '1 hour ago';
+  if (diffHr < 24) return `${diffHr} hours ago`;
+
+  const diffDays = Math.floor(diffHr / 24);
+  if (diffDays === 1) return '1 day ago';
+  return `${diffDays} days ago`;
 };
 
 // Stat Card Component

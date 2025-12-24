@@ -273,7 +273,48 @@ export const getAdminDashboard = async (): Promise<any> => {
   };
 };
 
+// EmailUser resource from /auth/users/ endpoint
+type EmailUserResource = {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  profile_pic_url?: string;
+  roles: string[];
+  is_staff: boolean;
+  is_active: boolean;
+  date_joined: string;
+  organizations?: Array<{ id: string; name: string; org_type: string }>;
+};
+
+const toAdminUserFromEmailUser = (emailUser: EmailUserResource): AdminUser => {
+  return {
+    id: emailUser.id,
+    name: emailUser.name || emailUser.username || emailUser.email.split('@')[0],
+    email: emailUser.email,
+    role: emailUser.roles && emailUser.roles.length > 0 ? emailUser.roles[0] : 'user',
+    roles: emailUser.roles || [],
+    organizations: emailUser.organizations || [],
+    status: emailUser.is_active ? 'active' : 'inactive',
+    joinedAt: emailUser.date_joined,
+    lastActive: emailUser.date_joined,
+  };
+};
+
 export const getUsers = async (page = 1, pageSize = 10): Promise<PaginatedResponse<AdminUser>> => {
+  // Fetch from /auth/users/ endpoint which returns EmailUser objects with roles
+  const { data } = await axiosInstance.get<DrfListResponse<EmailUserResource>>('/auth/users/', {
+    params: { page, page_size: pageSize },
+  });
+  const normalized = normalizePaginated(data, page, pageSize);
+  return {
+    ...normalized,
+    data: normalized.data.map(toAdminUserFromEmailUser),
+  };
+};
+
+// Legacy function for participants (assessment takers)
+export const getParticipants = async (page = 1, pageSize = 10): Promise<PaginatedResponse<AdminUser>> => {
   const { data } = await axiosInstance.get<DrfListResponse<ParticipantResource>>('/admin/participants/', {
     params: { page, page_size: pageSize },
   });

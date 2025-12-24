@@ -10,25 +10,18 @@ const axiosInstance = axios.create({
   },
 });
 
+/**
+ * Get admin/user token from localStorage
+ * This instance is for admin operations only.
+ * Candidate operations use candidateAxios with attempt tokens.
+ */
 const safeGetToken = () => {
   if (typeof window === 'undefined') {
     return null;
   }
 
   try {
-    // Try regular user token first (for authenticated users)
-    const userToken = window.localStorage.getItem('token');
-    if (userToken) {
-      return userToken;
-    }
-
-    // Fall back to JWT attempt token (for guest participants)
-    const attemptToken = window.localStorage.getItem('attempt_token');
-    if (attemptToken) {
-      return attemptToken;
-    }
-
-    return null;
+    return window.localStorage.getItem('token');
   } catch (error) {
     console.warn('Unable to read token from localStorage', error);
     return null;

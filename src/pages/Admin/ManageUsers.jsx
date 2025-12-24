@@ -1,18 +1,32 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getUsers } from '../../api/admin';
 import AdminLayout from '../../components/AdminLayout';
+import RoleAssignmentModal from '../../components/RoleAssignmentModal';
 
 const ManageUsers = () => {
-  const { data: usersData, isLoading } = useQuery({
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+
+  const { data: usersData, isLoading, refetch } = useQuery({
     queryKey: ['adminUsers'],
     queryFn: () => getUsers(),
   });
 
   const handleReadOnlyAction = () => {
     alert('User provisioning is read-only in this build. Please use the backend admin or management commands to create or modify users.');
+  };
+
+  const handleEditRoles = (user) => {
+    setSelectedUser(user);
+    setIsRoleModalOpen(true);
+  };
+
+  const handleRoleUpdateSuccess = () => {
+    // Refresh the user list after role update
+    refetch();
   };
 
   return (
@@ -59,7 +73,8 @@ const ManageUsers = () => {
               <tr>
                 <th className="px-6 py-4 text-left text-gray-300 font-semibold">Name</th>
                 <th className="px-6 py-4 text-left text-gray-300 font-semibold">Email</th>
-                <th className="px-6 py-4 text-left text-gray-300 font-semibold">Role</th>
+                <th className="px-6 py-4 text-left text-gray-300 font-semibold">Roles</th>
+                <th className="px-6 py-4 text-left text-gray-300 font-semibold">Organizations</th>
                 <th className="px-6 py-4 text-left text-gray-300 font-semibold">Status</th>
                 <th className="px-6 py-4 text-left text-gray-300 font-semibold">Joined</th>
                 <th className="px-6 py-4 text-left text-gray-300 font-semibold">Actions</th>
@@ -71,13 +86,53 @@ const ManageUsers = () => {
                   <td className="px-6 py-4">{user.name}</td>
                   <td className="px-6 py-4">{user.email}</td>
                   <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'
-                      }`}
-                    >
-                      {user.role}
-                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles && user.roles.length > 0 ? (
+                        user.roles.map((role, idx) => {
+                          const getRoleBadgeColor = (roleName) => {
+                            const roleColors = {
+                              'Super Admin': 'bg-purple-500/20 border border-purple-500/40 text-purple-300',
+                              'Recruiter Admin': 'bg-blue-500/20 border border-blue-500/40 text-blue-300',
+                              'Training Admin': 'bg-green-500/20 border border-green-500/40 text-green-300',
+                              'College Admin': 'bg-yellow-500/20 border border-yellow-500/40 text-yellow-300',
+                              'Interviewer': 'bg-orange-500/20 border border-orange-500/40 text-orange-300',
+                              'User': 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300',
+                            };
+                            return roleColors[roleName] || 'bg-gray-500/20 border border-gray-500/40 text-gray-300';
+                          };
+
+                          return (
+                            <span
+                              key={idx}
+                              className={`px-2 py-1 rounded-full text-xs font-semibold ${getRoleBadgeColor(role)}`}
+                            >
+                              {role}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-500/20 border border-gray-500/40 text-gray-300">
+                          No roles
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {user.organizations && user.organizations.length > 0 ? (
+                        user.organizations.map((org, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 border border-indigo-500/40 text-indigo-300"
+                            title={org.org_type}
+                          >
+                            {org.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-500 text-sm">No organizations</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <span
@@ -92,9 +147,9 @@ const ManageUsers = () => {
                   <td className="px-6 py-4">
                     <div className="flex space-x-2">
                       <button
-                        onClick={handleReadOnlyAction}
+                        onClick={() => handleEditRoles(user)}
                         className="p-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-500/50 rounded-lg transition-all hover:scale-110"
-                        title="Edit user"
+                        title="Edit roles"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -117,6 +172,14 @@ const ManageUsers = () => {
           </table>
         </div>
       )}
+
+      {/* Role Assignment Modal */}
+      <RoleAssignmentModal
+        isOpen={isRoleModalOpen}
+        onClose={() => setIsRoleModalOpen(false)}
+        user={selectedUser}
+        onSuccess={handleRoleUpdateSuccess}
+      />
     </AdminLayout>
   );
 };

@@ -1,7 +1,10 @@
 /**
  * Candidate API - Assessment taking endpoints
+ *
+ * Uses candidateAxios - separate instance with attempt token only.
+ * This ensures complete isolation from admin authentication.
  */
-import axiosInstance from './axiosInstance';
+import candidateAxios from './candidateAxios';
 
 interface JoinAssessmentResponse {
   assessment: {
@@ -115,7 +118,7 @@ interface DashboardResponse {
  * Join assessment using unique link token
  */
 export const joinAssessmentByToken = async (token: string): Promise<JoinAssessmentResponse> => {
-  const response = await axiosInstance.get(`/assessment/join/${token}/`);
+  const response = await candidateAxios.get(`/assessment/join/${token}/`);
   return response.data;
 };
 
@@ -126,7 +129,7 @@ export const startAssessment = async (
   assessmentId: string,
   data: StartAssessmentPayload
 ): Promise<StartAssessmentResponse> => {
-  const response = await axiosInstance.post(`/assessment/${assessmentId}/start/`, data);
+  const response = await candidateAxios.post(`/assessment/${assessmentId}/start/`, data);
   return response.data;
 };
 
@@ -137,7 +140,7 @@ export const saveResponse = async (
   attemptId: string,
   data: SaveResponsePayload
 ): Promise<any> => {
-  const response = await axiosInstance.post(`/attempt/${attemptId}/save/`, data);
+  const response = await candidateAxios.post(`/attempt/${attemptId}/save/`, data);
   return response.data;
 };
 
@@ -145,7 +148,7 @@ export const saveResponse = async (
  * Submit attempt (final submission)
  */
 export const submitAttempt = async (attemptId: string): Promise<SubmitAttemptResponse> => {
-  const response = await axiosInstance.post(`/attempt/${attemptId}/submit/`);
+  const response = await candidateAxios.post(`/attempt/${attemptId}/submit/`);
   return response.data;
 };
 
@@ -153,7 +156,7 @@ export const submitAttempt = async (attemptId: string): Promise<SubmitAttemptRes
  * Send heartbeat to check status and get time remaining
  */
 export const sendHeartbeat = async (attemptId: string): Promise<HeartbeatResponse> => {
-  const response = await axiosInstance.post(`/attempt/${attemptId}/heartbeat/`);
+  const response = await candidateAxios.post(`/attempt/${attemptId}/heartbeat/`);
   return response.data;
 };
 
@@ -164,7 +167,7 @@ export const reportViolation = async (
   attemptId: string,
   violation: ReportViolationPayload
 ): Promise<any> => {
-  const response = await axiosInstance.post(`/attempt/${attemptId}/report_violation/`, violation);
+  const response = await candidateAxios.post(`/attempt/${attemptId}/report_violation/`, violation);
   return response.data;
 };
 
@@ -175,7 +178,7 @@ export const executeCode = async (
   attemptId: string,
   data: ExecuteCodePayload
 ): Promise<any> => {
-  const response = await axiosInstance.post(`/attempt/${attemptId}/execute_code/`, data);
+  const response = await candidateAxios.post(`/attempt/${attemptId}/execute_code/`, data);
   return response.data;
 };
 
@@ -183,7 +186,7 @@ export const executeCode = async (
  * Get code execution result
  */
 export const getCodeResult = async (attemptId: string, jobId: string): Promise<any> => {
-  const response = await axiosInstance.get(`/attempt/${attemptId}/code/result/${jobId}/`);
+  const response = await candidateAxios.get(`/attempt/${attemptId}/code/result/${jobId}/`);
   return response.data;
 };
 
@@ -191,7 +194,7 @@ export const getCodeResult = async (attemptId: string, jobId: string): Promise<a
  * Get attempt results (after submission)
  */
 export const getAttemptResults = async (attemptId: string): Promise<GetResultsResponse> => {
-  const response = await axiosInstance.get(`/attempt/${attemptId}/results/`);
+  const response = await candidateAxios.get(`/attempt/${attemptId}/results/`);
   return response.data;
 };
 
@@ -199,7 +202,7 @@ export const getAttemptResults = async (attemptId: string): Promise<GetResultsRe
  * Get participant dashboard
  */
 export const getParticipantDashboard = async (): Promise<DashboardResponse> => {
-  const response = await axiosInstance.get('/participants/dashboard/');
+  const response = await candidateAxios.get('/participants/dashboard/');
   return response.data;
 };
 

@@ -56,10 +56,14 @@ const AssessmentList = () => {
     }
   };
 
-  const handleCopyLink = (assessmentId) => {
-    const link = `${window.location.origin}/user/assessment-start?id=${assessmentId}`;
+  const handleCopyLink = (assessment) => {
+    if (!assessment.unique_link_token) {
+      console.error('No unique_link_token found for assessment:', assessment.id);
+      return;
+    }
+    const link = `${window.location.origin}/user/assessment-start?token=${assessment.unique_link_token}`;
     navigator.clipboard.writeText(link);
-    setCopiedLink(assessmentId);
+    setCopiedLink(assessment.id);
     setTimeout(() => setCopiedLink(null), 2000);
   };
 
@@ -258,7 +262,7 @@ const AssessmentList = () => {
                         {/* Only show Copy Link for published assessments */}
                         {assessment.status !== 'draft' && (
                           <button
-                            onClick={() => handleCopyLink(assessment.id)}
+                            onClick={() => handleCopyLink(assessment)}
                             className={`px-3 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 ${
                               copiedLink === assessment.id
                                 ? 'bg-green-500/20 border border-green-500/50 text-green-400'

@@ -700,8 +700,12 @@ func main() {
   const [isRecording, setIsRecording] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
   const [recordedBlob, setRecordedBlob] = useState(null);
+  const [recordingTimeLeft, setRecordingTimeLeft] = useState(null);
   const videoRecorderRef = useRef(null);
   const videoPreviewRef = useRef(null);
+  const recordedBlobUrlRef = useRef(null);
+  const recordingTimerRef = useRef(null);
+  const recordingStartTimeRef = useRef(null);
 
   // Proctoring: Handle violation alerts (use useCallback to stabilize reference)
   const handleViolationRef = useRef(null);
@@ -1512,6 +1516,52 @@ func main() {
         }
       }
 
+      // Stop camera and microphone before navigating away
+      console.log('Cleaning up media streams...');
+
+      // Stop proctoring stream
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped proctoring track:', track.kind);
+        });
+        setStream(null);
+      }
+
+      // Stop video recording stream
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped video recording track:', track.kind);
+        });
+        setVideoStream(null);
+      }
+
+      // Clear video element sources
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = null;
+      }
+      if (recordedBlobUrlRef.current) {
+        URL.revokeObjectURL(recordedBlobUrlRef.current);
+        recordedBlobUrlRef.current = null;
+      }
+
+      // Stop MediaPipe proctoring
+      if (mediaPipeProctoringRef.current) {
+        try {
+          mediaPipeProctoringRef.current.stop();
+          mediaPipeProctoringRef.current = null;
+        } catch (e) {
+          console.warn('Error stopping MediaPipe:', e);
+        }
+      }
+
+      // Clear any recording timers
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
       // Clear flow completion flag
       localStorage.removeItem('assessment_flow_completed');
       localStorage.removeItem('attempt_data');
@@ -1519,7 +1569,12 @@ func main() {
       localStorage.removeItem('can_resume');
       localStorage.removeItem('assessment_failed_saves');
 
-      router.push('/user/assessment-end');
+      console.log('Media cleanup complete, navigating to end page...');
+
+      // Give browser time to release media devices before navigation
+      setTimeout(() => {
+        router.push('/user/assessment-end');
+      }, 100);
     }
   };
 
@@ -1913,18 +1968,35 @@ func main() {
   // Video section handlers
   const handleStartRecording = async () => {
     try {
-      // Request video and audio permissions
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
+      const currentVideoQ = videoQuestions.find(q => q.order === currentVideoQuestion) || videoQuestions[currentVideoQuestion - 1];
+      const maxDuration = currentVideoQ?.content?.max_video_duration_seconds || 120;
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: 'user'
-        }, 
-        audio: true 
+        },
+        audio: true
       });
-      
+
       setVideoStream(mediaStream);
       setIsRecording(true);
+      setRecordingTimeLeft(maxDuration);
+      recordingStartTimeRef.current = Date.now();
+
+      recordingTimerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+        const timeLeft = Math.max(0, maxDuration - elapsed);
+        setRecordingTimeLeft(timeLeft);
+
+        if (timeLeft === 0) {
+          clearInterval(recordingTimerRef.current);
+          if (videoRecorderRef.current && videoRecorderRef.current.state === 'recording') {
+            videoRecorderRef.current.stop();
+          }
+        }
+      }, 100);
       
       // Set video stream to preview element
       if (videoPreviewRef.current) {
@@ -1959,17 +2031,26 @@ func main() {
 
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
+        console.log('Recording stopped. Blob size:', blob.size, 'bytes');
+
+        if (recordedBlobUrlRef.current) {
+          URL.revokeObjectURL(recordedBlobUrlRef.current);
+        }
+
+        recordedBlobUrlRef.current = URL.createObjectURL(blob);
+
         setRecordedBlob(blob);
         setIsRecording(false);
-        
-        // Stop all tracks
+
         if (mediaStream) {
           mediaStream.getTracks().forEach(track => track.stop());
         }
-        
+
         if (videoPreviewRef.current) {
           videoPreviewRef.current.srcObject = null;
         }
+
+        console.log('Video ready for playback');
       };
 
       recorder.onerror = (event) => {
@@ -1987,22 +2068,39 @@ func main() {
   };
 
   const handleStopRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+
     if (videoRecorderRef.current && isRecording) {
       try {
         videoRecorderRef.current.stop();
         setIsRecording(false);
+        setRecordingTimeLeft(null);
       } catch (error) {
         console.error('Error stopping recording:', error);
         setIsRecording(false);
+        setRecordingTimeLeft(null);
       }
     }
   };
 
   const handleRetake = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+
+    if (recordedBlobUrlRef.current) {
+      URL.revokeObjectURL(recordedBlobUrlRef.current);
+      recordedBlobUrlRef.current = null;
+    }
+
     setRecordedBlob(null);
     setIsRecording(false);
-    
-    // Stop current recording if active
+    setRecordingTimeLeft(null);
+
     if (videoRecorderRef.current && isRecording) {
       try {
         videoRecorderRef.current.stop();
@@ -2010,19 +2108,18 @@ func main() {
         console.error('Error stopping recorder:', error);
       }
     }
-    
-    // Stop and cleanup video stream
+
     if (videoStream) {
       videoStream.getTracks().forEach(track => track.stop());
       setVideoStream(null);
     }
-    
-    // Clear video preview
+
     if (videoPreviewRef.current) {
       videoPreviewRef.current.srcObject = null;
     }
-    
+
     videoRecorderRef.current = null;
+    console.log('Ready for new recording');
   };
 
   const handleSubmitVideo = async () => {
@@ -2042,30 +2139,35 @@ func main() {
     }
 
     try {
-      // MOCKED: Replace with real API call when you have AWS keys
-      const MOCK_MODE = true; // Set to false when you have real API keys
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const attemptToken = localStorage.getItem('attempt_token');
+
+      if (!attemptToken) {
+        throw new Error('Authentication token not found. Please restart the assessment.');
+      }
+
+      const MOCK_MODE = false;
 
       if (MOCK_MODE) {
-        // ============ MOCKED FLOW ============
-        console.log('📹 [MOCKED] Video upload flow (waiting for AWS S3 keys)');
+        console.log('[MOCKED] Video upload flow');
         console.log('Video blob size:', recordedBlob.size, 'bytes');
         console.log('Video type:', recordedBlob.type);
 
-        // Simulate upload delay
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        console.log('✅ [MOCKED] Video upload successful');
-        // ====================================
+        console.log('[MOCKED] Video upload successful');
       } else {
-        // ============ REAL FLOW (when you have AWS keys) ============
+        const uploadRequestUrl = `${API_BASE_URL}/attempt/${attemptId}/request_video_upload/`;
+        console.log('Requesting upload URL from:', uploadRequestUrl);
+        console.log('Attempt ID:', attemptId);
+        console.log('Question ID:', currentVideoQ.backendId);
 
-        // Step 1: Request presigned URL from backend
-        const requestResponse = await fetch(
-          `/api/attempts/${attemptId}/request_video_upload/`,
-          {
+        let requestResponse;
+        try {
+          requestResponse = await fetch(uploadRequestUrl, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${token}`,
+              'Authorization': `Bearer ${attemptToken}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -2074,15 +2176,25 @@ func main() {
               content_type: recordedBlob.type || 'video/webm',
               file_size_bytes: recordedBlob.size
             })
-          }
-        );
-
-        if (!requestResponse.ok) {
+          });
+        } catch (fetchError) {
+          console.error('Network error during fetch:', fetchError);
           throw new Error('Failed to request upload URL');
         }
 
+        console.log('Upload request response status:', requestResponse.status);
+
+        if (!requestResponse.ok) {
+          const errorData = await requestResponse.json().catch(() => ({}));
+          console.error('Upload request failed:', errorData);
+          throw new Error(errorData.error || 'Failed to request upload URL');
+        }
+
         const { upload_url, fields, s3_key } = await requestResponse.json();
-        console.log('📤 Got presigned URL, uploading to S3...');
+        console.log('Got presigned URL, uploading to S3...');
+        console.log('Upload URL:', upload_url);
+        console.log('Fields:', fields);
+        console.log('Blob size:', recordedBlob.size, 'bytes');
 
         // Step 2: Upload directly to S3 using presigned POST
         const formData = new FormData();
@@ -2095,24 +2207,34 @@ func main() {
         // Add file last
         formData.append('file', recordedBlob, 'answer.webm');
 
-        const uploadResponse = await fetch(upload_url, {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error('S3 upload failed');
+        console.log('Uploading to S3...');
+        let uploadResponse;
+        try {
+          uploadResponse = await fetch(upload_url, {
+            method: 'POST',
+            body: formData
+          });
+          console.log('S3 response status:', uploadResponse.status);
+        } catch (fetchError) {
+          console.error('Network error during S3 upload:', fetchError);
+          throw new Error(`S3 upload failed: ${fetchError.message}`);
         }
 
-        console.log('✅ S3 upload successful');
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text().catch(() => 'No error details');
+          console.error('S3 upload failed. Status:', uploadResponse.status);
+          console.error('S3 error response:', errorText);
+          throw new Error(`S3 upload failed with status ${uploadResponse.status}`);
+        }
 
-        // Step 3: Confirm upload with backend
+        console.log('S3 upload successful');
+
         const confirmResponse = await fetch(
-          `/api/attempts/${attemptId}/confirm_video_upload/`,
+          `${API_BASE_URL}/attempt/${attemptId}/confirm_video_upload/`,
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${token}`,
+              'Authorization': `Bearer ${attemptToken}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -2127,7 +2249,7 @@ func main() {
         }
 
         const { video_url } = await confirmResponse.json();
-        console.log('✅ Upload confirmed, video URL:', video_url);
+        console.log('Upload confirmed, video URL:', video_url);
 
         // ============================================================
       }
@@ -2145,14 +2267,29 @@ func main() {
         setCurrentVideoQuestion(currentVideoQuestion + 1);
         handleRetake();
       } else {
-        // All sections completed - navigate to assessment end
-        localStorage.removeItem('assessment_flow_completed');
-        router.push('/user/assessment-end');
+        // Last video submitted - show submit assessment button
+        // Don't auto-submit, let user review and click "Submit Assessment"
+        console.log('All video questions completed - ready to submit');
+        // User will click "Submit Assessment" button which calls handleSubmitSection
       }
 
     } catch (err) {
       console.error('Error uploading video:', err);
-      alert('Failed to upload video. Please try again.');
+
+      let errorMessage = 'Failed to upload video. ';
+      if (err.message.includes('Authentication token')) {
+        errorMessage = err.message;
+      } else if (err.message === 'Failed to request upload URL') {
+        errorMessage += 'Could not connect to server. Please check your connection.';
+      } else if (err.message === 'S3 upload failed') {
+        errorMessage += 'Upload to cloud storage failed. Please try again.';
+      } else if (err.message === 'Failed to confirm upload') {
+        errorMessage += 'Upload succeeded but confirmation failed. Please contact support.';
+      } else {
+        errorMessage += err.message || 'Please try again.';
+      }
+
+      alert(errorMessage);
     }
   };
 
@@ -2883,7 +3020,14 @@ func main() {
                     <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
                       <div className="flex items-center justify-between mb-6">
                         <h1 className="text-xl font-semibold">Video Interview — Question {currentVideoQuestion} of {totalVideoQuestions}</h1>
-                        <button className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300">2 min</button>
+                        <div className="px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-lg text-sm text-orange-400 font-semibold">
+                          Max: {(() => {
+                            const maxDuration = currentVideoQ?.content?.max_video_duration_seconds || 120;
+                            const minutes = Math.floor(maxDuration / 60);
+                            const seconds = maxDuration % 60;
+                            return seconds > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `${minutes} min`;
+                          })()}
+                        </div>
                       </div>
                       
                       {currentVideoQ ? (
@@ -2932,10 +3076,11 @@ func main() {
 
                     {/* Video Preview */}
                     <div className="flex-1 bg-gray-800 rounded-xl mb-4 flex items-center justify-center overflow-hidden relative">
-                      {recordedBlob ? (
+                      {recordedBlob && recordedBlobUrlRef.current ? (
                         <video
-                          src={URL.createObjectURL(recordedBlob)}
+                          src={recordedBlobUrlRef.current}
                           controls
+                          autoPlay
                           className="w-full h-full object-contain"
                         />
                       ) : (
@@ -2960,9 +3105,20 @@ func main() {
                             </div>
                           )}
                           {isRecording && (
-                            <div className="absolute top-4 right-4 flex items-center space-x-2 px-3 py-1.5 bg-red-500/90 rounded-lg">
-                              <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-                              <span className="text-white text-sm font-semibold">Recording...</span>
+                            <div className="absolute top-4 right-4 flex flex-col items-end space-y-2">
+                              <div className="flex items-center space-x-2 px-3 py-1.5 bg-red-500/90 rounded-lg">
+                                <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+                                <span className="text-white text-sm font-semibold">Recording</span>
+                              </div>
+                              {recordingTimeLeft !== null && (
+                                <div className={`px-3 py-1.5 rounded-lg font-mono text-sm font-semibold ${
+                                  recordingTimeLeft <= 10
+                                    ? 'bg-red-500/90 text-white'
+                                    : 'bg-black/70 text-white'
+                                }`}>
+                                  {Math.floor(recordingTimeLeft / 60)}:{String(recordingTimeLeft % 60).padStart(2, '0')}
+                                </div>
+                              )}
                             </div>
                           )}
                         </>

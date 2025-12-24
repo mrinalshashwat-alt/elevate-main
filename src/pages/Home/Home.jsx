@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useOtpLogin } from '../../hooks/useOtpLogin';
 import { motion, AnimatePresence, useScroll, useSpring, useInView, useReducedMotion } from 'framer-motion';
 import CountUp from 'react-countup';
-import { FiEye, FiEyeOff, FiX, FiCheck, FiLoader, FiAward, FiStar, FiUsers, FiTrendingUp, FiClock, FiArrowRight, FiMessageSquare, FiUserCheck, FiCompass, FiCode, FiTarget, FiBriefcase, FiHome, FiZap, FiPackage } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiX, FiCheck, FiLoader, FiAward, FiStar, FiUsers, FiTrendingUp, FiClock, FiArrowRight, FiMessageSquare, FiUserCheck, FiCompass, FiCode, FiTarget, FiBriefcase, FiHome, FiZap, FiPackage, FiUser } from 'react-icons/fi';
 
 // Custom Hooks
 const useTypewriter = (text, speed = 50) => {
@@ -1918,32 +1918,43 @@ const Home = () => {
               </>
             ) : (
               <>
-                <motion.button 
-                  onClick={() => router.push('/admin/dashboard')}
-                  className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-blue-400/40 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                <motion.button
+                  onClick={() => {
+                    // Check if we're on localhost or production
+                    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('localhost'));
+                    if (isLocalhost) {
+                      router.push('/admin/login');
+                    } else {
+                      // In production, redirect to admin subdomain
+                      window.location.href = window.location.protocol + '//' + window.location.hostname.replace(/^(www\.|assess\.)?/, 'admin.') + '/login';
+                    }
+                  }}
+                  className="px-4 md:px-6 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-orange-400/40 focus:outline-none focus:ring-2 focus:ring-orange-400 flex items-center gap-2"
                   whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
                   whileTap={{ scale: 0.95 }}
-                  aria-label="Admin Demo"
+                  aria-label="For Companies"
                 >
-                  Admin Demo
+                  <FiBriefcase className="w-4 h-4" />
+                  For Companies
                 </motion.button>
-                <motion.button 
-                  onClick={() => openLoginModal('user')}
-                  className="px-4 md:px-5 py-2 md:py-2.5 bg-white/5 border border-white/10 text-white/90 rounded-full font-medium text-xs md:text-sm transition-all duration-300 hover:bg-white/10 hover:border-orange-400/40 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                <motion.button
+                  onClick={() => {
+                    // Check if we're on localhost or production
+                    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname.includes('localhost'));
+                    if (isLocalhost) {
+                      router.push('/user');
+                    } else {
+                      // In production, redirect to assess subdomain
+                      window.location.href = window.location.protocol + '//' + window.location.hostname.replace(/^(www\.|admin\.)?/, 'assess.') + '/';
+                    }
+                  }}
+                  className="px-4 md:px-6 py-2 md:py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-full font-semibold text-xs md:text-sm shadow-lg shadow-orange-500/30 focus:outline-none focus:ring-2 focus:ring-orange-400 flex items-center gap-2"
                   whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
                   whileTap={{ scale: 0.95 }}
-                  aria-label="User login"
+                  aria-label="For Candidates"
                 >
-                  User Login
-                </motion.button>
-                <motion.button 
-                  onClick={openSignupModal}
-                  className="px-4 md:px-5 py-2 md:py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-full font-semibold text-xs md:text-sm shadow-lg shadow-orange-500/30 focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  whileHover={!prefersReducedMotion ? { scale: 1.05, y: -2 } : {}}
-                  whileTap={{ scale: 0.95 }}
-                  aria-label="Sign up"
-                >
-                  Sign Up
+                  <FiUser className="w-4 h-4" />
+                  For Candidates
                 </motion.button>
               </>
             )}
